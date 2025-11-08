@@ -1,14 +1,36 @@
-import { Bell, CheckCircle2 } from 'lucide-react'
-import { useMemo } from 'react'
+import { Bell, CheckCircle2, AlertCircle, Info, CheckCheck } from 'lucide-react'
+import { useMemo, useEffect } from 'react'
 import dayjs from '@/lib/dayjs'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { useNotificationStore } from '@/store/notification-store'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { useAuthStore } from '@/store/auth-store'
+
+const NotificationIcon = ({ type }: { type?: string }) => {
+  switch (type) {
+    case 'success':
+      return <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+    case 'warning':
+      return <AlertCircle className="h-4 w-4 text-amber-500" />
+    case 'error':
+      return <AlertCircle className="h-4 w-4 text-red-500" />
+    default:
+      return <Info className="h-4 w-4 text-blue-500" />
+  }
+}
 
 export const NotificationCenter = () => {
-  const { notifications, unread, markAll } = useNotificationStore()
+  const { notifications, unread, markAll, requestPermission, permissionGranted } = useNotificationStore()
+  const { user } = useAuthStore()
+
+  // Request notification permission for supervisors
+  useEffect(() => {
+    if (user?.cargo === 'SUPERVISOR' && !permissionGranted) {
+      requestPermission()
+    }
+  }, [user, permissionGranted, requestPermission])
 
   const grouped = useMemo(() => {
     const groups: Record<string, typeof notifications> = {}
@@ -71,24 +93,31 @@ export const NotificationCenter = () => {
                   {items.map((notification) => (
                     <div
                       key={notification.id}
-                      className="rounded-2xl border border-slate-100/80 bg-slate-50/60 p-4 text-sm shadow-sm dark:border-slate-800 dark:bg-slate-900/40"
+                      className="group rounded-2xl border border-slate-100/80 bg-slate-50/60 p-4 text-sm shadow-sm transition-all hover:border-slate-200 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/40 dark:hover:border-slate-700"
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="font-semibold text-slate-900 dark:text-white">
-                          {notification.title}
-                        </p>
-                        {!notification.read ? (
-                          <Badge variant="warning">Nuevo</Badge>
-                        ) : (
-                          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                        )}
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5">
+                          <NotificationIcon type={notification.type} />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="font-semibold text-slate-900 dark:text-white">
+                              {notification.title}
+                            </p>
+                            {!notification.read ? (
+                              <Badge variant="warning" className="shrink-0">Nuevo</Badge>
+                            ) : (
+                              <CheckCheck className="h-4 w-4 shrink-0 text-emerald-400" />
+                            )}
+                          </div>
+                          <p className="mt-1 text-slate-500 dark:text-slate-400">
+                            {notification.body}
+                          </p>
+                          <p className="mt-2 text-xs text-slate-400">
+                            {dayjs(notification.createdAt).format('HH:mm')}
+                          </p>
+                        </div>
                       </div>
-                      <p className="mt-1 text-slate-500 dark:text-slate-400">
-                        {notification.body}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-400">
-                        {dayjs(notification.createdAt).format('HH:mm')}
-                      </p>
                     </div>
                   ))}
                 </div>

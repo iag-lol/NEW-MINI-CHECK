@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -26,4 +26,84 @@ body {
 
 .leaflet-container {
   font: inherit;
+}
+
+/* ===================================
+   Shimmer Animation for Skeletons
+   =================================== */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+/* ===================================
+   Smooth Transitions
+   =================================== */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* ===================================
+   Custom Scrollbar
+   =================================== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.3);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.5);
+}
+
+/* ===================================
+   Selection Colors
+   =================================== */
+::selection {
+  background-color: rgba(59, 91, 255, 0.3);
+  color: white;
+}
+
+/* ===================================
+   Focus Visible (Accessibility)
+   =================================== */
+:focus-visible {
+  outline: 2px solid rgb(59, 91, 255);
+  outline-offset: 2px;
+}
+
+/* ===================================
+   Print Styles
+   =================================== */
+@media print {
+  body {
+    background-color: white;
+  }
+
+  .no-print {
+    display: none !important;
+  }
 }

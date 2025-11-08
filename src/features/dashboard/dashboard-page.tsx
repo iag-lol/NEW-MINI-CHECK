@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { motion } from 'framer-motion'
 import {
   Area,
   AreaChart,
@@ -14,14 +15,23 @@ import {
   YAxis,
 } from 'recharts'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
-import { AlertTriangle, CheckCircle2, DownloadCloud } from 'lucide-react'
+import {
+  AlertTriangle,
+  CheckCircle2,
+  DownloadCloud,
+  Activity,
+  Bus,
+  AlertCircle,
+  Clock
+} from 'lucide-react'
 import dayjs from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
 import { exportAllModulesToXlsx, exportExecutivePdf } from '@/lib/exporters'
 import { Card, CardTitle } from '@/components/ui/card'
+import { StatCard } from '@/components/ui/stat-card'
+import { Skeleton, SkeletonCard, SkeletonChart } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { Tables } from '@/types/database'
 
@@ -71,7 +81,7 @@ const useTickets = () =>
 export const DashboardPage = () => {
   const [exporting, setExporting] = useState(false)
   const { data: revisions, isLoading: revisionsLoading } = useWeeklyRevisions()
-  const { data: tickets, isLoading: ticketsLoading } = useTickets()
+  const { data: tickets } = useTickets()
   const mapToken = import.meta.env.VITE_MAPBOX_TOKEN
   const tileLayerUrl = mapToken
     ? `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=${mapToken}`
@@ -130,46 +140,84 @@ export const DashboardPage = () => {
 
   const latestRevisions = revisions?.slice(0, 6) ?? []
 
+  if (revisionsLoading) {
+    return (
+      <div className="space-y-8">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Card className="col-span-2">
+            <Skeleton className="mb-2 h-6 w-1/3" />
+            <Skeleton className="mb-4 h-4 w-1/2" />
+            <SkeletonChart />
+          </Card>
+          <SkeletonCard />
+        </div>
+      </div>
+    )
+  }
+
+  const operationalRate = stats.total > 0 ? (stats.operativo / stats.total) * 100 : 0
+
   return (
     <div className="space-y-8">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardTitle className="text-sm uppercase text-slate-500">Semana actual</CardTitle>
-          <p className="mt-3 text-4xl font-black text-slate-900 dark:text-white">
-            {revisionsLoading ? '—' : stats.total}
-          </p>
-          <p className="text-sm text-slate-500">Revisiones enviadas</p>
-        </Card>
-        <Card>
-          <CardTitle className="text-sm uppercase text-slate-500">Operatividad</CardTitle>
-          <div className="mt-3 flex items-baseline gap-3">
-            <span className="text-4xl font-black text-emerald-500">{stats.operativo}</span>
-            <Badge variant="warning">{stats.panne} en panne</Badge>
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl border border-slate-200/60 bg-gradient-to-br from-brand-50 to-white p-6 dark:border-slate-800 dark:from-brand-950/20 dark:to-slate-950"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
+              Dashboard de Supervisión
+            </h1>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              Vista consolidada en tiempo real · Semana {dayjs().isoWeek()} de {dayjs().year()}
+            </p>
           </div>
-          <Progress
-            value={stats.total ? (stats.operativo / (stats.total || 1)) * 100 : 0}
-            className="mt-3"
-          />
-        </Card>
-        <Card>
-          <CardTitle className="text-sm uppercase text-slate-500">Tickets abiertos</CardTitle>
-          <div className="mt-3 flex items-center gap-3">
-            <span className="text-4xl font-black text-brand-500">
-              {ticketsLoading ? '—' : pendingTickets.length}
+          <div className="flex items-center gap-2">
+            <Clock className="h-5 w-5 text-slate-400" />
+            <span className="text-sm text-slate-600 dark:text-slate-400">
+              Última actualización: {dayjs().format('HH:mm')}
             </span>
-            <p className="text-sm text-slate-500">pendientes</p>
           </div>
-          <p className="text-xs text-slate-400">
-            {pendingTickets.filter((ticket) => ticket.estado === 'EN_PROCESO').length} en proceso
-          </p>
-        </Card>
-        <Card>
-          <CardTitle className="text-sm uppercase text-slate-500">Terminal destacada</CardTitle>
-          <p className="mt-3 text-3xl font-black text-slate-900 dark:text-white">
-            {stats.terminalTop}
-          </p>
-          <p className="text-sm text-slate-500">Mayor actividad esta semana</p>
-        </Card>
+        </div>
+      </motion.div>
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Revisiones Totales"
+          value={stats.total}
+          description="Buses revisados esta semana"
+          icon={Activity}
+          variant="default"
+        />
+        <StatCard
+          title="Buses Operativos"
+          value={stats.operativo}
+          description={`${operationalRate.toFixed(1)}% de operatividad`}
+          icon={Bus}
+          variant="success"
+        />
+        <StatCard
+          title="Buses en Panne"
+          value={stats.panne}
+          description="Requieren atención inmediata"
+          icon={AlertTriangle}
+          variant={stats.panne > 0 ? 'danger' : 'default'}
+        />
+        <StatCard
+          title="Tickets Abiertos"
+          value={pendingTickets.length}
+          description={`${pendingTickets.filter((t) => t.estado === 'EN_PROCESO').length} en proceso`}
+          icon={AlertCircle}
+          variant={pendingTickets.length > 0 ? 'warning' : 'success'}
+        />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
