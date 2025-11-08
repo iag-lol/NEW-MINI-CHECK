@@ -98,9 +98,21 @@ type PublicidadRow = {
   danio: boolean | null
   residuos: boolean | null
   detalle_lados: {
-    izquierda: boolean
-    derecha: boolean
-    luneta: boolean
+    izquierda: {
+      tiene: boolean
+      danio: boolean | null
+      residuos: boolean | null
+    }
+    derecha: {
+      tiene: boolean
+      danio: boolean | null
+      residuos: boolean | null
+    }
+    luneta: {
+      tiene: boolean
+      danio: boolean | null
+      residuos: boolean | null
+    }
   } | null
   nombre_publicidad: string | null
   observacion: string | null

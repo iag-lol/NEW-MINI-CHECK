@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { FormProvider, useForm, useWatch } from 'react-hook-form'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useEffect, useState, type ReactNode } from 'react'
+import { FormProvider, useForm } from 'react-hook-form'
+import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, MapPin, Search } from 'lucide-react'
 import { z } from 'zod'
 import dayjs, { getIsoWeekYear } from '@/lib/dayjs'
@@ -10,12 +10,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card } from '@/components/ui/card'
 import { useAuthStore } from '@/store/auth-store'
-import type { Tables } from '@/types/database'
+import type { Tables, Database } from '@/types/database'
 import { useNotificationStore } from '@/store/notification-store'
+
+const publicidadAreaSchema = z.object({
+  tiene: z.boolean(),
+  danio: z.boolean().nullable(),
+  residuos: z.boolean().nullable(),
+})
 
 const inspectionSchema = z.object({
   estadoBus: z.enum(['OPERATIVO', 'EN_PANNE']),
@@ -30,10 +34,16 @@ const inspectionSchema = z.object({
     observacion: z.string().optional(),
   }),
   camaras: z.object({
-    monitor: z.enum(['FUNCIONA', 'APAGADO', 'CON_DANO', 'SIN_SENAL']),
-    puertas: z.boolean(),
-    reversa: z.boolean(),
-    visibles: z.boolean(),
+    monitorDanado: z.boolean().nullable(),
+    monitorDetalle: z.string().optional(),
+    camDelantera: z.boolean().nullable(),
+    camCabina: z.boolean().nullable(),
+    camInteriores: z.boolean().nullable(),
+    camTrasera: z.boolean().nullable(),
+    visiblesMonitor: z.boolean().nullable(),
+    activaReversa: z.boolean().nullable(),
+    activaPuertas: z.boolean().nullable(),
+    visiblesPuertasCerradas: z.boolean().nullable(),
     observacion: z.string().optional(),
   }),
   extintores: z.object({
@@ -59,39 +69,127 @@ const inspectionSchema = z.object({
     observacion: z.string().optional(),
   }),
   odometro: z.object({
-    lectura: z.coerce.number().min(0, 'Debe ser positivo'),
+    lectura: z.preprocess(
+      (value) => (value === '' || value === null ? undefined : Number(value)),
+      z.number().min(0, 'Debe ser positivo')
+    ),
     estado: z.enum(['OK', 'INCONSISTENTE', 'NO_FUNCIONA']),
     observacion: z.string().optional(),
   }),
   publicidad: z.object({
-    tiene: z.boolean(),
+    izquierda: publicidadAreaSchema,
+    derecha: publicidadAreaSchema,
+    luneta: publicidadAreaSchema,
     nombre: z.string().optional(),
-    danio: z.boolean().nullable().optional(),
-    residuos: z.boolean().nullable().optional(),
     observacion: z.string().optional(),
   }),
 })
 
-type InspectionForm = z.infer<typeof inspectionSchema>
-
 const steps = [
   { key: 'estado', label: 'Estado general' },
-  { key: 'tag', label: 'TAG y cámaras' },
+  { key: 'tag', label: 'TAG' },
+  { key: 'camaras', label: 'Cámaras' },
   { key: 'extintores', label: 'Extintores' },
   { key: 'mobileye', label: 'Mobileye' },
-  { key: 'odometro', label: 'Odómetro y publicidad' },
+  { key: 'odometro', label: 'Odómetro' },
+  { key: 'publicidad', label: 'Publicidad' },
   { key: 'cierre', label: 'Cierre' },
-]
+] as const
 
-type CameraToggleField = 'camaras.puertas' | 'camaras.reversa' | 'camaras.visibles'
-type PublicidadFlagField = 'publicidad.danio' | 'publicidad.residuos'
-type MobileyeToggleField =
-  | 'mobileye.alertaIzq'
-  | 'mobileye.alertaDer'
-  | 'mobileye.consola'
-  | 'mobileye.sensorFrontal'
-  | 'mobileye.sensorIzq'
-  | 'mobileye.sensorDer'
+const publicityAreas = [
+  { key: 'izquierda', label: 'Lateral Izquierdo' },
+  { key: 'derecha', label: 'Lateral Derecho' },
+  { key: 'luneta', label: 'Luneta' },
+] as const
+
+type PublicidadAreaKey = (typeof publicityAreas)[number]['key']
+
+const cameraHardwareQuestions = [
+  { field: 'camDelantera', label: 'Cámara delantera' },
+  { field: 'camCabina', label: 'Cámara de cabina' },
+  { field: 'camInteriores', label: 'Cámaras interiores' },
+  { field: 'camTrasera', label: 'Cámara trasera' },
+] as const
+
+type CameraHardwareField = (typeof cameraHardwareQuestions)[number]['field']
+
+const mobileyeQuestionList = [
+  { field: 'alertaIzq', label: 'Alerta izquierda' },
+  { field: 'alertaDer', label: 'Alerta derecha' },
+  { field: 'consola', label: 'Consola' },
+  { field: 'sensorFrontal', label: 'Sensor frontal' },
+  { field: 'sensorIzq', label: 'Sensor izquierdo' },
+  { field: 'sensorDer', label: 'Sensor derecho' },
+] as const
+
+type MobileyeField = (typeof mobileyeQuestionList)[number]['field']
+
+type InspectionForm = z.infer<typeof inspectionSchema>
+type StepKey = (typeof steps)[number]['key']
+type CameraPath = `camaras.${CameraHardwareField}`
+type MobileyePath = `mobileye.${MobileyeField}`
+type PublicidadPath = `publicidad.${PublicidadAreaKey}.${'tiene' | 'danio' | 'residuos'}`
+
+interface BinaryQuestionProps {
+  label: string
+  value: boolean | null | undefined
+  onChange: (value: boolean) => void
+  positiveLabel?: string
+  negativeLabel?: string
+  description?: string
+}
+
+const BinaryQuestion = ({
+  label,
+  value,
+  onChange,
+  positiveLabel = 'Sí',
+  negativeLabel = 'No',
+  description,
+}: BinaryQuestionProps) => (
+  <div className="space-y-2 rounded-2xl border border-slate-100/60 bg-white/60 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+    <div>
+      <p className="text-sm font-semibold text-slate-900 dark:text-white">{label}</p>
+      {description && <p className="text-xs text-slate-500">{description}</p>}
+    </div>
+    <div className="flex gap-3">
+      <Button
+        type="button"
+        variant={value === true ? 'success' : 'outline'}
+        className="flex-1 rounded-xl"
+        onClick={() => onChange(true)}
+      >
+        {positiveLabel}
+      </Button>
+      <Button
+        type="button"
+        variant={value === false ? 'destructive' : 'outline'}
+        className="flex-1 rounded-xl"
+        onClick={() => onChange(false)}
+      >
+        {negativeLabel}
+      </Button>
+    </div>
+  </div>
+)
+
+const SectionCard = ({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description?: string
+  children: ReactNode
+}) => (
+  <Card className="space-y-6 border border-slate-100/80 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950/60">
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.35em] text-brand-500">{title}</p>
+      {description && <p className="text-sm text-slate-500">{description}</p>}
+    </div>
+    {children}
+  </Card>
+)
 
 export const InspectionFormPage = () => {
   const { user } = useAuthStore()
@@ -103,11 +201,29 @@ export const InspectionFormPage = () => {
       observacionGeneral: '',
       terminalReportado: user?.terminal ?? '',
       tag: { tiene: true, serie: '', observacion: '' },
-      camaras: { monitor: 'FUNCIONA', puertas: true, reversa: true, visibles: true },
+      camaras: {
+        monitorDanado: null,
+        monitorDetalle: '',
+        camDelantera: null,
+        camCabina: null,
+        camInteriores: null,
+        camTrasera: null,
+        visiblesMonitor: null,
+        activaReversa: null,
+        activaPuertas: null,
+        visiblesPuertasCerradas: null,
+        observacion: '',
+      },
       extintores: { tiene: true },
       mobileye: { aplica: false },
-      odometro: { estado: 'OK', lectura: 0 },
-      publicidad: { tiene: false, danio: null, residuos: null, observacion: '' },
+      odometro: { estado: 'OK', lectura: undefined, observacion: '' },
+      publicidad: {
+        izquierda: { tiene: false, danio: null, residuos: null },
+        derecha: { tiene: false, danio: null, residuos: null },
+        luneta: { tiene: false, danio: null, residuos: null },
+        nombre: '',
+        observacion: '',
+      },
     },
   })
   const [step, setStep] = useState(0)
@@ -117,29 +233,11 @@ export const InspectionFormPage = () => {
   const [saving, setSaving] = useState(false)
   const [coordinates, setCoordinates] = useState<{ lat: number; lon: number } | null>(null)
   const [terminalDetected, setTerminalDetected] = useState<string | null>(null)
-  const estadoBus = useWatch({ control: methods.control, name: 'estadoBus' })
-  const tagTiene = useWatch({ control: methods.control, name: 'tag.tiene' })
-  const extintorTiene = useWatch({ control: methods.control, name: 'extintores.tiene' })
-  const publicidadTiene = useWatch({ control: methods.control, name: 'publicidad.tiene' })
-  const mobileyeAplica = useWatch({ control: methods.control, name: 'mobileye.aplica' })
-  const camMonitor = useWatch({ control: methods.control, name: 'camaras.monitor' })
-  const cameraToggles: Array<{ label: string; field: CameraToggleField }> = [
-    { label: 'Puertas', field: 'camaras.puertas' },
-    { label: 'Reversa', field: 'camaras.reversa' },
-    { label: 'Visibles', field: 'camaras.visibles' },
-  ]
-  const publicidadFlags: Array<{ label: string; field: PublicidadFlagField }> = [
-    { label: 'Daño en gráfica', field: 'publicidad.danio' },
-    { label: 'Residuos', field: 'publicidad.residuos' },
-  ]
-  const mobileyeFields: Array<{ label: string; field: MobileyeToggleField }> = [
-    { label: 'Alerta Izquierda', field: 'mobileye.alertaIzq' },
-    { label: 'Alerta Derecha', field: 'mobileye.alertaDer' },
-    { label: 'Consola', field: 'mobileye.consola' },
-    { label: 'Sensor frontal', field: 'mobileye.sensorFrontal' },
-    { label: 'Sensor izquierdo', field: 'mobileye.sensorIzq' },
-    { label: 'Sensor derecho', field: 'mobileye.sensorDer' },
-  ]
+  const estadoBus = methods.watch('estadoBus')
+  const mobileyeAplica = methods.watch('mobileye.aplica')
+  const mobileyeState = methods.watch('mobileye')
+  const publicityState = methods.watch('publicidad')
+  const stepKey: StepKey = steps[step].key
 
   const requestLocation = () => {
     if (!navigator.geolocation) return
@@ -201,130 +299,17 @@ export const InspectionFormPage = () => {
     }
     methods.setValue(
       'mobileye.aplica',
-      busRecord.marca?.toLowerCase().includes('volvo') ?? false
+      busRecord.marca?.toLowerCase().includes('volvo') ?? false,
+      { shouldDirty: true }
     )
   }
+
+  const handleNext = () => setStep((prev) => Math.min(prev + 1, steps.length - 1))
+  const handlePrev = () => setStep((prev) => Math.max(prev - 1, 0))
 
   const submitInspection = async (values: InspectionForm) => {
     if (!user || !bus) {
       setBusAlert('Debes seleccionar un bus válido antes de enviar.')
-      return
-    }
-    const guard = (
-      condition: boolean,
-      field: keyof InspectionForm | `${keyof InspectionForm}.${string}`,
-      message: string,
-      stepIndex: number
-    ) => {
-      if (condition) return true
-      methods.setError(field as any, { type: 'manual', message })
-      setStep(stepIndex)
-      return false
-    }
-
-    if (
-      !guard(
-        values.tag.tiene ? Boolean(values.tag.serie?.trim()) : Boolean(values.tag.observacion?.trim()),
-        values.tag.tiene ? ('tag.serie' as const) : ('tag.observacion' as const),
-        values.tag.tiene
-          ? 'La serie del TAG es obligatoria'
-          : 'Describe la ausencia del TAG',
-        1
-      )
-    ) {
-      return
-    }
-
-    if (
-      values.camaras.monitor !== 'FUNCIONA' &&
-      !guard(
-        Boolean(values.camaras.observacion?.trim()),
-        'camaras.observacion',
-        'Describe la falla del monitor',
-        1
-      )
-    ) {
-      return
-    }
-
-    if (
-      !guard(
-        values.extintores.tiene
-          ? Boolean(
-              values.extintores.vencimientoMes &&
-                values.extintores.vencimientoAnio &&
-                values.extintores.certificacion &&
-                values.extintores.presion
-            )
-          : Boolean(values.extintores.observacion?.trim()),
-        values.extintores.tiene
-          ? ('extintores.vencimientoMes' as const)
-          : ('extintores.observacion' as const),
-        values.extintores.tiene
-          ? 'Completa el vencimiento y certificación del extintor'
-          : 'Describe por qué no tiene extintor',
-        2
-      )
-    ) {
-      return
-    }
-
-    if (
-      values.mobileye.aplica &&
-      [values.mobileye.alertaDer, values.mobileye.alertaIzq, values.mobileye.consola].some(
-        (value) => value === false
-      ) &&
-      !guard(
-        Boolean(values.mobileye.observacion?.trim()),
-        'mobileye.observacion',
-        'Describe la falla Mobileye detectada',
-        3
-      )
-    ) {
-      return
-    }
-
-    if (
-      values.odometro.estado !== 'OK' &&
-      !guard(
-        Boolean(values.odometro.observacion?.trim()),
-        'odometro.observacion',
-        'Explica la anomalía del odómetro',
-        4
-      )
-    ) {
-      return
-    }
-
-    if (
-      !guard(
-        values.publicidad.tiene
-          ? Boolean(values.publicidad.nombre?.trim())
-          : Boolean(values.publicidad.observacion?.trim()),
-        values.publicidad.tiene
-          ? ('publicidad.nombre' as const)
-          : ('publicidad.observacion' as const),
-        values.publicidad.tiene
-          ? 'Indica la campaña instalada'
-          : 'Describe el estado de la carrocería',
-        4
-      )
-    ) {
-      return
-    }
-
-    if (
-      !values.publicidad.tiene &&
-      !guard(
-        values.publicidad.danio !== null &&
-          values.publicidad.danio !== undefined &&
-          values.publicidad.residuos !== null &&
-          values.publicidad.residuos !== undefined,
-        'publicidad.danio',
-        'Declara daño y residuos para carrocería',
-        4
-      )
-    ) {
       return
     }
 
@@ -344,7 +329,7 @@ export const InspectionFormPage = () => {
         semana_iso: `${getIsoWeekYear()}-W${String(dayjs().isoWeek()).padStart(2, '0')}`,
         operativo: values.estadoBus === 'OPERATIVO',
       }
-      const { data: revision, error } = await supabase
+      const { data: revisionData, error } = await supabase
         .from('revisiones')
         .insert(revisionInsert)
         .select('id')
@@ -352,7 +337,7 @@ export const InspectionFormPage = () => {
       if (error) throw error
 
       await supabase.from('tags').insert({
-        revision_id: revision.id,
+        revision_id: revisionData.id,
         tiene: values.tag.tiene,
         serie: values.tag.serie || null,
         observacion: values.tag.observacion || null,
@@ -361,12 +346,18 @@ export const InspectionFormPage = () => {
       })
 
       await supabase.from('camaras').insert({
-        revision_id: revision.id,
-        monitor_estado: values.camaras.monitor,
+        revision_id: revisionData.id,
+        monitor_estado: values.camaras.monitorDanado ? 'CON_DANO' : 'FUNCIONA',
         detalle: {
-          puertas: values.camaras.puertas,
-          reversa: values.camaras.reversa,
-          visibles: values.camaras.visibles,
+          monitorDetalle: values.camaras.monitorDetalle,
+          camDelantera: values.camaras.camDelantera,
+          camCabina: values.camaras.camCabina,
+          camInteriores: values.camaras.camInteriores,
+          camTrasera: values.camaras.camTrasera,
+          visiblesMonitor: values.camaras.visiblesMonitor,
+          activaReversa: values.camaras.activaReversa,
+          activaPuertas: values.camaras.activaPuertas,
+          visiblesPuertasCerradas: values.camaras.visiblesPuertasCerradas,
         },
         observacion: values.camaras.observacion || null,
         bus_ppu: bus.ppu,
@@ -374,7 +365,7 @@ export const InspectionFormPage = () => {
       })
 
       await supabase.from('extintores').insert({
-        revision_id: revision.id,
+        revision_id: revisionData.id,
         tiene: values.extintores.tiene,
         vencimiento_mes: values.extintores.vencimientoMes ?? null,
         vencimiento_anio: values.extintores.vencimientoAnio ?? null,
@@ -391,14 +382,14 @@ export const InspectionFormPage = () => {
 
       if (values.mobileye.aplica) {
         await supabase.from('mobileye').insert({
-          revision_id: revision.id,
+          revision_id: revisionData.id,
           bus_marca: bus.marca,
-          alerta_izq: values.mobileye.alertaIzq ?? false,
-          alerta_der: values.mobileye.alertaDer ?? false,
-          consola: values.mobileye.consola ?? false,
-          sensor_frontal: values.mobileye.sensorFrontal ?? false,
-          sensor_izq: values.mobileye.sensorIzq ?? false,
-          sensor_der: values.mobileye.sensorDer ?? false,
+          alerta_izq: values.mobileye.alertaIzq ?? null,
+          alerta_der: values.mobileye.alertaDer ?? null,
+          consola: values.mobileye.consola ?? null,
+          sensor_frontal: values.mobileye.sensorFrontal ?? null,
+          sensor_izq: values.mobileye.sensorIzq ?? null,
+          sensor_der: values.mobileye.sensorDer ?? null,
           observacion: values.mobileye.observacion ?? null,
           bus_ppu: bus.ppu,
           terminal: values.terminalReportado,
@@ -406,7 +397,7 @@ export const InspectionFormPage = () => {
       }
 
       await supabase.from('odometro').insert({
-        revision_id: revision.id,
+        revision_id: revisionData.id,
         lectura: values.odometro.lectura,
         estado: values.odometro.estado,
         observacion: values.odometro.observacion ?? null,
@@ -414,37 +405,38 @@ export const InspectionFormPage = () => {
         terminal: values.terminalReportado,
       })
 
-      await supabase.from('publicidad').insert({
-        revision_id: revision.id,
-        tiene: values.publicidad.tiene,
+      const publicidadTiene = publicityAreas.some((area) => values.publicidad[area.key].tiene)
+      const publicidadDanio = publicityAreas.some((area) => values.publicidad[area.key].danio)
+      const publicidadResiduos = publicityAreas.some((area) => values.publicidad[area.key].residuos)
+
+      const publicidadPayload: Database['public']['Tables']['publicidad']['Insert'] = {
+        revision_id: revisionData.id,
+        tiene: publicidadTiene,
+        danio: publicidadDanio,
+        residuos: publicidadResiduos,
+        detalle_lados: {
+          izquierda: values.publicidad.izquierda,
+          derecha: values.publicidad.derecha,
+          luneta: values.publicidad.luneta,
+        },
         nombre_publicidad: values.publicidad.nombre ?? null,
-        danio: values.publicidad.danio ?? null,
-        residuos: values.publicidad.residuos ?? null,
-        detalle_lados: null,
         observacion: values.publicidad.observacion ?? null,
         bus_ppu: bus.ppu,
         terminal: values.terminalReportado,
-      })
+      }
 
-    const triggeredTickets: Array<{ modulo: string; descripcion: string }> = []
+      await supabase.from('publicidad').insert(publicidadPayload)
+
+      const tickets: Array<{ modulo: string; descripcion: string }> = []
       if (
         !values.extintores.tiene ||
         values.extintores.certificacion === 'VENCIDA' ||
         values.extintores.presion !== 'OPTIMO'
       ) {
-        triggeredTickets.push({
-          modulo: 'Extintores',
-          descripcion: 'Revisión con hallazgos críticos en extintores',
-        })
+        tickets.push({ modulo: 'Extintores', descripcion: 'Hallazgos críticos en extintores' })
       }
-      if (
-        (values.publicidad.danio && values.publicidad.tiene === false) ||
-        values.publicidad.residuos
-      ) {
-        triggeredTickets.push({
-          modulo: 'Publicidad',
-          descripcion: 'Publicidad con daño o residuos en carrocería',
-        })
+      if (publicidadDanio || publicidadResiduos) {
+        tickets.push({ modulo: 'Publicidad', descripcion: 'Publicidad con daño o residuos' })
       }
       if (
         values.mobileye.aplica &&
@@ -457,26 +449,24 @@ export const InspectionFormPage = () => {
           values.mobileye.sensorFrontal,
         ].some((value) => value === false)
       ) {
-        triggeredTickets.push({
-          modulo: 'Mobileye',
-          descripcion: 'Se detectaron fallas en sensores Mobileye',
-        })
+        tickets.push({ modulo: 'Mobileye', descripcion: 'Sensor Mobileye reportó falla' })
       }
-      if (triggeredTickets.length) {
-      await supabase.from('tickets').insert(
-        triggeredTickets.map((ticket) => ({
-          revision_id: revision.id,
-          descripcion: ticket.descripcion,
-          modulo: ticket.modulo,
-          estado: 'PENDIENTE' as const,
-          prioridad: 'ALTA' as const,
-          terminal: values.terminalReportado,
-        }))
-      )
+
+      if (tickets.length) {
+        await supabase.from('tickets').insert(
+          tickets.map((ticket) => ({
+            revision_id: revisionData.id,
+            descripcion: ticket.descripcion,
+            modulo: ticket.modulo,
+            estado: 'PENDIENTE' as const,
+            prioridad: 'ALTA' as const,
+            terminal: values.terminalReportado,
+          }))
+        )
       }
 
       push({
-        id: revision.id,
+        id: revisionData.id,
         title: 'Revisión enviada',
         body: `Bus ${bus.ppu} · ${values.terminalReportado}`,
       })
@@ -493,28 +483,395 @@ export const InspectionFormPage = () => {
     }
   }
 
-  const nextStep = async () => {
-    if (estadoBus === 'EN_PANNE') {
-      setStep(steps.length - 1)
-      return
-    }
-    const fieldsPerStep: Record<number, Array<keyof InspectionForm>> = {
-      0: ['estadoBus', 'observacionGeneral', 'terminalReportado'],
-      1: ['tag', 'camaras'],
-      2: ['extintores'],
-      3: ['mobileye'],
-      4: ['odometro', 'publicidad'],
-      5: [],
-    }
-    const currentFields = fieldsPerStep[step]
-    if (currentFields.length) {
-      const valid = await methods.trigger(currentFields as any, { shouldFocus: true })
-      if (!valid) return
-    }
-    setStep((prev) => Math.min(prev + 1, steps.length - 1))
+  const renderEstado = () => (
+    <SectionCard title="Estado del bus" description="Valida condiciones generales antes de continuar.">
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <Label>Estado operativo</Label>
+          <div className="mt-3 flex gap-3">
+            <Button
+              type="button"
+              variant={estadoBus === 'OPERATIVO' ? 'success' : 'outline'}
+              className="flex-1 rounded-2xl"
+              onClick={() => methods.setValue('estadoBus', 'OPERATIVO')}
+            >
+              <CheckCircle2 className="mr-2 h-4 w-4" /> Operativo
+            </Button>
+            <Button
+              type="button"
+              variant={estadoBus === 'EN_PANNE' ? 'destructive' : 'outline'}
+              className="flex-1 rounded-2xl"
+              onClick={() => methods.setValue('estadoBus', 'EN_PANNE')}
+            >
+              <AlertTriangle className="mr-2 h-4 w-4" /> En panne
+            </Button>
+          </div>
+        </div>
+        <div>
+          <Label>Terminal</Label>
+          <Input
+            value={methods.watch('terminalReportado')}
+            onChange={(event) => methods.setValue('terminalReportado', event.target.value)}
+          />
+          {terminalDetected && (
+            <p className="mt-1 text-xs text-emerald-500">Detectado por GPS: {terminalDetected}</p>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="mt-2 gap-2 text-xs text-brand-600"
+            onClick={requestLocation}
+          >
+            <MapPin className="h-3.5 w-3.5" /> Recalcular ubicación
+          </Button>
+        </div>
+      </div>
+      <div>
+        <Label>Observación general</Label>
+        <Textarea
+          value={methods.watch('observacionGeneral')}
+          onChange={(event) => methods.setValue('observacionGeneral', event.target.value)}
+        />
+      </div>
+    </SectionCard>
+  )
+
+  const renderTag = () => (
+    <SectionCard title="TAG" description="Valida instalación y serie">
+      <BinaryQuestion
+        label="¿El bus tiene TAG?"
+        value={methods.watch('tag.tiene')}
+        positiveLabel="Instalado"
+        negativeLabel="No tiene"
+        onChange={(value) => methods.setValue('tag.tiene', value)}
+      />
+      {methods.watch('tag.tiene') ? (
+        <div>
+          <Label>Serie</Label>
+          <Input
+            className="mt-2"
+            placeholder="Ingresa la serie"
+            value={methods.watch('tag.serie') ?? ''}
+            onChange={(event) => methods.setValue('tag.serie', event.target.value)}
+          />
+        </div>
+      ) : (
+        <div>
+          <Label>Observación</Label>
+          <Textarea
+            className="mt-2"
+            placeholder="Describe por qué no tiene TAG"
+            value={methods.watch('tag.observacion') ?? ''}
+            onChange={(event) => methods.setValue('tag.observacion', event.target.value)}
+          />
+        </div>
+      )}
+    </SectionCard>
+  )
+
+  const renderCamaras = () => {
+    const camaras = methods.watch('camaras')
+    return (
+      <SectionCard title="Cámaras" description="Preguntas específicas por componente">
+        <div className="grid gap-4 md:grid-cols-2">
+          <BinaryQuestion
+            label="Monitor de cámaras"
+            description="¿Presenta daños visibles?"
+            value={
+              camaras.monitorDanado == null
+                ? null
+                : camaras.monitorDanado === false
+                ? true
+                : false
+            }
+            positiveLabel="Sin daños"
+            negativeLabel="Con daños"
+            onChange={(value) =>
+              methods.setValue('camaras.monitorDanado', value ? false : true, { shouldDirty: true })
+            }
+          />
+          <div>
+            <Label>Detalle del monitor</Label>
+            <Textarea
+              className="mt-2"
+              placeholder="Ej: cámara 2 sin señal"
+              value={camaras.monitorDetalle ?? ''}
+              onChange={(event) => methods.setValue('camaras.monitorDetalle', event.target.value)}
+            />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {cameraHardwareQuestions.map((item) => (
+            <BinaryQuestion
+              key={item.field}
+              label={`${item.label} (estado físico)`}
+              positiveLabel="Operativa"
+              negativeLabel="Con daño"
+              value={camaras[item.field]}
+              onChange={(value) =>
+                methods.setValue(`camaras.${item.field}` as CameraPath, value, {
+                  shouldDirty: true,
+                })
+              }
+            />
+          ))}
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <BinaryQuestion
+            label="¿Todas las cámaras son visibles?"
+            value={camaras.visiblesMonitor}
+            onChange={(value) => methods.setValue('camaras.visiblesMonitor', value)}
+          />
+          <BinaryQuestion
+            label="¿La cámara trasera se activa con reversa?"
+            value={camaras.activaReversa}
+            onChange={(value) => methods.setValue('camaras.activaReversa', value)}
+          />
+          <BinaryQuestion
+            label="¿Las cámaras de puertas se activan al abrirse?"
+            value={camaras.activaPuertas}
+            onChange={(value) => methods.setValue('camaras.activaPuertas', value)}
+          />
+          <BinaryQuestion
+            label="¿Se muestran con puertas cerradas?"
+            value={camaras.visiblesPuertasCerradas}
+            onChange={(value) => methods.setValue('camaras.visiblesPuertasCerradas', value)}
+          />
+        </div>
+        <div>
+          <Label>Observaciones</Label>
+          <Textarea
+            className="mt-2"
+            value={camaras.observacion ?? ''}
+            onChange={(event) => methods.setValue('camaras.observacion', event.target.value)}
+          />
+        </div>
+      </SectionCard>
+    )
   }
 
-  const prevStep = () => setStep((prev) => Math.max(prev - 1, 0))
+  const renderExtintores = () => (
+    <SectionCard title="Extintores" description="Completa vencimientos y estado físico">
+      <BinaryQuestion
+        label="¿Tiene extintor instalado?"
+        value={methods.watch('extintores.tiene')}
+        onChange={(value) => methods.setValue('extintores.tiene', value)}
+      />
+      {methods.watch('extintores.tiene') && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Input
+            type="number"
+            placeholder="Mes vencimiento"
+            value={methods.watch('extintores.vencimientoMes') ?? ''}
+            onChange={(event) =>
+              methods.setValue('extintores.vencimientoMes', Number(event.target.value))
+            }
+          />
+          <Input
+            type="number"
+            placeholder="Año vencimiento"
+            value={methods.watch('extintores.vencimientoAnio') ?? ''}
+            onChange={(event) =>
+              methods.setValue('extintores.vencimientoAnio', Number(event.target.value))
+            }
+          />
+        </div>
+      )}
+    </SectionCard>
+  )
+
+  const renderMobileye = () => (
+    <SectionCard title="Mobileye" description="Aplica solo a buses Volvo">
+      <BinaryQuestion
+        label="¿Este bus cuenta con Mobileye?"
+        value={mobileyeAplica}
+        positiveLabel="Sí, aplica"
+        negativeLabel="No aplica"
+        onChange={(value) => methods.setValue('mobileye.aplica', value)}
+      />
+      {mobileyeAplica && (
+        <div className="grid gap-4 md:grid-cols-3">
+          {mobileyeQuestionList.map((item) => (
+            <BinaryQuestion
+              key={item.field}
+              label={item.label}
+              value={mobileyeState?.[item.field] ?? null}
+              positiveLabel="OK"
+              negativeLabel="Falla"
+              onChange={(value) =>
+                methods.setValue(`mobileye.${item.field}` as MobileyePath, value, { shouldDirty: true })
+              }
+            />
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  )
+
+  const renderOdometro = () => (
+    <SectionCard title="Odómetro" description="Captura lectura real">
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <Label>Lectura</Label>
+          <Input
+            type="text"
+            inputMode="numeric"
+            placeholder="Ej: 145200"
+            value={(() => {
+              const lectura = methods.watch('odometro.lectura')
+              if (lectura === undefined || Number.isNaN(lectura)) return ''
+              return lectura.toString()
+            })()}
+            onChange={(event) => {
+              const raw = event.target.value
+              methods.setValue(
+                'odometro.lectura',
+                raw === '' ? (undefined as unknown as number) : Number(raw),
+                { shouldDirty: true }
+              )
+            }}
+          />
+        </div>
+        <div>
+          <Label>Estado</Label>
+          <div className="mt-2 flex flex-wrap gap-3">
+            {['OK', 'INCONSISTENTE', 'NO_FUNCIONA'].map((estado) => (
+              <Button
+                key={estado}
+                type="button"
+                variant={methods.watch('odometro.estado') === estado ? 'success' : 'outline'}
+                onClick={() =>
+                  methods.setValue('odometro.estado', estado as InspectionForm['odometro']['estado'])
+                }
+              >
+                {estado}
+              </Button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div>
+        <Label>Observación</Label>
+        <Textarea
+          className="mt-2"
+          value={methods.watch('odometro.observacion') ?? ''}
+          onChange={(event) => methods.setValue('odometro.observacion', event.target.value)}
+        />
+      </div>
+    </SectionCard>
+  )
+
+  const renderPublicidad = () => (
+    <SectionCard title="Publicidad" description="Evalúa cada cara del bus">
+      <div className="grid gap-6">
+        {publicityAreas.map((area) => (
+          <div key={area.key} className="rounded-2xl border border-slate-100/60 p-4 dark:border-slate-800">
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">{area.label}</p>
+            <div className="mt-3 space-y-3">
+              <BinaryQuestion
+                label="¿Tiene publicidad instalada?"
+                value={publicityState?.[area.key].tiene ?? false}
+                onChange={(value) =>
+                  methods.setValue(`publicidad.${area.key}.tiene` as PublicidadPath, value, {
+                    shouldDirty: true,
+                  })
+                }
+              />
+              <BinaryQuestion
+                label="¿Daño en pintura?"
+                value={
+                  publicityState?.[area.key].danio == null
+                    ? null
+                    : publicityState?.[area.key].danio === false
+                    ? true
+                    : false
+                }
+                positiveLabel="Sin daño"
+                negativeLabel="Con daño"
+                onChange={(value) =>
+                  methods.setValue(`publicidad.${area.key}.danio` as PublicidadPath, value ? false : true, {
+                    shouldDirty: true,
+                  })
+                }
+              />
+              <BinaryQuestion
+                label="¿Residuos?"
+                value={
+                  publicityState?.[area.key].residuos == null
+                    ? null
+                    : publicityState?.[area.key].residuos === false
+                    ? true
+                    : false
+                }
+                positiveLabel="Limpio"
+                negativeLabel="Con residuos"
+                onChange={(value) =>
+                  methods.setValue(`publicidad.${area.key}.residuos` as PublicidadPath, value ? false : true, {
+                    shouldDirty: true,
+                  })
+                }
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <Label>Nombre de campaña</Label>
+          <Input
+            className="mt-2"
+            value={publicityState?.nombre ?? ''}
+            onChange={(event) => methods.setValue('publicidad.nombre', event.target.value)}
+          />
+        </div>
+        <div>
+          <Label>Observaciones</Label>
+          <Textarea
+            className="mt-2"
+            value={publicityState?.observacion ?? ''}
+            onChange={(event) => methods.setValue('publicidad.observacion', event.target.value)}
+          />
+        </div>
+      </div>
+    </SectionCard>
+  )
+
+  const renderCierre = () => (
+    <SectionCard title="Resumen" description="Confirma antes de enviar">
+      <div className="rounded-2xl border border-slate-100/70 p-4 text-sm dark:border-slate-800">
+        <p>Bus: {bus?.ppu ?? 'Selecciona una PPU'}</p>
+        <p>Terminal: {methods.watch('terminalReportado')}</p>
+        <p>Estado: {estadoBus}</p>
+      </div>
+      <p className="text-xs text-slate-500">
+        Al enviar se notificará a los supervisores y se crearán tickets automáticos según hallazgos.
+      </p>
+    </SectionCard>
+  )
+
+  const renderStep = () => {
+    switch (stepKey) {
+      case 'estado':
+        return renderEstado()
+      case 'tag':
+        return renderTag()
+      case 'camaras':
+        return renderCamaras()
+      case 'extintores':
+        return renderExtintores()
+      case 'mobileye':
+        return renderMobileye()
+      case 'odometro':
+        return renderOdometro()
+      case 'publicidad':
+        return renderPublicidad()
+      case 'cierre':
+        return renderCierre()
+      default:
+        return null
+    }
+  }
 
   return (
     <FormProvider {...methods}>
@@ -523,8 +880,8 @@ export const InspectionFormPage = () => {
         className="space-y-8"
         aria-label="Formulario principal New Mini-Check"
       >
-        <Card className="p-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end">
+        <Card className="space-y-4 p-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end">
             <div className="flex-1">
               <Label htmlFor="busSearch">PPU o Nº interno</Label>
               <Input
@@ -534,18 +891,12 @@ export const InspectionFormPage = () => {
                 onChange={(event) => setBusQuery(event.target.value.toUpperCase())}
               />
             </div>
-            <Button
-              type="button"
-              className="gap-2 rounded-2xl"
-              onClick={searchBus}
-              variant="outline"
-            >
-              <Search className="h-4 w-4" />
-              Buscar bus
+            <Button type="button" className="gap-2 rounded-2xl" variant="outline" onClick={searchBus}>
+              <Search className="h-4 w-4" /> Buscar bus
             </Button>
           </div>
           {bus && (
-            <div className="mt-4 rounded-2xl bg-slate-50/80 p-4 text-sm dark:bg-slate-900/40">
+            <div className="rounded-2xl bg-slate-50/80 p-4 text-sm dark:bg-slate-900/40">
               <p className="text-base font-semibold text-slate-900 dark:text-white">
                 {bus.ppu} · #{bus.numero_interno} · {bus.marca} {bus.modelo}
               </p>
@@ -553,440 +904,56 @@ export const InspectionFormPage = () => {
             </div>
           )}
           {busAlert && (
-            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
               {busAlert}
             </div>
           )}
         </Card>
 
-        <Card className="p-6">
-          <div className="flex flex-wrap items-center gap-3">
-            {steps.map((item, index) => {
-              const isDisabled =
-                estadoBus === 'EN_PANNE' && index !== 0 && index !== steps.length - 1
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold ${
-                    step === index
-                      ? 'bg-brand-600 text-white'
-                      : 'bg-slate-100 text-slate-400 dark:bg-slate-900/40'
-                  } ${isDisabled ? 'opacity-40' : ''}`}
-                  disabled={isDisabled}
-                  onClick={() => !isDisabled && setStep(index)}
-                >
-                  <span className="text-xs">{index + 1}</span>
-                  {item.label}
-                </button>
-              )
-            })}
+        <Card className="p-4">
+          <div className="flex flex-wrap gap-2">
+            {steps.map((item, index) => (
+              <button
+                key={item.key}
+                type="button"
+                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide ${
+                  step === index
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-500 dark:bg-slate-900/40'
+                }`}
+                onClick={() => setStep(index)}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
         </Card>
 
         <AnimatePresence mode="wait">
           <motion.div
-            key={step}
+            key={stepKey}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.25 }}
           >
-            {step === 0 && (
-              <Card className="space-y-6 p-6">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <Label>Estado del bus</Label>
-                    <div className="mt-2 flex gap-3">
-                      {['OPERATIVO', 'EN_PANNE'].map((state) => (
-                        <Button
-                          key={state}
-                          type="button"
-                          variant={estadoBus === state ? 'default' : 'outline'}
-                          onClick={() => methods.setValue('estadoBus', state as any)}
-                          className="flex-1 rounded-2xl"
-                        >
-                          {state === 'OPERATIVO' ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <AlertTriangle className="mr-2 h-4 w-4" />}
-                          {state === 'OPERATIVO' ? 'Operativo' : 'En panne'}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <Label>Terminal</Label>
-                    <Input
-                      value={methods.watch('terminalReportado')}
-                      onChange={(event) =>
-                        methods.setValue('terminalReportado', event.target.value)
-                      }
-                    />
-                    {terminalDetected && (
-                      <p className="mt-1 text-xs text-emerald-500">
-                        Detección automática: {terminalDetected}
-                      </p>
-                    )}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="mt-2 gap-2 text-xs text-brand-600"
-                      onClick={requestLocation}
-                    >
-                      <MapPin className="h-3.5 w-3.5" />
-                      Recalcular por GPS
-                    </Button>
-                  </div>
-                </div>
-                <div>
-                  <Label>Observación general</Label>
-                  <Textarea
-                    value={methods.watch('observacionGeneral')}
-                    onChange={(event) =>
-                      methods.setValue('observacionGeneral', event.target.value)
-                    }
-                  />
-                </div>
-              </Card>
-            )}
-
-            {step === 1 && (
-              <Card className="space-y-6 p-6">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <Label>TAG instalado</Label>
-                    <div className="mt-2 flex items-center gap-2">
-                      <Switch
-                        checked={tagTiene}
-                        onCheckedChange={(checked) =>
-                          methods.setValue('tag.tiene', checked, { shouldDirty: true })
-                        }
-                      />
-                      <span className="text-sm text-slate-500">{tagTiene ? 'Sí' : 'No'}</span>
-                    </div>
-                    {tagTiene ? (
-                      <Input
-                        className="mt-2"
-                        placeholder="Serie"
-                        value={methods.watch('tag.serie') ?? ''}
-                        onChange={(event) =>
-                          methods.setValue('tag.serie', event.target.value, { shouldDirty: true })
-                        }
-                      />
-                    ) : (
-                      <Textarea
-                        className="mt-2"
-                        placeholder="Describe la observación"
-                        value={methods.watch('tag.observacion') ?? ''}
-                        onChange={(event) =>
-                          methods.setValue('tag.observacion', event.target.value, {
-                            shouldDirty: true,
-                          })
-                        }
-                      />
-                    )}
-                  </div>
-                  <div>
-                    <Label>Monitor cámaras</Label>
-                    <Select
-                      value={camMonitor}
-                      onValueChange={(value: InspectionForm['camaras']['monitor']) =>
-                        methods.setValue('camaras.monitor', value)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona el estado" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="FUNCIONA">Funciona</SelectItem>
-                        <SelectItem value="APAGADO">Apagado</SelectItem>
-                        <SelectItem value="CON_DANO">Con daño</SelectItem>
-                        <SelectItem value="SIN_SENAL">Sin señal</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {camMonitor !== 'FUNCIONA' ? (
-                      <Textarea
-                        className="mt-2"
-                        placeholder="Describe la falla encontrada"
-                        value={methods.watch('camaras.observacion') ?? ''}
-                        onChange={(event) =>
-                          methods.setValue('camaras.observacion', event.target.value)
-                        }
-                      />
-                    ) : (
-                      <div className="mt-2 flex gap-4">
-                        {cameraToggles.map(({ label, field }) => {
-                          const currentValue = methods.watch(field)
-                          return (
-                            <button
-                              type="button"
-                              key={field}
-                              onClick={() =>
-                                methods.setValue(field, !currentValue, {
-                                  shouldDirty: true,
-                                })
-                              }
-                              className={`flex-1 rounded-2xl border px-3 py-2 text-sm font-semibold ${
-                                currentValue
-                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                  : 'border-slate-200 text-slate-500'
-                              }`}
-                            >
-                              {label}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {step === 2 && (
-              <Card className="space-y-6 p-6">
-                <div>
-                  <Label>Extintor instalado</Label>
-                  <div className="mt-2 flex items-center gap-2">
-                    <Switch
-                      checked={extintorTiene}
-                      onCheckedChange={(checked) =>
-                        methods.setValue('extintores.tiene', checked, { shouldDirty: true })
-                      }
-                    />
-                    <span className="text-sm text-slate-500">{extintorTiene ? 'Sí' : 'No'}</span>
-                  </div>
-                </div>
-                {extintorTiene ? (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Input
-                      type="number"
-                      placeholder="Mes vencimiento"
-                      value={methods.watch('extintores.vencimientoMes') ?? ''}
-                      onChange={(event) =>
-                        methods.setValue('extintores.vencimientoMes', Number(event.target.value))
-                      }
-                    />
-                    <Input
-                      type="number"
-                      placeholder="Año vencimiento"
-                      value={methods.watch('extintores.vencimientoAnio') ?? ''}
-                      onChange={(event) =>
-                        methods.setValue('extintores.vencimientoAnio', Number(event.target.value))
-                      }
-                    />
-                    <Select
-                      value={methods.watch('extintores.certificacion') ?? undefined}
-                      onValueChange={(value) =>
-                        methods.setValue('extintores.certificacion', value as any)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Certificación" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="VIGENTE">Vigente</SelectItem>
-                        <SelectItem value="VENCIDA">Vencida</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={methods.watch('extintores.presion') ?? undefined}
-                      onValueChange={(value) =>
-                        methods.setValue('extintores.presion', value as any)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Presión" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="SOBRECARGA">Sobrecarga</SelectItem>
-                        <SelectItem value="OPTIMO">Óptimo</SelectItem>
-                        <SelectItem value="BAJA_CARGA">Baja carga</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : (
-                  <Textarea
-                    placeholder="Describe la observación obligatoria"
-                    value={methods.watch('extintores.observacion') ?? ''}
-                    onChange={(event) =>
-                      methods.setValue('extintores.observacion', event.target.value)
-                    }
-                  />
-                )}
-              </Card>
-            )}
-
-            {step === 3 && (
-              <Card className="space-y-6 p-6">
-                <div>
-                  <Label>Mobileye (solo buses Volvo)</Label>
-                  <div className="mt-2 flex items-center gap-2">
-                    <Switch
-                      checked={mobileyeAplica}
-                      onCheckedChange={(checked) =>
-                        methods.setValue('mobileye.aplica', checked, { shouldDirty: true })
-                      }
-                    />
-                    <span className="text-sm text-slate-500">
-                      {mobileyeAplica ? 'Aplicable' : 'No aplica'}
-                    </span>
-                  </div>
-                </div>
-                {mobileyeAplica && (
-                  <div className="grid gap-4 md:grid-cols-3">
-                    {mobileyeFields.map(({ field, label }) => {
-                      const value = methods.watch(field)
-                      return (
-                        <button
-                          key={field}
-                          type="button"
-                          onClick={() =>
-                            methods.setValue(field, !value, {
-                              shouldDirty: true,
-                            })
-                          }
-                          className={`rounded-2xl border px-3 py-2 text-sm font-semibold ${
-                            value
-                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                              : 'border-red-200 bg-red-50 text-red-600'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </Card>
-            )}
-
-            {step === 4 && (
-              <Card className="space-y-6 p-6">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <Label>Lectura odómetro</Label>
-                    <Input
-                      type="number"
-                      value={methods.watch('odometro.lectura')}
-                      onChange={(event) =>
-                        methods.setValue('odometro.lectura', Number(event.target.value))
-                      }
-                    />
-                    <div className="mt-2">
-                      <Select
-                        value={methods.watch('odometro.estado')}
-                        onValueChange={(value) =>
-                          methods.setValue('odometro.estado', value as any)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Estado" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="OK">OK</SelectItem>
-                          <SelectItem value="INCONSISTENTE">Inconsistente</SelectItem>
-                          <SelectItem value="NO_FUNCIONA">No funciona</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div>
-                    <Label>Publicidad</Label>
-                    <div className="mt-2 flex items-center gap-2">
-                      <Switch
-                        checked={publicidadTiene}
-                        onCheckedChange={(checked) =>
-                          methods.setValue('publicidad.tiene', checked, { shouldDirty: true })
-                        }
-                      />
-                      <span className="text-sm text-slate-500">
-                        {publicidadTiene ? 'Con publicidad' : 'Sin publicidad'}
-                      </span>
-                    </div>
-                    {publicidadTiene ? (
-                      <Input
-                        className="mt-2"
-                        placeholder="Nombre campaña"
-                        value={methods.watch('publicidad.nombre') ?? ''}
-                        onChange={(event) =>
-                          methods.setValue('publicidad.nombre', event.target.value)
-                        }
-                      />
-                    ) : (
-                      <div className="mt-4 grid gap-4 md:grid-cols-2">
-                        {publicidadFlags.map(({ label, field }) => {
-                          const value = methods.watch(field)
-                          return (
-                            <div key={field}>
-                              <p className="text-xs uppercase tracking-wide text-slate-400">
-                                {label}
-                              </p>
-                              <div className="mt-2 flex gap-2">
-                                <Button
-                                  type="button"
-                                  variant={value === true ? 'destructive' : 'outline'}
-                                  onClick={() => methods.setValue(field, true, { shouldDirty: true })}
-                                >
-                                  Sí
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant={value === false ? 'default' : 'outline'}
-                                  onClick={() =>
-                                    methods.setValue(field, false, { shouldDirty: true })
-                                  }
-                                >
-                                  No
-                                </Button>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {step === 5 && (
-              <Card className="space-y-4 p-6">
-                <h3 className="text-xl font-semibold">Confirmación</h3>
-                <p className="text-sm text-slate-500">
-                  Revisa la información capturada. Al enviar se dispararán notificaciones en
-                  tiempo real al supervisor de terminal.
-                </p>
-                <div className="rounded-2xl bg-slate-50/80 p-4 text-sm dark:bg-slate-900/40">
-                  <p>Bus: {bus?.ppu ?? '—'}</p>
-                  <p>Estado: {estadoBus}</p>
-                  <p>Terminal: {methods.watch('terminalReportado')}</p>
-                </div>
-              </Card>
-            )}
+            {renderStep()}
           </motion.div>
         </AnimatePresence>
 
-        <div className="flex flex-col-reverse gap-3 md:flex-row md:justify-between">
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={step === 0}
-            onClick={prevStep}
-            className="rounded-2xl"
-          >
+        <div className="flex flex-col gap-3 md:flex-row md:justify-between">
+          <Button type="button" variant="ghost" disabled={step === 0} onClick={handlePrev}>
             Paso anterior
           </Button>
-          <div className="flex gap-3">
-            {step < steps.length - 1 ? (
-              <Button type="button" onClick={nextStep} className="rounded-2xl">
-                Continuar
-              </Button>
-            ) : (
-              <Button type="submit" className="rounded-2xl" disabled={saving}>
-                {saving ? 'Guardando...' : 'Enviar revisión'}
-              </Button>
-            )}
-          </div>
+          {stepKey === 'cierre' ? (
+            <Button type="submit" disabled={saving} className="rounded-2xl">
+              {saving ? 'Guardando...' : 'Enviar revisión'}
+            </Button>
+          ) : (
+            <Button type="button" onClick={handleNext} className="rounded-2xl">
+              Continuar
+            </Button>
+          )}
         </div>
       </form>
     </FormProvider>

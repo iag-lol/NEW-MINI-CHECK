@@ -10,6 +10,8 @@ const buttonVariants = cva(
       variant: {
         default:
           'bg-brand-600 text-white shadow focus-visible:ring-offset-slate-900 hover:bg-brand-500',
+        success:
+          'bg-emerald-600 text-white shadow focus-visible:ring-offset-slate-900 hover:bg-emerald-500',
         outline:
           'border border-slate-200/60 bg-transparent text-slate-900 hover:bg-slate-100 dark:border-slate-800 dark:text-slate-100 dark:hover:bg-slate-900',
         subtle:
