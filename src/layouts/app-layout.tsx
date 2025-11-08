@@ -1,0 +1,33 @@
+import { Outlet } from 'react-router-dom'
+import { useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
+import { Sidebar } from '@/components/layout/sidebar'
+import { MobileNav } from '@/components/layout/mobile-nav'
+import { TopBar } from '@/components/layout/top-bar'
+import { useRealtimeSubscriptions } from '@/hooks/use-realtime'
+import { useAuthStore } from '@/store/auth-store'
+
+export const AppLayout = () => {
+  useRealtimeSubscriptions()
+  const location = useLocation()
+  const { setLastVisitedPath } = useAuthStore()
+
+  useEffect(() => {
+    setLastVisitedPath(location.pathname)
+  }, [location.pathname, setLastVisitedPath])
+
+  return (
+    <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
+      <Sidebar />
+      <div className="flex flex-1 flex-col md:pl-[var(--sidebar-width)]">
+        <TopBar />
+        <main className="flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-10">
+          <div className="mx-auto max-w-6xl">
+            <Outlet />
+          </div>
+        </main>
+      </div>
+      <MobileNav />
+    </div>
+  )
+}
