@@ -1,73 +1,70 @@
-# React + TypeScript + Vite
+# New Mini-Check
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Sistema web para la revisión integral de flota de buses, con autenticación por RUT, workflow de inspección paso a paso, tablero supervisor, notificaciones en tiempo real (Supabase Realtime) y exportaciones XLSX/PDF listas para auditorías.
 
-Currently, two official plugins are available:
+## Tecnologías principales
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- React 19 + Vite + TypeScript
+- TailwindCSS + Shadcn/UI + Framer Motion
+- Zustand y React Query para estado y datos
+- Supabase (Auth, Postgres, Storage, Realtime)
+- Leaflet con capas satelitales de Mapbox
+- ExcelJS y jsPDF para exportaciones
 
-## React Compiler
+## Requisitos
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Node.js 20+
+- Cuenta de Supabase
+- Token público de Mapbox
 
-## Expanding the ESLint configuration
+## Variables de entorno
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Crea `.env` tomando como referencia `.env.example`:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+VITE_MAPBOX_TOKEN=pk....
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Scripts básicos
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install       # instala dependencias
+npm run dev       # entorno local con HMR
+npm run build     # compila a producción (dist/)
+npm run preview   # sirve el build de dist/
 ```
+
+## Despliegue en Render (Static Site)
+
+- **Branch:** `main`
+- **Build command:** `npm install && npm run build`
+- **Publish directory:** `dist`
+- Configura las variables de entorno anteriores en Render → Environment.
+
+## Supabase
+
+1. Ejecuta el contenido de `supabase/schema.sql` en el SQL Editor de tu proyecto. Crea tablas, relaciones y políticas básicas.
+2. El script inserta un supervisor listo para ingresar:
+
+| Rol         | RUT            | Contraseña        |
+|-------------|----------------|-------------------|
+| Supervisor  | `12.345.678-5` | `Supervisor#2025` |
+
+> El password se cifra automáticamente con `crypt(...)` al ejecutar el script.
+
+3. Completa las tablas `flota`, `personal`, etc., con tus datos reales (todas las vistas consumen Supabase directamente, no hay datos mockeados).
+
+## Estructura relevante
+
+- `src/features/*`: Páginas y módulos (dashboard, formulario, reportes, etc.).
+- `src/store/*`: Zustand stores (auth, UI, notificaciones).
+- `src/lib/*`: utilidades (Supabase client, geocercas, RUT helpers, exports).
+- `supabase/schema.sql`: definición completa de la base y datos semilla.
+
+## Notas
+
+- El formulario de inspección aplica todas las reglas descritas (bloqueos por estado, validaciones condicionales, tickets automáticos).
+- Las notificaciones push dependen de los permisos del navegador; en móviles se complementan con sonido generado vía Web Audio API.
+- Si deseas usuarios adicionales, reutiliza el bloque `insert into public.usuarios` del script, ajustando `rut`, `cargo`, `terminal` y contraseña.
