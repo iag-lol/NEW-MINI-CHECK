@@ -36,6 +36,7 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { Tables } from '@/types/database'
 import { TERMINAL_GEOFENCES, type TerminalSlug } from '@/constants/geofences'
+import { useActiveInspectors } from '@/hooks/use-active-inspectors'
 
 interface WeekPayload {
   start: string
@@ -86,6 +87,7 @@ export const DashboardPage = () => {
   const [exporting, setExporting] = useState(false)
   const { data: revisions, isLoading: revisionsLoading } = useWeeklyRevisions()
   const { data: tickets } = useTickets()
+  const { inspectors: liveInspectors } = useActiveInspectors()
   const mapToken = import.meta.env.VITE_MAPBOX_TOKEN
   const mapRef = useRef<LeafletMap | null>(null)
   const [mapLayer, setMapLayer] = useState<BaseLayerKey>('satellite')
@@ -162,23 +164,6 @@ export const DashboardPage = () => {
     const map = new Map<string, Tables<'revisiones'>>()
     revisions?.forEach((revision) => map.set(revision.id, revision))
     return map
-  }, [revisions])
-
-  const inspectorsActivos = useMemo(() => {
-    if (!revisions) return []
-    const now = dayjs()
-    const limitHours = 6
-    const ordered = [...revisions].sort(
-      (a, b) => dayjs(b.created_at).valueOf() - dayjs(a.created_at).valueOf()
-    )
-    const latestByInspector = new Map<string, Tables<'revisiones'>>()
-    ordered.forEach((revision) => {
-      if (now.diff(dayjs(revision.created_at), 'hour') > limitHours) return
-      if (!latestByInspector.has(revision.inspector_rut)) {
-        latestByInspector.set(revision.inspector_rut, revision)
-      }
-    })
-    return Array.from(latestByInspector.values())
   }, [revisions])
 
   const ticketMarkers = useMemo(() => {
@@ -490,19 +475,22 @@ export const DashboardPage = () => {
                 ))}
               </LayerGroup>
               <LayerGroup>
-                {inspectorsActivos.map((revision) => (
+                {liveInspectors.map((inspector) => (
                   <CircleMarker
-                    key={`inspector-${revision.inspector_rut}`}
-                    center={[revision.lat, revision.lon]}
+                    key={`inspector-${inspector.usuario_rut}`}
+                    center={[inspector.lat, inspector.lon]}
                     radius={6}
                     color="#0ea5e9"
                     weight={2}
                     opacity={0.9}
                   >
                     <Popup>
-                      <p className="text-sm font-semibold">{revision.inspector_nombre}</p>
+                      <p className="text-sm font-semibold">{inspector.nombre}</p>
                       <p className="text-xs text-slate-500">
-                        Último registro {dayjs(revision.created_at).format('ddd HH:mm')}
+                        {inspector.terminal} · Precisión ±
+                        {Math.round(inspector.accuracy ?? 0)} m
+                        <br />
+                        Último pulso {dayjs(inspector.last_heartbeat).fromNow()}
                       </p>
                     </Popup>
                   </CircleMarker>
@@ -540,20 +528,20 @@ export const DashboardPage = () => {
           <div className="space-y-4">
             <div className="rounded-2xl border border-slate-100/80 p-4 dark:border-slate-900">
               <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                Inspectores activos ({inspectorsActivos.length})
+                Inspectores activos en vivo ({liveInspectors.length})
               </p>
               <ScrollArea className="mt-3 h-40 pr-3">
-                {inspectorsActivos.length === 0 && (
+                {liveInspectors.length === 0 && (
                   <p className="text-xs text-slate-400">Sin inspectores conectados en las últimas horas.</p>
                 )}
-                {inspectorsActivos.map((revision) => (
-                  <div key={revision.inspector_rut} className="mb-3 text-xs last:mb-0">
+                {liveInspectors.map((inspector) => (
+                  <div key={inspector.usuario_rut} className="mb-3 text-xs last:mb-0">
                     <p className="font-semibold text-slate-800 dark:text-white">
-                      {revision.inspector_nombre}
+                      {inspector.nombre}
                     </p>
                     <p className="text-slate-500">
-                      {revision.bus_ppu} · {revision.terminal_detectado} ·{' '}
-                      {dayjs(revision.created_at).format('HH:mm')} hrs
+                      {inspector.terminal} · Precisión ±{Math.round(inspector.accuracy ?? 0)} m ·{' '}
+                      {dayjs(inspector.last_heartbeat).format('HH:mm')} hrs
                     </p>
                   </div>
                 ))}
