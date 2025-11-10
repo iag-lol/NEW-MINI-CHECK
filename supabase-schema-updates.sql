@@ -5,7 +5,13 @@
 -- Script idempotente - puede ejecutarse múltiples veces
 -- =============================================
 
--- 1. ACTUALIZAR CONSTRAINT DE CAMARAS (monitor_estado)
+-- 1. MIGRAR DATOS ANTIGUOS PRIMERO (CON_DANO → CON_DAÑO)
+-- Esto debe hacerse ANTES de actualizar el constraint
+UPDATE camaras
+SET monitor_estado = 'CON_DAÑO'
+WHERE monitor_estado = 'CON_DANO';
+
+-- 2. ACTUALIZAR CONSTRAINT DE CAMARAS (monitor_estado)
 DO $$
 BEGIN
     -- Eliminar constraint antiguo si existe
@@ -20,11 +26,6 @@ BEGIN
     ALTER TABLE camaras ADD CONSTRAINT camaras_monitor_estado_check
     CHECK (monitor_estado IN ('FUNCIONA', 'APAGADO', 'CON_DAÑO', 'SIN_SENAL'));
 END $$;
-
--- 2. MIGRAR DATOS ANTIGUOS (CON_DANO → CON_DAÑO)
-UPDATE camaras
-SET monitor_estado = 'CON_DAÑO'
-WHERE monitor_estado = 'CON_DANO';
 
 -- 3. AGREGAR COLUMNA updated_at EN CAMARAS
 DO $$
@@ -389,7 +390,32 @@ WHERE e.certificacion = 'VENCIDA'
        AND CURRENT_DATE > DATE(e.vencimiento_anio || '-' || LPAD(e.vencimiento_mes::TEXT, 2, '0') || '-01'))
 ORDER BY e.created_at DESC;
 
--- 17. VERIFICACIÓN FINAL
+-- 17. PERMITIR INSERCIÓN Y ACTUALIZACIÓN EN USUARIOS
+-- Primero eliminar políticas existentes si hay conflictos
+DROP POLICY IF EXISTS "Permitir inserción pública de usuarios" ON usuarios;
+DROP POLICY IF EXISTS "Permitir actualización de usuarios" ON usuarios;
+
+-- Crear política para INSERT (permite crear nuevos usuarios)
+CREATE POLICY "Permitir inserción pública de usuarios"
+ON usuarios
+FOR INSERT
+WITH CHECK (true);
+
+-- Crear política para UPDATE (permite actualizar usuarios existentes)
+CREATE POLICY "Permitir actualización de usuarios"
+ON usuarios
+FOR UPDATE
+USING (true)
+WITH CHECK (true);
+
+-- Crear política para DELETE (opcional, solo si necesitas eliminar usuarios)
+DROP POLICY IF EXISTS "Permitir eliminación de usuarios" ON usuarios;
+CREATE POLICY "Permitir eliminación de usuarios"
+ON usuarios
+FOR DELETE
+USING (true);
+
+-- 18. VERIFICACIÓN FINAL
 -- Muestra un resumen de los datos actualizados
 SELECT
     'camaras' as tabla,
@@ -424,8 +450,8 @@ FROM tickets;
 -- =============================================
 -- RESUMEN DE CAMBIOS APLICADOS:
 --
--- ✅ Constraint de monitor_estado actualizado (CON_DAÑO con tilde)
--- ✅ Datos migrados automáticamente (CON_DANO → CON_DAÑO)
+-- ✅ Datos migrados automáticamente (CON_DANO → CON_DAÑO) - PRIMERO
+-- ✅ Constraint de monitor_estado actualizado (CON_DAÑO con tilde) - DESPUÉS
 -- ✅ Columnas updated_at agregadas en 6 tablas
 -- ✅ Triggers automáticos creados para updated_at
 -- ✅ 4 columnas nuevas en tickets (responsable, fecha_limite, completado_por, completado_en)
@@ -434,6 +460,7 @@ FROM tickets;
 -- ✅ Función get_historial_bus() para historial completo
 -- ✅ Vista reporte_camaras para análisis
 -- ✅ Vista extintores_vencidos para alertas
+-- ✅ Políticas RLS para usuarios (INSERT, UPDATE, DELETE)
 -- ✅ Verificación final con conteo de registros
 --
 -- El script es idempotente y puede ejecutarse múltiples veces sin errores.
