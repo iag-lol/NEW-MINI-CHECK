@@ -26,21 +26,25 @@ export function WorkerReports() {
   const loadWorkerStats = async () => {
     try {
       // Obtener todos los inspectores
-      const { data: usuarios } = await supabase
+      const { data: usuariosData } = await supabase
         .from('usuarios')
         .select('*')
         .eq('cargo', 'INSPECTOR')
 
-      if (!usuarios) return
+      const usuarios = (usuariosData || []) as Worker[]
+
+      if (!usuarios || usuarios.length === 0) return
 
       // Obtener estadísticas de cada inspector
       const stats = await Promise.all(
         usuarios.map(async (worker) => {
-          const { data: revisiones } = await supabase
+          const { data: revisionesData } = await supabase
             .from('revisiones')
             .select('*')
             .eq('inspector_rut', worker.rut)
             .order('created_at', { ascending: false })
+
+          const revisiones = (revisionesData || []) as Tables<'revisiones'>[]
 
           const totalInspections = revisiones?.length || 0
           const operativeCount = revisiones?.filter((r) => r.operativo).length || 0

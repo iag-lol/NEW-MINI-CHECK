@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, Calendar, MapPin, User, Clock, Info, ChevronDown, ChevronUp } from 'lucide-react'
+import { Search, MapPin, User, Info, ChevronDown, ChevronUp } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -26,12 +26,13 @@ export function PPUSearchReport() {
     setSearching(true)
     try {
       // Buscar info del bus
-      const { data: bus } = await supabase
+      const { data: busData } = await supabase
         .from('flota')
         .select('*')
         .or(`ppu.ilike.%${searchQuery}%,numero_interno.ilike.%${searchQuery}%`)
         .single()
 
+      const bus = busData as Tables<'flota'> | null
       setBusInfo(bus)
 
       if (!bus) {
@@ -48,7 +49,7 @@ export function PPUSearchReport() {
 
       if (error) throw error
 
-      setResults(revisiones || [])
+      setResults((revisiones as ExtendedRevision[]) || [])
     } catch (error) {
       console.error('Error searching:', error)
     } finally {
@@ -56,30 +57,6 @@ export function PPUSearchReport() {
     }
   }
 
-  const getModuleData = async (revisionId: string) => {
-    try {
-      const [camaras, tags, extintores, odometro, mobileye, publicidad] = await Promise.all([
-        supabase.from('camaras').select('*').eq('revision_id', revisionId).single(),
-        supabase.from('tags').select('*').eq('revision_id', revisionId).single(),
-        supabase.from('extintores').select('*').eq('revision_id', revisionId).single(),
-        supabase.from('odometro').select('*').eq('revision_id', revisionId).single(),
-        supabase.from('mobileye').select('*').eq('revision_id', revisionId).maybeSingle(),
-        supabase.from('publicidad').select('*').eq('revision_id', revisionId).single(),
-      ])
-
-      return {
-        camaras: camaras.data,
-        tags: tags.data,
-        extintores: extintores.data,
-        odometro: odometro.data,
-        mobileye: mobileye.data,
-        publicidad: publicidad.data,
-      }
-    } catch (error) {
-      console.error('Error fetching module data:', error)
-      return null
-    }
-  }
 
   const toggleExpand = async (revisionId: string) => {
     if (expandedRevision === revisionId) {

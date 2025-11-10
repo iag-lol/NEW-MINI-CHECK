@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { Search, Users, FileText, MapPin, TrendingUp, Calendar } from 'lucide-react'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PPUSearchReport } from './components/ppu-search-report'
 import { WorkerReports } from './components/worker-reports'

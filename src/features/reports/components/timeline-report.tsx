@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Clock, User, MapPin, CheckCircle, XCircle } from 'lucide-react'
+import { Calendar, User, MapPin, CheckCircle, XCircle } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabase'
 import dayjs from '@/lib/dayjs'
@@ -37,7 +37,7 @@ export function TimelineReport() {
       }
 
       const { data } = await query.limit(100)
-      setRevisiones(data || [])
+      setRevisiones((data as Revision[]) || [])
     } catch (error) {
       console.error('Error loading timeline:', error)
     } finally {

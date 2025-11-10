@@ -23,13 +23,20 @@ export function IPAnalytics() {
 
   const loadIPStats = async () => {
     try {
-      const { data: revisiones } = await supabase
+      const { data: revisionesData } = await supabase
         .from('revisiones')
         .select('*')
         .not('ip_address', 'is', null)
         .order('created_at', { ascending: false })
 
-      if (!revisiones) return
+      if (!revisionesData) return
+
+      const revisiones = revisionesData as Array<{
+        ip_address: string | null
+        ip_info: { city: string | null; region: string | null; isp: string | null } | null
+        created_at: string
+        inspector_nombre: string
+      }>
 
       // Agrupar por IP
       const ipMap = new Map<string, IPStats>()
