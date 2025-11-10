@@ -4,11 +4,13 @@ import 'dayjs/locale/es'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
+import relativeTime from 'dayjs/plugin/relativeTime'
 
 dayjs.extend(isoWeek)
 dayjs.extend(utc)
 dayjs.extend(timezone)
 dayjs.locale('es')
+dayjs.extend(relativeTime)
 
 dayjs.tz.setDefault('America/Santiago')
 

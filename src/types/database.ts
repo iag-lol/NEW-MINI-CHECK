@@ -158,15 +158,25 @@ type FlotaRow = {
 export type Database = {
   public: {
     Tables: {
-      usuarios: TableRecord<{
-        rut: string
-        nombre: string
-        cargo: Role
-        terminal: string
-        password: string
-        foto_url: string | null
-        created_at: string
-      }>
+      usuarios: TableRecord<
+        {
+          rut: string
+          nombre: string
+          cargo: Role
+          terminal: string
+          password: string
+          foto_url: string | null
+          created_at: string
+        },
+        {
+          rut: string
+          nombre: string
+          cargo: Role
+          terminal: string
+          password: string
+          foto_url: string | null
+        }
+      >
       revisiones: TableRecord<RevisionRow, Omit<RevisionRow, 'id' | 'created_at'>>
       tags: TableRecord<TagRow, Omit<TagRow, 'id' | 'created_at'>>
       camaras: TableRecord<CamarasRow, Omit<CamarasRow, 'id' | 'created_at'>>

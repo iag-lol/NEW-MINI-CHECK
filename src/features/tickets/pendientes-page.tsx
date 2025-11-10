@@ -10,6 +10,9 @@ import {
   Info,
   Search,
   X,
+  BusFront,
+  ClipboardCheck,
+  ListChecks,
 } from 'lucide-react'
 import dayjs from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
@@ -23,6 +26,30 @@ import type { Tables } from '@/types/database'
 
 type TicketEstado = Tables<'tickets'>['estado']
 type TicketPrioridad = Tables<'tickets'>['prioridad']
+type TicketRecord = Tables<'tickets'> & {
+  revision: {
+    bus_ppu: string | null
+    bus_interno: string | null
+    estado_bus: Tables<'revisiones'>['estado_bus']
+    terminal_detectado: string | null
+    created_at: string
+    observaciones: string | null
+  } | null
+}
+
+interface DetailedTicket extends TicketRecord {
+  detailSummary?: string
+  detailItems?: Array<{ label: string; value: string }>
+}
+
+interface BusTicketGroup {
+  busPpu: string
+  busInterno?: string | null
+  terminal?: string | null
+  estadoBus?: string | null
+  tickets: DetailedTicket[]
+  lastUpdate: string
+}
 
 export const PendientesPage = () => {
   const [searchQuery, setSearchQuery] = useState('')
@@ -31,31 +58,137 @@ export const PendientesPage = () => {
   const [moduloFilter, setModuloFilter] = useState<string>('TODOS')
 
   const { data: tickets, refetch, isLoading } = useQuery({
-    queryKey: ['tickets'],
+    queryKey: ['tickets', 'detallados'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tickets')
-        .select('*')
+        .select(
+          '*, revision:revision_id(bus_ppu, bus_interno, estado_bus, terminal_detectado, created_at, observaciones)'
+        )
         .order('created_at', { ascending: false })
       if (error) throw error
-      return data as Tables<'tickets'>[]
+
+      const typedData = (data ?? []) as TicketRecord[]
+      const revisionIds = typedData.map((ticket) => ticket.revision_id).filter(Boolean) as string[]
+      if (revisionIds.length === 0) return typedData
+
+      const [extintores, publicidad, mobileye] = await Promise.all([
+        supabase
+          .from('extintores')
+          .select('*')
+          .in('revision_id', revisionIds)
+          .then((res) => (res.data ?? []) as Tables<'extintores'>[]),
+        supabase
+          .from('publicidad')
+          .select('*')
+          .in('revision_id', revisionIds)
+          .then((res) => (res.data ?? []) as Tables<'publicidad'>[]),
+        supabase
+          .from('mobileye')
+          .select('*')
+          .in('revision_id', revisionIds)
+          .then((res) => (res.data ?? []) as Tables<'mobileye'>[]),
+      ])
+
+      const extMap = new Map(extintores.map((row) => [row.revision_id, row]))
+      const pubMap = new Map(publicidad.map((row) => [row.revision_id, row]))
+      const mobMap = new Map(mobileye.map((row) => [row.revision_id, row]))
+
+      return typedData.map((ticket) => {
+        const decorated: DetailedTicket = { ...ticket }
+        switch (ticket.modulo.toLowerCase()) {
+          case 'extintores': {
+            const record = extMap.get(ticket.revision_id ?? '')
+            if (record) {
+              decorated.detailSummary = `Certificación ${record.certificacion ?? '—'} · Presión ${record.presion ?? '—'}`
+              decorated.detailItems = [
+                { label: 'Vencimiento', value: record.vencimiento_mes && record.vencimiento_anio ? `${record.vencimiento_mes}/${record.vencimiento_anio}` : '—' },
+                { label: 'Sonda', value: record.sonda ?? '—' },
+                { label: 'Manómetro', value: record.manometro ?? '—' },
+                { label: 'Cilindro', value: record.cilindro ?? '—' },
+                { label: 'Porta', value: record.porta ?? '—' },
+              ]
+            }
+            break
+          }
+          case 'publicidad': {
+            const record = pubMap.get(ticket.revision_id ?? '')
+            if (record) {
+              const detalle = record.detalle_lados as Record<string, any> | null
+              const ladosConDanio =
+                detalle &&
+                Object.entries(detalle)
+                  .filter(([, info]) => info?.danio || info?.residuos)
+                  .map(([lado]) => lado)
+              decorated.detailSummary =
+                ladosConDanio && ladosConDanio.length > 0
+                  ? `Hallazgos en ${ladosConDanio.join(', ')}`
+                  : 'Daños no especificados'
+              decorated.detailItems = [
+                { label: 'Campaña', value: record.nombre_publicidad ?? 'No informada' },
+                { label: 'Daño', value: record.danio ? 'Sí' : 'No' },
+                { label: 'Residuos', value: record.residuos ? 'Sí' : 'No' },
+                { label: 'Obs.', value: record.observacion ?? '—' },
+              ]
+            }
+            break
+          }
+          case 'mobileye': {
+            const record = mobMap.get(ticket.revision_id ?? '')
+            if (record) {
+              const fallas = [
+                record.alerta_izq === false ? 'Alerta izquierda' : null,
+                record.alerta_der === false ? 'Alerta derecha' : null,
+                record.consola === false ? 'Consola' : null,
+                record.sensor_frontal === false ? 'Sensor frontal' : null,
+                record.sensor_izq === false ? 'Sensor izquierdo' : null,
+                record.sensor_der === false ? 'Sensor derecho' : null,
+              ].filter(Boolean)
+              decorated.detailSummary =
+                fallas.length > 0 ? `Fallas: ${fallas.join(', ')}` : 'Anomalía no especificada'
+              decorated.detailItems = fallas.map((falla) => ({ label: 'Componente', value: falla! }))
+            }
+            break
+          }
+          default:
+            decorated.detailSummary = ticket.descripcion
+        }
+        return decorated
+      })
     },
     refetchInterval: 15_000,
   })
 
   const updateTicket = async (id: string, estado: TicketEstado) => {
-    await supabase.from('tickets').update({ estado }).eq('id', id)
+    await supabase.from('tickets').update({ estado, actualizado_en: dayjs().toISOString() }).eq('id', id)
+    refetch()
+  }
+
+  const updatePriority = async (id: string, prioridad: TicketPrioridad) => {
+    await supabase.from('tickets').update({ prioridad, actualizado_en: dayjs().toISOString() }).eq('id', id)
+    refetch()
+  }
+
+  const bulkUpdateEstado = async (ticketIds: string[], estado: TicketEstado) => {
+    if (ticketIds.length === 0) return
+    await supabase
+      .from('tickets')
+      .update({ estado, actualizado_en: dayjs().toISOString() })
+      .in('id', ticketIds)
     refetch()
   }
 
   const filteredTickets = useMemo(() => {
     if (!tickets) return []
     return tickets.filter((ticket) => {
+      const searchNormalized = searchQuery.toLowerCase()
       const matchesSearch =
         searchQuery === '' ||
-        ticket.descripcion.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ticket.modulo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ticket.terminal.toLowerCase().includes(searchQuery.toLowerCase())
+        ticket.descripcion.toLowerCase().includes(searchNormalized) ||
+        ticket.modulo.toLowerCase().includes(searchNormalized) ||
+        ticket.terminal.toLowerCase().includes(searchNormalized) ||
+        (ticket.revision?.bus_ppu?.toLowerCase().includes(searchNormalized) ?? false) ||
+        (ticket.revision?.bus_interno?.toLowerCase().includes(searchNormalized) ?? false)
       const matchesEstado = estadoFilter === 'TODOS' || ticket.estado === estadoFilter
       const matchesPrioridad =
         prioridadFilter === 'TODOS' || ticket.prioridad === prioridadFilter
@@ -78,6 +211,33 @@ export const PendientesPage = () => {
     if (!tickets) return []
     return Array.from(new Set(tickets.map((t) => t.modulo)))
   }, [tickets])
+
+  const groupedByBus = useMemo(() => {
+    const groups = new Map<string, BusTicketGroup>()
+    filteredTickets.forEach((ticket) => {
+      const busPpu = ticket.revision?.bus_ppu ?? 'SIN_PPU'
+      const terminal = ticket.revision?.terminal_detectado ?? ticket.terminal
+      const key = `${busPpu}-${terminal}`
+      if (!groups.has(key)) {
+        groups.set(key, {
+          busPpu,
+          busInterno: ticket.revision?.bus_interno,
+          terminal,
+          estadoBus: ticket.revision?.estado_bus,
+          tickets: [],
+          lastUpdate: ticket.created_at,
+        })
+      }
+      const group = groups.get(key)!
+      group.tickets.push(ticket)
+      if (dayjs(ticket.created_at).isAfter(group.lastUpdate)) {
+        group.lastUpdate = ticket.created_at
+      }
+    })
+    return Array.from(groups.values()).sort((a, b) =>
+      dayjs(b.lastUpdate).valueOf() - dayjs(a.lastUpdate).valueOf()
+    )
+  }, [filteredTickets])
 
   const getTicketIcon = (prioridad: TicketPrioridad) => {
     switch (prioridad) {
@@ -114,13 +274,20 @@ export const PendientesPage = () => {
   return (
     <div className="space-y-6">
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <StatCard
           title="Total de Tickets"
           value={stats.total}
           description="Todos los registros"
           icon={AlertCircle}
           variant="default"
+        />
+        <StatCard
+          title="Buses comprometidos"
+          value={groupedByBus.length}
+          description="Con tickets abiertos"
+          icon={BusFront}
+          variant="info"
         />
         <StatCard
           title="Pendientes"
@@ -212,92 +379,164 @@ export const PendientesPage = () => {
         </div>
       </Card>
 
-      {/* Tickets List */}
+      {/* Tickets agrupados por bus */}
       <div className="space-y-4">
-        <AnimatePresence mode="popLayout">
-          {filteredTickets.map((ticket) => (
+        <AnimatePresence mode="sync">
+          {groupedByBus.map((group) => (
             <motion.div
-              key={ticket.id}
-              initial={{ opacity: 0, y: 20 }}
+              key={`${group.busPpu}-${group.terminal}`}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
+              exit={{ opacity: 0, y: -12 }}
             >
-              <Card className="p-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      {getTicketIcon(ticket.prioridad)}
-                      <p className="text-sm font-semibold text-slate-400">
-                        {ticket.modulo}
-                      </p>
-                      <Badge
-                        variant={
-                          ticket.prioridad === 'ALTA'
-                            ? 'danger'
-                            : ticket.prioridad === 'MEDIA'
-                            ? 'warning'
-                            : 'default'
-                        }
-                        className="text-xs"
-                      >
-                        {ticket.prioridad}
-                      </Badge>
+              <Card className="p-5 space-y-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <div className="flex items-center gap-3 text-sm text-slate-500">
+                      <BusFront className="h-4 w-4 text-brand-500" />
+                      <span className="font-semibold text-slate-900 dark:text-white">
+                        {group.busPpu}
+                      </span>
+                      {group.busInterno && <span>· #{group.busInterno}</span>}
                     </div>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                      {ticket.descripcion}
-                    </h3>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {ticket.terminal} · Creado el{' '}
-                      {dayjs(ticket.created_at).format('DD MMM YYYY [a las] HH:mm')}
+                    <p className="text-xs text-slate-500">
+                      {group.terminal} · Estado bus{' '}
+                      {group.estadoBus === 'EN_PANNE' ? 'En panne' : 'Operativo'} · Última
+                      actualización {dayjs(group.lastUpdate).fromNow()}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge
-                      variant={
-                        ticket.estado === 'RESUELTO'
-                          ? 'success'
-                          : ticket.estado === 'EN_PROCESO'
-                          ? 'warning'
-                          : 'danger'
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-2 rounded-2xl"
+                      onClick={() =>
+                        bulkUpdateEstado(
+                          group.tickets.map((ticket) => ticket.id),
+                          'EN_PROCESO'
+                        )
                       }
                     >
-                      {ticket.estado}
-                    </Badge>
-                    {ticket.estado !== 'EN_PROCESO' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-2 rounded-2xl"
-                        onClick={() => updateTicket(ticket.id, 'EN_PROCESO')}
-                      >
-                        <Clock className="h-4 w-4" />
-                        En proceso
-                      </Button>
-                    )}
-                    {ticket.estado !== 'RESUELTO' && (
-                      <Button
-                        size="sm"
-                        className="gap-2 rounded-2xl"
-                        onClick={() => updateTicket(ticket.id, 'RESUELTO')}
-                      >
-                        <CheckCircle2 className="h-4 w-4" />
-                        Marcar resuelto
-                      </Button>
-                    )}
+                      <ListChecks className="h-4 w-4" />
+                      Marcar bus en proceso
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="gap-2 rounded-2xl"
+                      onClick={() =>
+                        bulkUpdateEstado(
+                          group.tickets.map((ticket) => ticket.id),
+                          'RESUELTO'
+                        )
+                      }
+                    >
+                      <ClipboardCheck className="h-4 w-4" />
+                      Resolver todos
+                    </Button>
                   </div>
+                </div>
+                <div className="space-y-3">
+                  {group.tickets.map((ticket) => (
+                    <div
+                      key={ticket.id}
+                      className="rounded-2xl border border-slate-100/80 p-4 dark:border-slate-900/70"
+                    >
+                      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex items-center gap-2 text-sm">
+                          {getTicketIcon(ticket.prioridad)}
+                          <span className="font-semibold uppercase tracking-wide text-slate-500">
+                            {ticket.modulo}
+                          </span>
+                          <Badge
+                            variant={
+                              ticket.prioridad === 'ALTA'
+                                ? 'danger'
+                                : ticket.prioridad === 'MEDIA'
+                                ? 'warning'
+                                : 'outline'
+                            }
+                          >
+                            {ticket.prioridad}
+                          </Badge>
+                          <Badge
+                            variant={
+                              ticket.estado === 'RESUELTO'
+                                ? 'success'
+                                : ticket.estado === 'EN_PROCESO'
+                                ? 'warning'
+                                : 'danger'
+                            }
+                          >
+                            {ticket.estado}
+                          </Badge>
+                        </div>
+                        <select
+                          value={ticket.prioridad}
+                          onChange={(event) =>
+                            updatePriority(ticket.id, event.target.value as TicketPrioridad)
+                          }
+                          className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs uppercase dark:border-slate-800 dark:bg-slate-950"
+                        >
+                          <option value="ALTA">Prioridad alta</option>
+                          <option value="MEDIA">Prioridad media</option>
+                          <option value="BAJA">Prioridad baja</option>
+                        </select>
+                      </div>
+                      <p className="text-base font-semibold text-slate-900 dark:text-white">
+                        {ticket.descripcion}
+                      </p>
+                      {ticket.detailSummary && (
+                        <p className="text-sm text-slate-500">{ticket.detailSummary}</p>
+                      )}
+                      {ticket.detailItems && ticket.detailItems.length > 0 && (
+                        <div className="mt-3 grid gap-2 md:grid-cols-2">
+                          {ticket.detailItems.map((item, index) => (
+                            <div
+                              key={`${ticket.id}-detail-${index}`}
+                              className="rounded-xl bg-slate-50/80 px-3 py-2 text-xs font-medium text-slate-600 dark:bg-slate-900/50 dark:text-slate-300"
+                            >
+                              {item.label}: <span className="text-slate-900 dark:text-white">{item.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {ticket.estado !== 'EN_PROCESO' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-2 rounded-2xl"
+                            onClick={() => updateTicket(ticket.id, 'EN_PROCESO')}
+                          >
+                            <Clock className="h-4 w-4" />
+                            Marcar en proceso
+                          </Button>
+                        )}
+                        {ticket.estado !== 'RESUELTO' && (
+                          <Button
+                            size="sm"
+                            className="gap-2 rounded-2xl"
+                            onClick={() => updateTicket(ticket.id, 'RESUELTO')}
+                          >
+                            <CheckCircle2 className="h-4 w-4" />
+                            Cerrar ticket
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </Card>
             </motion.div>
           ))}
         </AnimatePresence>
-        {filteredTickets.length === 0 && (
+        {groupedByBus.length === 0 && (
           <Card className="p-12 text-center">
             <AlertCircle className="mx-auto h-12 w-12 text-slate-300" />
             <p className="mt-4 text-sm font-medium text-slate-600 dark:text-slate-400">
               {hasActiveFilters
                 ? 'No se encontraron tickets con los filtros aplicados'
-                : 'No hay tickets registrados'}
+                : 'No hay tickets registrados.'}
             </p>
           </Card>
         )}
