@@ -162,6 +162,21 @@ type FlotaRow = {
   created_at: string
 }
 
+type UsuarioActivoRow = {
+  usuario_rut: string
+  nombre: string
+  cargo: Role
+  terminal: string
+  lat: number
+  lon: number
+  accuracy: number | null
+  last_heartbeat: string
+  ip_address: string | null
+  device_info: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -194,6 +209,7 @@ export type Database = {
       tickets: TableRecord<TicketRow, Omit<TicketRow, 'id' | 'created_at' | 'actualizado_en'>>
       personal: TableRecord<PersonalRow, Omit<PersonalRow, 'id' | 'created_at'>>
       flota: TableRecord<FlotaRow, Omit<FlotaRow, 'id' | 'created_at'>>
+      usuarios_activos: TableRecord<UsuarioActivoRow, Omit<UsuarioActivoRow, 'created_at' | 'updated_at'>>
     }
     Views: Record<string, never>
     Functions: Record<string, never>
