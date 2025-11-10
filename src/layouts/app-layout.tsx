@@ -7,6 +7,7 @@ import { TopBar } from '@/components/layout/top-bar'
 import { useRealtimeSubscriptions } from '@/hooks/use-realtime'
 import { useRealtimeLocation } from '@/hooks/use-realtime-location'
 import { useAuthStore } from '@/store/auth-store'
+import { TrackingProvider } from '@/context/tracking-context'
 
 export const AppLayout = () => {
   useRealtimeSubscriptions()
@@ -20,17 +21,19 @@ export const AppLayout = () => {
   }, [location.pathname, setLastVisitedPath])
 
   return (
-    <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
-      <Sidebar />
-      <div className="flex flex-1 flex-col md:pl-[var(--sidebar-width)]">
-        <TopBar tracking={tracking} />
-        <main className="flex-1 px-4 pb-32 pt-6 md:px-8 md:pb-10">
-          <div className="w-full">
-            <Outlet />
-          </div>
-        </main>
+    <TrackingProvider value={tracking}>
+      <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
+        <Sidebar />
+        <div className="flex flex-1 flex-col md:pl-[var(--sidebar-width)]">
+          <TopBar />
+          <main className="flex-1 px-4 pb-32 pt-6 md:px-8 md:pb-10">
+            <div className="w-full">
+              <Outlet />
+            </div>
+          </main>
+        </div>
+        <MobileNav />
       </div>
-      <MobileNav />
-    </div>
+    </TrackingProvider>
   )
 }

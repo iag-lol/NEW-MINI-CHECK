@@ -5,15 +5,12 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { NotificationCenter } from '@/components/notification-center'
 import { useLocation } from 'react-router-dom'
 import { TrackingStatus } from '@/components/layout/tracking-status'
-import type { TrackingSnapshot } from '@/hooks/use-realtime-location'
+import { useTracking } from '@/context/tracking-context'
 
-interface TopBarProps {
-  tracking: TrackingSnapshot
-}
-
-export const TopBar = ({ tracking }: TopBarProps) => {
+export const TopBar = () => {
   const { user } = useAuthStore()
   const location = useLocation()
+  const tracking = useTracking()
   const currentItem =
     SIDEBAR_ITEMS.find((item) => location.pathname.startsWith(item.path)) ?? SIDEBAR_ITEMS[0]
 

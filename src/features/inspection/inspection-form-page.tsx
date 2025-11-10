@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { FormProvider, useForm } from 'react-hook-form'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, CheckCircle2, MapPin, Search } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Loader2, MapPin, Search } from 'lucide-react'
 import { z } from 'zod'
 import dayjs, { getIsoWeekYear } from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuthStore } from '@/store/auth-store'
 import type { Tables, Database } from '@/types/database'
 import { useNotificationStore } from '@/store/notification-store'
+import { useTracking } from '@/context/tracking-context'
 
 const publicidadAreaSchema = z.object({
   tiene: z.boolean(),
@@ -302,34 +303,39 @@ export const InspectionFormPage = () => {
   const [bus, setBus] = useState<Tables<'flota'> | null>(null)
   const [busAlert, setBusAlert] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [coordinates, setCoordinates] = useState<{ lat: number; lon: number } | null>(null)
-  const [terminalDetected, setTerminalDetected] = useState<string | null>(null)
+  const [terminalDetected, setTerminalDetected] = useState<{ name: string; distance: number } | null>(null)
+  const [refreshingGPS, setRefreshingGPS] = useState(false)
+  const {
+    location: trackingLocation,
+    error: trackingError,
+    refreshLocation,
+    lastLocationUpdate,
+    isTracking: gpsActive,
+  } = useTracking()
   const estadoBus = methods.watch('estadoBus')
   const mobileyeAplica = methods.watch('mobileye.aplica')
   const mobileyeState = methods.watch('mobileye')
   const publicityState = methods.watch('publicidad')
   const stepKey: StepKey = steps[step].key
 
-  const requestLocation = () => {
-    if (!navigator.geolocation) return
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords
-        setCoordinates({ lat: latitude, lon: longitude })
-        const detected = detectTerminal(latitude, longitude)
-        if (detected) {
-          setTerminalDetected(detected.terminal)
-          methods.setValue('terminalReportado', detected.terminal, { shouldDirty: true })
-        }
-      },
-      () => setTerminalDetected(null),
-      { enableHighAccuracy: true }
-    )
-  }
-
   useEffect(() => {
-    requestLocation()
-  }, [])
+    if (!trackingLocation) {
+      setTerminalDetected(null)
+      return
+    }
+
+    const detected = detectTerminal(trackingLocation.lat, trackingLocation.lon)
+    if (!detected) {
+      setTerminalDetected(null)
+      return
+    }
+
+    setTerminalDetected({ name: detected.terminal, distance: detected.distance })
+    const currentTerminal = methods.getValues('terminalReportado')
+    if (!currentTerminal || currentTerminal === user?.terminal) {
+      methods.setValue('terminalReportado', detected.terminal, { shouldDirty: true })
+    }
+  }, [trackingLocation, methods, user?.terminal])
 
   useEffect(() => {
     if (estadoBus === 'EN_PANNE' && step !== 0 && step !== steps.length - 1) {
@@ -411,13 +417,13 @@ export const InspectionFormPage = () => {
       const revisionInsert = {
         inspector_rut: user.rut,
         inspector_nombre: user.nombre,
-        terminal_detectado: terminalDetected ?? 'SIN_TERMINAL',
+        terminal_detectado: terminalDetected?.name ?? 'SIN_TERMINAL',
         terminal_reportado: values.terminalReportado,
         bus_ppu: bus.ppu,
         bus_interno: bus.numero_interno,
         estado_bus: values.estadoBus,
-        lat: coordinates?.lat ?? -33.45,
-        lon: coordinates?.lon ?? -70.66,
+        lat: trackingLocation?.lat ?? -33.45,
+        lon: trackingLocation?.lon ?? -70.66,
         observaciones: values.observacionGeneral,
         semana_iso: `${getIsoWeekYear()}-W${String(dayjs().isoWeek()).padStart(2, '0')}`,
         operativo: values.estadoBus === 'OPERATIVO',
@@ -588,6 +594,15 @@ export const InspectionFormPage = () => {
     }
   }
 
+  const handleRefreshGps = async () => {
+    setRefreshingGPS(true)
+    try {
+      await refreshLocation()
+    } finally {
+      setRefreshingGPS(false)
+    }
+  }
+
   const renderEstado = () => (
     <SectionCard title="Estado del bus" description="Valida condiciones generales antes de continuar.">
       <div className="grid gap-4 md:grid-cols-2">
@@ -619,17 +634,45 @@ export const InspectionFormPage = () => {
             onChange={(event) => methods.setValue('terminalReportado', event.target.value)}
           />
           {terminalDetected && (
-            <p className="mt-1 text-xs text-emerald-500">Detectado por GPS: {terminalDetected}</p>
+            <p className="mt-1 text-xs text-emerald-500">
+              Detectado por GPS: {terminalDetected.name} ({terminalDetected.distance} m)
+            </p>
           )}
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="mt-2 gap-2 text-xs text-brand-600"
-            onClick={requestLocation}
-          >
-            <MapPin className="h-3.5 w-3.5" /> Recalcular ubicación
-          </Button>
+          <div className="mt-3 rounded-2xl border border-dashed border-slate-200/70 p-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-300">
+            <div className="flex items-center justify-between text-[11px] uppercase tracking-wide">
+              <span className="font-semibold text-slate-600 dark:text-slate-100">
+                GPS en vivo {gpsActive ? '· activo' : '· inactivo'}
+              </span>
+              <span className="text-slate-400">{lastLocationUpdate ? dayjs(lastLocationUpdate).fromNow() : 'sin lectura'}</span>
+            </div>
+            <p className="mt-2 font-mono text-sm text-slate-700 dark:text-white">
+              {trackingLocation
+                ? `${trackingLocation.lat.toFixed(6)}, ${trackingLocation.lon.toFixed(6)}`
+                : 'Sin coordenadas'}
+            </p>
+            <p className="text-[11px] text-slate-500">
+              Precisión:&nbsp;
+              {trackingLocation ? `±${Math.round(trackingLocation.accuracy)} m` : 'no disponible'}
+            </p>
+            {trackingError && (
+              <p className="mt-1 text-[11px] font-semibold text-red-500">Error: {trackingError}</p>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="mt-2 gap-2 text-xs text-brand-600"
+              onClick={handleRefreshGps}
+              disabled={refreshingGPS}
+            >
+              {refreshingGPS ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <MapPin className="h-3.5 w-3.5" />
+              )}
+              {refreshingGPS ? 'Actualizando...' : 'Actualizar GPS'}
+            </Button>
+          </div>
         </div>
       </div>
       <div>

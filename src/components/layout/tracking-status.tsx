@@ -8,8 +8,8 @@ export const TrackingStatus = ({
   error,
   location,
   lastHeartbeat,
+  lastLocationUpdate,
 }: TrackingSnapshot) => {
-
   const statusLabel = error
     ? 'Error de tracking'
     : isTracking
@@ -23,8 +23,12 @@ export const TrackingStatus = ({
       : 'Esperando ubicación...'
 
   const heartbeatLabel = lastHeartbeat
-    ? `Pulso ${dayjs(lastHeartbeat).fromNow()}`
+    ? `Pulso BD ${dayjs(lastHeartbeat).fromNow()}`
     : 'Sin heartbeat'
+
+  const gpsLabel = lastLocationUpdate
+    ? `GPS ${dayjs(lastLocationUpdate).fromNow()}`
+    : 'GPS sin lectura'
 
   const containerClass = error
     ? 'border-red-200/80 bg-red-50/80 text-red-700 shadow-sm dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200'
@@ -50,6 +54,7 @@ export const TrackingStatus = ({
         </span>
         <span className="text-sm font-bold">{statusLabel}</span>
         <span className="text-[11px] font-medium opacity-90">{secondaryLabel}</span>
+        <span className="text-[10px] opacity-70">{gpsLabel}</span>
         <span className="text-[10px] opacity-70">{heartbeatLabel}</span>
       </div>
     </div>

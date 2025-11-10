@@ -16,6 +16,7 @@ export interface TrackingSnapshot {
   error: string | null
   isTracking: boolean
   lastHeartbeat: number | null
+  lastLocationUpdate: number | null
 }
 
 interface UseRealtimeLocationOptions {
@@ -44,10 +45,12 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
   const heartbeatIntervalRef = useRef<number | null>(null)
   const lastUpdateRef = useRef<number>(0)
   const lastLocationRef = useRef<LocationData | null>(null)
+  const [lastLocationUpdate, setLastLocationUpdate] = useState<number | null>(null)
 
   const updateLocationState = (nextLocation: LocationData) => {
     setLocation(nextLocation)
     lastLocationRef.current = nextLocation
+    setLastLocationUpdate(Date.now())
   }
 
   // Obtener ubicación actual
@@ -192,6 +195,7 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
     setIsTracking(false)
     lastLocationRef.current = null
     setLastHeartbeat(null)
+    setLastLocationUpdate(null)
 
     // Limpiar watch de geolocalización
     if (watchIdRef.current !== null) {
@@ -241,12 +245,27 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
     }
   }, [])
 
+  const refreshLocation = async () => {
+    try {
+      const latest = await getCurrentLocation()
+      updateLocationState(latest)
+      if (enabled) {
+        await sendHeartbeat(latest)
+      }
+    } catch (err) {
+      console.error('Error refreshing location:', err)
+      setError(err instanceof Error ? err.message : 'No pudimos actualizar el GPS')
+    }
+  }
+
   return {
     location,
     error,
     isTracking,
     lastHeartbeat,
+    lastLocationUpdate,
     startTracking,
     stopTracking,
+    refreshLocation,
   }
 }
