@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import ExcelJS from 'exceljs'
 import jsPDF from 'jspdf'
@@ -10,7 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { useNotificationStore } from '@/store/notification-store'
 import type { Tables } from '@/types/database'
+import { Loader2, Trash2, PenSquare } from 'lucide-react'
 
 interface Filters {
   terminal: string
@@ -24,8 +29,12 @@ export const RecordsPage = () => {
     estado: 'TODOS',
     query: '',
   })
+  const { push } = useNotificationStore()
+  const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  const { data: revisiones, isLoading } = useQuery({
+  const { data: revisiones, isLoading, refetch } = useQuery({
     queryKey: ['records', filters],
     queryFn: async () => {
       let query = supabase.from('revisiones').select('*').order('created_at', { ascending: false })
@@ -43,6 +52,40 @@ export const RecordsPage = () => {
       return data as Tables<'revisiones'>[]
     },
   })
+
+  const openEditor = (revisionId: string) => {
+    setSelectedRevisionId(revisionId)
+    setSheetOpen(true)
+  }
+
+  const handleDelete = async (revisionId: string) => {
+    if (!window.confirm('¿Eliminar este registro y todos sus datos asociados?')) return
+    setDeletingId(revisionId)
+    try {
+      const childTables = ['tickets', 'tags', 'camaras', 'extintores', 'mobileye', 'odometro', 'publicidad']
+      for (const table of childTables) {
+        await supabase.from(table).delete().eq('revision_id', revisionId)
+      }
+      await supabase.from('revisiones').delete().eq('id', revisionId)
+      push({
+        id: `revision-deleted-${revisionId}`,
+        title: 'Registro eliminado',
+        body: 'El historial completo fue eliminado correctamente.',
+        type: 'success',
+      })
+      refetch()
+    } catch (error) {
+      console.error('Error deleting revision', error)
+      push({
+        id: `revision-delete-error-${revisionId}`,
+        title: 'No pudimos eliminar',
+        body: 'Intenta nuevamente en unos segundos.',
+        type: 'error',
+      })
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const exportXlsx = async () => {
     if (!revisiones?.length) return
@@ -156,12 +199,13 @@ export const RecordsPage = () => {
                 <th className="px-6 py-3">Estado</th>
                 <th className="px-6 py-3">Fecha</th>
                 <th className="px-6 py-3">Observación</th>
+                <th className="px-6 py-3 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100/70 dark:divide-slate-900/60">
               {isLoading && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-slate-400">
+                  <td colSpan={7} className="px-6 py-10 text-center text-slate-400">
                     Cargando registros...
                   </td>
                 </tr>
@@ -183,11 +227,37 @@ export const RecordsPage = () => {
                       {dayjs(revision.created_at).format('DD MMM · HH:mm')}
                     </td>
                     <td className="px-6 py-4 text-slate-500">{revision.observaciones}</td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openEditor(revision.id)}
+                          title="Editar / ver"
+                        >
+                          <PenSquare className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-red-500 hover:text-red-600"
+                          onClick={() => handleDelete(revision.id)}
+                          disabled={deletingId === revision.id}
+                          title="Eliminar"
+                        >
+                          {deletingId === revision.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               {!isLoading && !revisiones?.length && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-slate-400">
+                  <td colSpan={7} className="px-6 py-10 text-center text-slate-400">
                     No hay registros para los filtros aplicados.
                   </td>
                 </tr>
@@ -196,6 +266,428 @@ export const RecordsPage = () => {
           </table>
         </ScrollArea>
       </Card>
+
+      <Sheet
+        open={sheetOpen}
+        onOpenChange={(open) => {
+          setSheetOpen(open)
+          if (!open) {
+            setSelectedRevisionId(null)
+          }
+        }}
+      >
+        <SheetContent className="w-full max-w-4xl">
+          {selectedRevisionId && (
+            <RevisionDetailSheet
+              revisionId={selectedRevisionId}
+              onSaved={() => {
+                refetch()
+              }}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
+    </div>
+  )
+}
+
+interface RevisionDetailSheetProps {
+  revisionId: string
+  onSaved: () => void
+}
+
+type RevisionFormState = {
+  estado_bus: 'OPERATIVO' | 'EN_PANNE'
+  terminal_reportado: string
+  observaciones: string
+  tagSerie: string
+  tagObservacion: string
+  extObservacion: string
+  mobileyeObservacion: string
+  odometroLectura: string
+  odometroEstado: 'OK' | 'INCONSISTENTE' | 'NO_FUNCIONA'
+  odometroObservacion: string
+}
+
+type RevisionDetails = {
+  revision: Tables<'revisiones'>
+  tag: Tables<'tags'> | null
+  camaras: Tables<'camaras'> | null
+  extintores: Tables<'extintores'> | null
+  mobileye: Tables<'mobileye'> | null
+  odometro: Tables<'odometro'> | null
+  publicidad: Tables<'publicidad'> | null
+}
+
+const baseFormState: RevisionFormState = {
+  estado_bus: 'OPERATIVO',
+  terminal_reportado: '',
+  observaciones: '',
+  tagSerie: '',
+  tagObservacion: '',
+  extObservacion: '',
+  mobileyeObservacion: '',
+  odometroLectura: '',
+  odometroEstado: 'OK',
+  odometroObservacion: '',
+}
+
+const RevisionDetailSheet = ({ revisionId, onSaved }: RevisionDetailSheetProps) => {
+  const { push } = useNotificationStore()
+  const [details, setDetails] = useState<RevisionDetails | null>(null)
+  const [form, setForm] = useState<RevisionFormState>(baseFormState)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  const loadDetails = async () => {
+    setLoading(true)
+    try {
+      const { data: revision, error } = await supabase
+        .from('revisiones')
+        .select('*')
+        .eq('id', revisionId)
+        .single()
+      if (error || !revision) {
+        throw error ?? new Error('Revision no encontrada')
+      }
+      const revisionRecord = revision as Tables<'revisiones'>
+
+      const [tag, camaras, extintores, mobileye, odometro, publicidad] = await Promise.all([
+        supabase.from('tags').select('*').eq('revision_id', revisionId).maybeSingle(),
+        supabase.from('camaras').select('*').eq('revision_id', revisionId).maybeSingle(),
+        supabase.from('extintores').select('*').eq('revision_id', revisionId).maybeSingle(),
+        supabase.from('mobileye').select('*').eq('revision_id', revisionId).maybeSingle(),
+        supabase.from('odometro').select('*').eq('revision_id', revisionId).maybeSingle(),
+        supabase.from('publicidad').select('*').eq('revision_id', revisionId).maybeSingle(),
+      ])
+
+      const tagData = (tag.data ?? null) as Tables<'tags'> | null
+      const camarasData = (camaras.data ?? null) as Tables<'camaras'> | null
+      const extintoresData = (extintores.data ?? null) as Tables<'extintores'> | null
+      const mobileyeData = (mobileye.data ?? null) as Tables<'mobileye'> | null
+      const odometroData = (odometro.data ?? null) as Tables<'odometro'> | null
+      const publicidadData = (publicidad.data ?? null) as Tables<'publicidad'> | null
+
+      setDetails({
+        revision: revisionRecord,
+        tag: tagData,
+        camaras: camarasData,
+        extintores: extintoresData,
+        mobileye: mobileyeData,
+        odometro: odometroData,
+        publicidad: publicidadData,
+      })
+
+      setForm({
+        estado_bus: revisionRecord.estado_bus,
+        terminal_reportado: revisionRecord.terminal_reportado,
+        observaciones: revisionRecord.observaciones ?? '',
+        tagSerie: tagData?.serie ?? '',
+        tagObservacion: tagData?.observacion ?? '',
+        extObservacion: extintoresData?.observacion ?? '',
+        mobileyeObservacion: mobileyeData?.observacion ?? '',
+        odometroLectura:
+          odometroData?.lectura !== undefined && odometroData?.lectura !== null
+            ? String(odometroData?.lectura)
+            : '',
+        odometroEstado: odometroData?.estado ?? 'OK',
+        odometroObservacion: odometroData?.observacion ?? '',
+      })
+    } catch (error) {
+      console.error('Error loading revision details', error)
+      push({
+        id: `revision-load-error-${revisionId}`,
+        title: 'No pudimos cargar el registro',
+        body: 'Actualiza la página e inténtalo nuevamente.',
+        type: 'error',
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadDetails()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revisionId])
+
+  const handleSave = async () => {
+    if (!details) return
+    setSaving(true)
+    try {
+      await supabase
+        .from('revisiones')
+        .update({
+          estado_bus: form.estado_bus,
+          terminal_reportado: form.terminal_reportado,
+          observaciones: form.observaciones || null,
+        })
+        .eq('id', revisionId)
+
+      if (details.tag) {
+        await supabase
+          .from('tags')
+          .update({
+            serie: form.tagSerie || null,
+            observacion: form.tagObservacion || null,
+          })
+          .eq('revision_id', revisionId)
+      }
+
+      if (details.extintores) {
+        await supabase
+          .from('extintores')
+          .update({
+            observacion: form.extObservacion || null,
+          })
+          .eq('revision_id', revisionId)
+      }
+
+      if (details.mobileye) {
+        await supabase
+          .from('mobileye')
+          .update({
+            observacion: form.mobileyeObservacion || null,
+          })
+          .eq('revision_id', revisionId)
+      }
+
+      if (details.odometro) {
+        const lecturaValue = form.odometroLectura.trim()
+          ? Number(form.odometroLectura.trim())
+          : details.odometro.lectura
+        await supabase
+          .from('odometro')
+          .update({
+            lectura: lecturaValue,
+            estado: form.odometroEstado,
+            observacion: form.odometroObservacion || null,
+          })
+          .eq('revision_id', revisionId)
+      }
+      push({
+        id: `revision-updated-${revisionId}`,
+        title: 'Registro actualizado',
+        body: 'Los cambios quedaron guardados.',
+        type: 'success',
+      })
+      onSaved()
+    } catch (error) {
+      console.error('Error updating revision', error)
+      push({
+        id: `revision-update-error-${revisionId}`,
+        title: 'No pudimos guardar',
+        body: 'Revisa los campos e inténtalo nuevamente.',
+        type: 'error',
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleChange = <K extends keyof RevisionFormState>(key: K, value: RevisionFormState[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-slate-500">
+        Cargando información...
+      </div>
+    )
+  }
+
+  if (!details) {
+    return (
+      <div className="text-sm text-red-500">
+        No pudimos cargar los detalles de esta revisión. Cierra la ventana e inténtalo nuevamente.
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6 pb-10">
+      <div>
+        <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Registro</p>
+        <h2 className="text-2xl font-black text-slate-900 dark:text-white">
+          {details.revision.bus_ppu} · #{details.revision.bus_interno}
+        </h2>
+        <p className="text-sm text-slate-500">
+          Inspector {details.revision.inspector_nombre} ·{' '}
+          {dayjs(details.revision.created_at).format('DD MMM YYYY · HH:mm')} hrs
+        </p>
+      </div>
+
+      <div className="space-y-4 rounded-2xl border border-slate-100/80 p-4 dark:border-slate-800">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Información general</h3>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <Label>Estado del bus</Label>
+            <Select
+              value={form.estado_bus}
+              onValueChange={(value: 'OPERATIVO' | 'EN_PANNE') => handleChange('estado_bus', value)}
+            >
+              <SelectTrigger className="mt-1.5">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="OPERATIVO">Operativo</SelectItem>
+                <SelectItem value="EN_PANNE">En panne</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Terminal reportado</Label>
+            <Input
+              className="mt-1.5"
+              value={form.terminal_reportado}
+              onChange={(event) => handleChange('terminal_reportado', event.target.value)}
+            />
+          </div>
+        </div>
+        <div>
+          <Label>Observaciones generales</Label>
+          <Textarea
+            className="mt-1.5"
+            value={form.observaciones}
+            onChange={(event) => handleChange('observaciones', event.target.value)}
+            rows={4}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-4 rounded-2xl border border-slate-100/80 p-4 dark:border-slate-800">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Módulos editables</h3>
+        {details.tag && (
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <Label>Serie TAG</Label>
+              <Input
+                className="mt-1.5"
+                value={form.tagSerie}
+                onChange={(event) => handleChange('tagSerie', event.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Observación TAG</Label>
+              <Textarea
+                className="mt-1.5"
+                rows={2}
+                value={form.tagObservacion}
+                onChange={(event) => handleChange('tagObservacion', event.target.value)}
+              />
+            </div>
+          </div>
+        )}
+        {details.extintores && (
+          <div>
+            <Label>Observación extintores</Label>
+            <Textarea
+              className="mt-1.5"
+              rows={2}
+              value={form.extObservacion}
+              onChange={(event) => handleChange('extObservacion', event.target.value)}
+            />
+          </div>
+        )}
+        {details.mobileye && (
+          <div>
+            <Label>Observación Mobileye</Label>
+            <Textarea
+              className="mt-1.5"
+              rows={2}
+              value={form.mobileyeObservacion}
+              onChange={(event) => handleChange('mobileyeObservacion', event.target.value)}
+            />
+          </div>
+        )}
+        {details.odometro && (
+          <div className="grid gap-3 md:grid-cols-3">
+            <div>
+              <Label>Lectura odómetro</Label>
+              <Input
+                className="mt-1.5"
+                value={form.odometroLectura}
+                onChange={(event) => handleChange('odometroLectura', event.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Estado</Label>
+              <Select
+                value={form.odometroEstado}
+                onValueChange={(value: 'OK' | 'INCONSISTENTE' | 'NO_FUNCIONA') =>
+                  handleChange('odometroEstado', value)
+                }
+              >
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="OK">OK</SelectItem>
+                  <SelectItem value="INCONSISTENTE">Inconsistente</SelectItem>
+                  <SelectItem value="NO_FUNCIONA">No funciona</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="md:col-span-3">
+              <Label>Observación odómetro</Label>
+              <Textarea
+                className="mt-1.5"
+                rows={2}
+                value={form.odometroObservacion}
+                onChange={(event) => handleChange('odometroObservacion', event.target.value)}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-3 rounded-2xl border border-slate-100/80 p-4 text-sm dark:border-slate-800">
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Detalle registrado</h3>
+        <div className="grid gap-3 md:grid-cols-2">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400">Coordenadas</p>
+            <p className="font-mono text-slate-900 dark:text-white">
+              {details.revision.lat.toFixed(6)}, {details.revision.lon.toFixed(6)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400">IP / Terminal</p>
+            <p className="text-slate-600 dark:text-slate-300">
+              {details.revision.ip_address ?? 'Sin IP'} · {details.revision.terminal_detectado}
+            </p>
+          </div>
+        </div>
+        {details.camaras && (
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400">Cámaras</p>
+            <p className="text-slate-600 dark:text-slate-300">
+              Monitor: {details.camaras.monitor_estado}{' '}
+              {details.camaras.observacion ? `· ${details.camaras.observacion}` : ''}
+            </p>
+          </div>
+        )}
+        {details.publicidad && (
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400">Publicidad</p>
+            <p className="text-slate-600 dark:text-slate-300">
+              Izquierda: {details.publicidad.detalle_lados?.izquierda?.tiene ? 'Sí' : 'No'} · Derecha:{' '}
+              {details.publicidad.detalle_lados?.derecha?.tiene ? 'Sí' : 'No'} · Luneta:{' '}
+              {details.publicidad.detalle_lados?.luneta?.tiene ? 'Sí' : 'No'}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-end gap-3">
+        <Button variant="ghost" onClick={loadDetails}>
+          Recargar datos
+        </Button>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Guardar cambios
+        </Button>
+      </div>
     </div>
   )
 }

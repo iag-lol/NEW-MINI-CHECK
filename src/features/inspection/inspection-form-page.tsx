@@ -84,8 +84,6 @@ const inspectionSchema = z.object({
     izquierda: publicidadAreaSchema,
     derecha: publicidadAreaSchema,
     luneta: publicidadAreaSchema,
-    nombre: z.string().optional(),
-    observacion: z.string().optional(),
   }),
 })
 
@@ -293,8 +291,6 @@ export const InspectionFormPage = () => {
         izquierda: { tiene: false, danio: null, residuos: null, observacion: '' },
         derecha: { tiene: false, danio: null, residuos: null, observacion: '' },
         luneta: { tiene: false, danio: null, residuos: null, observacion: '' },
-        nombre: '',
-        observacion: '',
       },
     },
   })
@@ -525,8 +521,8 @@ export const InspectionFormPage = () => {
           derecha: values.publicidad.derecha,
           luneta: values.publicidad.luneta,
         },
-        nombre_publicidad: values.publicidad.nombre ?? null,
-        observacion: values.publicidad.observacion ?? null,
+        nombre_publicidad: null,
+        observacion: null,
         bus_ppu: bus.ppu,
         terminal: values.terminalReportado,
       }
@@ -1037,24 +1033,6 @@ export const InspectionFormPage = () => {
             </div>
           </div>
         ))}
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <Label>Nombre de campaña</Label>
-          <Input
-            className="mt-2"
-            value={publicityState?.nombre ?? ''}
-            onChange={(event) => methods.setValue('publicidad.nombre', event.target.value)}
-          />
-        </div>
-        <div>
-          <Label>Observaciones</Label>
-          <Textarea
-            className="mt-2"
-            value={publicityState?.observacion ?? ''}
-            onChange={(event) => methods.setValue('publicidad.observacion', event.target.value)}
-          />
-        </div>
       </div>
     </SectionCard>
   )

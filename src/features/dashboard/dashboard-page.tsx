@@ -14,8 +14,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { MapContainer, TileLayer, CircleMarker, Popup, Circle, LayerGroup } from 'react-leaflet'
-import type { Map as LeafletMap } from 'leaflet'
+import { MapContainer, TileLayer, CircleMarker, Popup, Circle, LayerGroup, Marker } from 'react-leaflet'
+import { divIcon, type Map as LeafletMap } from 'leaflet'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -37,6 +37,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import type { Tables } from '@/types/database'
 import { TERMINAL_GEOFENCES, type TerminalSlug } from '@/constants/geofences'
 import { useActiveInspectors } from '@/hooks/use-active-inspectors'
+import { useAuthStore } from '@/store/auth-store'
 
 interface WeekPayload {
   start: string
@@ -44,6 +45,36 @@ interface WeekPayload {
 }
 
 type BaseLayerKey = 'street' | 'satellite'
+
+const createInspectorIcon = (label: string, color: string) =>
+  divIcon({
+    className: '',
+    html: `<div style="
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      width:32px;
+      height:32px;
+      border-radius:50%;
+      background:${color};
+      color:#fff;
+      font-size:12px;
+      font-weight:700;
+      border:2px solid rgba(255,255,255,0.9);
+      box-shadow:0 6px 14px rgba(15,23,42,0.25);
+    ">${label}</div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+  })
+
+const getInitials = (name: string) =>
+  name
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
 
 const getWeekRange = (): WeekPayload => {
   const start = dayjs().isoWeekday(1).startOf('day')
@@ -85,6 +116,7 @@ const useTickets = () =>
 
 export const DashboardPage = () => {
   const [exporting, setExporting] = useState(false)
+  const { user } = useAuthStore()
   const { data: revisions, isLoading: revisionsLoading } = useWeeklyRevisions()
   const { data: tickets } = useTickets()
   const { inspectors: liveInspectors } = useActiveInspectors()
@@ -475,26 +507,30 @@ export const DashboardPage = () => {
                 ))}
               </LayerGroup>
               <LayerGroup>
-                {liveInspectors.map((inspector) => (
-                  <CircleMarker
-                    key={`inspector-${inspector.usuario_rut}`}
-                    center={[inspector.lat, inspector.lon]}
-                    radius={6}
-                    color="#0ea5e9"
-                    weight={2}
-                    opacity={0.9}
-                  >
-                    <Popup>
-                      <p className="text-sm font-semibold">{inspector.nombre}</p>
-                      <p className="text-xs text-slate-500">
-                        {inspector.terminal} · Precisión ±
-                        {Math.round(inspector.accuracy ?? 0)} m
-                        <br />
-                        Último pulso {dayjs(inspector.last_heartbeat).fromNow()}
-                      </p>
-                    </Popup>
-                  </CircleMarker>
-                ))}
+                {liveInspectors.map((inspector) => {
+                  const isSelf = user?.rut === inspector.usuario_rut
+                  const icon = createInspectorIcon(
+                    getInitials(inspector.nombre),
+                    isSelf ? '#22c55e' : '#0284c7'
+                  )
+                  return (
+                    <Marker
+                      key={`inspector-${inspector.usuario_rut}`}
+                      position={[inspector.lat, inspector.lon]}
+                      icon={icon}
+                    >
+                      <Popup>
+                        <p className="text-sm font-semibold">{inspector.nombre}</p>
+                        <p className="text-xs text-slate-500">
+                          {inspector.terminal} · Precisión ±
+                          {Math.round(inspector.accuracy ?? 0)} m
+                          <br />
+                          Último pulso {dayjs(inspector.last_heartbeat).fromNow()}
+                        </p>
+                      </Popup>
+                    </Marker>
+                  )
+                })}
               </LayerGroup>
               <LayerGroup>
                 {ticketMarkers.map(({ ticket, revision }) => (
