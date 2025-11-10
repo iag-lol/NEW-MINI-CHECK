@@ -2,9 +2,21 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth-store'
 import { getUserIP } from '@/lib/ip-utils'
-import { useTrackingStore, type TrackingLocation } from '@/store/tracking-store'
+
+export interface TrackingLocation {
+  lat: number
+  lon: number
+  accuracy: number
+}
 
 type LocationData = TrackingLocation
+
+export interface TrackingSnapshot {
+  location: LocationData | null
+  error: string | null
+  isTracking: boolean
+  lastHeartbeat: number | null
+}
 
 interface UseRealtimeLocationOptions {
   enabled?: boolean
@@ -27,17 +39,15 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
   const [location, setLocation] = useState<LocationData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isTracking, setIsTracking] = useState(false)
+  const [lastHeartbeat, setLastHeartbeat] = useState<number | null>(null)
   const watchIdRef = useRef<number | null>(null)
   const heartbeatIntervalRef = useRef<number | null>(null)
   const lastUpdateRef = useRef<number>(0)
   const lastLocationRef = useRef<LocationData | null>(null)
-  const setTrackingState = useTrackingStore((state) => state.setTrackingState)
-  const resetTrackingState = useTrackingStore((state) => state.resetTracking)
 
   const updateLocationState = (nextLocation: LocationData) => {
     setLocation(nextLocation)
     lastLocationRef.current = nextLocation
-    setTrackingState({ location: nextLocation })
   }
 
   // Obtener ubicación actual
@@ -100,22 +110,14 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
       if (error) {
         console.error('Error sending heartbeat:', error)
         setError(error.message)
-        setTrackingState({ error: error.message })
       } else {
         setError(null)
-        setTrackingState({
-          error: null,
-          lastHeartbeat: Date.now(),
-          location: locationData,
-        })
+        setLastHeartbeat(Date.now())
         lastUpdateRef.current = Date.now()
       }
     } catch (err) {
       console.error('Error in sendHeartbeat:', err)
       setError(err instanceof Error ? err.message : 'Error desconocido')
-      setTrackingState({
-        error: err instanceof Error ? err.message : 'Error desconocido',
-      })
     }
   }
 
@@ -126,7 +128,7 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
     try {
       setIsTracking(true)
       setError(null)
-      setTrackingState({ isTracking: true, error: null })
+      setLastHeartbeat(null)
 
       // Obtener ubicación inicial
       const initialLocation = await getCurrentLocation()
@@ -153,7 +155,6 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
           (error) => {
             console.error('Error watching location:', error)
             setError(error.message)
-            setTrackingState({ error: error.message })
           },
           {
             enableHighAccuracy: highAccuracy,
@@ -182,10 +183,6 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
     } catch (err) {
       console.error('Error starting tracking:', err)
       setError(err instanceof Error ? err.message : 'Error al iniciar tracking')
-      setTrackingState({
-        error: err instanceof Error ? err.message : 'Error al iniciar tracking',
-        isTracking: false,
-      })
       setIsTracking(false)
     }
   }
@@ -193,8 +190,8 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
   // Detener tracking
   const stopTracking = async () => {
     setIsTracking(false)
-    resetTrackingState()
     lastLocationRef.current = null
+    setLastHeartbeat(null)
 
     // Limpiar watch de geolocalización
     if (watchIdRef.current !== null) {
@@ -248,6 +245,7 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
     location,
     error,
     isTracking,
+    lastHeartbeat,
     startTracking,
     stopTracking,
   }

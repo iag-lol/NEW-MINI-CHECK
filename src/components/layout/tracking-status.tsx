@@ -1,15 +1,14 @@
 import { AlertTriangle, Radar } from 'lucide-react'
 import dayjs from '@/lib/dayjs'
 import { cn } from '@/lib/utils'
-import { useTrackingStore } from '@/store/tracking-store'
+import type { TrackingSnapshot } from '@/hooks/use-realtime-location'
 
-export const TrackingStatus = () => {
-  const { isTracking, error, location, lastHeartbeat } = useTrackingStore((state) => ({
-    isTracking: state.isTracking,
-    error: state.error,
-    location: state.location,
-    lastHeartbeat: state.lastHeartbeat,
-  }))
+export const TrackingStatus = ({
+  isTracking,
+  error,
+  location,
+  lastHeartbeat,
+}: TrackingSnapshot) => {
 
   const statusLabel = error
     ? 'Error de tracking'

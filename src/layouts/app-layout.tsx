@@ -11,7 +11,7 @@ import { useAuthStore } from '@/store/auth-store'
 export const AppLayout = () => {
   useRealtimeSubscriptions()
   // Activar tracking GPS automático en toda la app
-  useRealtimeLocation({ enabled: true, intervalMs: 10000 })
+  const tracking = useRealtimeLocation({ enabled: true, intervalMs: 10000 })
   const location = useLocation()
   const { setLastVisitedPath } = useAuthStore()
 
@@ -23,7 +23,7 @@ export const AppLayout = () => {
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
       <Sidebar />
       <div className="flex flex-1 flex-col md:pl-[var(--sidebar-width)]">
-        <TopBar />
+        <TopBar tracking={tracking} />
         <main className="flex-1 px-4 pb-32 pt-6 md:px-8 md:pb-10">
           <div className="w-full">
             <Outlet />

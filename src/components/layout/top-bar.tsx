@@ -5,8 +5,13 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { NotificationCenter } from '@/components/notification-center'
 import { useLocation } from 'react-router-dom'
 import { TrackingStatus } from '@/components/layout/tracking-status'
+import type { TrackingSnapshot } from '@/hooks/use-realtime-location'
 
-export const TopBar = () => {
+interface TopBarProps {
+  tracking: TrackingSnapshot
+}
+
+export const TopBar = ({ tracking }: TopBarProps) => {
   const { user } = useAuthStore()
   const location = useLocation()
   const currentItem =
@@ -29,7 +34,7 @@ export const TopBar = () => {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <TrackingStatus />
+          <TrackingStatus {...tracking} />
           <ThemeToggle />
           <NotificationCenter />
         </div>
