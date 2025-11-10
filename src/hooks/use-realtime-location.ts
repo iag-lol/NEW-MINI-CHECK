@@ -31,7 +31,7 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
   const [error, setError] = useState<string | null>(null)
   const [isTracking, setIsTracking] = useState(false)
   const watchIdRef = useRef<number | null>(null)
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const heartbeatIntervalRef = useRef<number | null>(null)
   const lastUpdateRef = useRef<number>(0)
 
   // Obtener ubicación actual
@@ -69,22 +69,27 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
     try {
       const ip = await getUserIP()
 
-      // Usar la función SQL UPSERT
-      const { error } = await supabase.rpc('actualizar_usuario_activo', {
-        p_usuario_rut: user.rut,
-        p_nombre: user.nombre,
-        p_cargo: user.cargo,
-        p_terminal: user.terminal,
-        p_lat: locationData.lat,
-        p_lon: locationData.lon,
-        p_accuracy: locationData.accuracy,
-        p_ip_address: ip,
-        p_device_info: {
-          userAgent: navigator.userAgent,
-          platform: navigator.platform,
-          language: navigator.language,
-        },
-      })
+      // Usar UPSERT directamente en la tabla
+      const { error } = await supabase
+        .from('usuarios_activos')
+        .upsert({
+          usuario_rut: user.rut,
+          nombre: user.nombre,
+          cargo: user.cargo,
+          terminal: user.terminal,
+          lat: locationData.lat,
+          lon: locationData.lon,
+          accuracy: locationData.accuracy,
+          last_heartbeat: new Date().toISOString(),
+          ip_address: ip,
+          device_info: {
+            userAgent: navigator.userAgent,
+            platform: navigator.platform,
+            language: navigator.language,
+          },
+        }, {
+          onConflict: 'usuario_rut'
+        })
 
       if (error) {
         console.error('Error sending heartbeat:', error)
@@ -142,7 +147,7 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
       }
 
       // Configurar intervalo de heartbeat de respaldo
-      heartbeatIntervalRef.current = setInterval(async () => {
+      heartbeatIntervalRef.current = window.setInterval(async () => {
         if (location) {
           await sendHeartbeat(location)
         } else {
@@ -174,8 +179,8 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
     }
 
     // Limpiar intervalo de heartbeat
-    if (heartbeatIntervalRef.current) {
-      clearInterval(heartbeatIntervalRef.current)
+    if (heartbeatIntervalRef.current !== null) {
+      window.clearInterval(heartbeatIntervalRef.current)
       heartbeatIntervalRef.current = null
     }
 
@@ -206,8 +211,8 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
   // Limpiar al desmontar
   useEffect(() => {
     return () => {
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current)
+      if (heartbeatIntervalRef.current !== null) {
+        window.clearInterval(heartbeatIntervalRef.current)
       }
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current)
