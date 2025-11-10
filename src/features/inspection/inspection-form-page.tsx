@@ -54,22 +54,22 @@ const inspectionSchema = z.object({
     tiene: z.boolean(),
     vencimientoMes: z.coerce.number().min(1).max(12).optional(),
     vencimientoAnio: z.coerce.number().min(2023).max(2035).optional(),
-    certificacion: z.enum(['VIGENTE', 'VENCIDA']).optional(),
-    sonda: z.enum(['OK', 'SIN_LECTURA', 'FUERA_DE_RANGO']).optional(),
-    manometro: z.enum(['OK', 'SIN_LECTURA', 'FUERA_DE_RANGO']).optional(),
-    presion: z.enum(['SOBRECARGA', 'OPTIMO', 'BAJA_CARGA']).optional(),
-    cilindro: z.enum(['OK', 'ABOLLADO', 'OXIDADO']).optional(),
-    porta: z.enum(['TIENE', 'NO_TIENE', 'DANADO']).optional(),
+    certificacion: z.enum(['VIGENTE', 'VENCIDA']).nullable(),
+    sonda: z.enum(['OK', 'SIN_LECTURA', 'FUERA_DE_RANGO']).nullable(),
+    manometro: z.enum(['OK', 'SIN_LECTURA', 'FUERA_DE_RANGO']).nullable(),
+    presion: z.enum(['SOBRECARGA', 'OPTIMO', 'BAJA_CARGA']).nullable(),
+    cilindro: z.enum(['OK', 'ABOLLADO', 'OXIDADO']).nullable(),
+    porta: z.enum(['TIENE', 'NO_TIENE', 'DANADO']).nullable(),
     observacion: z.string().optional(),
   }),
   mobileye: z.object({
     aplica: z.boolean(),
-    alertaIzq: z.boolean().optional(),
-    alertaDer: z.boolean().optional(),
-    consola: z.boolean().optional(),
-    sensorFrontal: z.boolean().optional(),
-    sensorIzq: z.boolean().optional(),
-    sensorDer: z.boolean().optional(),
+    alertaIzq: z.boolean().nullable(),
+    alertaDer: z.boolean().nullable(),
+    consola: z.boolean().nullable(),
+    sensorFrontal: z.boolean().nullable(),
+    sensorIzq: z.boolean().nullable(),
+    sensorDer: z.boolean().nullable(),
     observacion: z.string().optional(),
   }),
   odometro: z.object({
@@ -284,8 +284,28 @@ export const InspectionFormPage = () => {
         visiblesPuertasCerradas: null,
         observacion: '',
       },
-      extintores: { tiene: true, observacion: '' },
-      mobileye: { aplica: false },
+      extintores: {
+        tiene: true,
+        vencimientoMes: undefined,
+        vencimientoAnio: undefined,
+        certificacion: null,
+        sonda: null,
+        manometro: null,
+        presion: null,
+        cilindro: null,
+        porta: null,
+        observacion: '',
+      },
+      mobileye: {
+        aplica: false,
+        alertaIzq: null,
+        alertaDer: null,
+        consola: null,
+        sensorFrontal: null,
+        sensorIzq: null,
+        sensorDer: null,
+        observacion: '',
+      },
       odometro: { estado: 'OK', lectura: undefined, observacion: '' },
       publicidad: {
         izquierda: { tiene: false, danio: null, residuos: null, observacion: '' },
@@ -301,6 +321,7 @@ export const InspectionFormPage = () => {
   const [saving, setSaving] = useState(false)
   const [terminalDetected, setTerminalDetected] = useState<{ name: string; distance: number } | null>(null)
   const [refreshingGPS, setRefreshingGPS] = useState(false)
+  const [validationMessage, setValidationMessage] = useState<string | null>(null)
   const {
     location: trackingLocation,
     error: trackingError,
@@ -389,15 +410,36 @@ export const InspectionFormPage = () => {
     )
   }
 
-  const handleNext = () => setStep((prev) => Math.min(prev + 1, steps.length - 1))
-  const handlePrev = () => setStep((prev) => Math.max(prev - 1, 0))
+  const handleNext = () => {
+    attemptNavigateToStep(Math.min(step + 1, steps.length - 1))
+  }
+  const handlePrev = () => {
+    attemptNavigateToStep(Math.max(step - 1, 0))
+  }
 
   const submitInspection = async (values: InspectionForm) => {
-    // CRÍTICO: Solo permitir envío en el paso final
     if (step !== steps.length - 1) {
-      console.warn('Intento de envío antes del paso final bloqueado')
+      attemptNavigateToStep(steps.length - 1)
       return
     }
+
+    const snapshot = methods.getValues()
+    for (let i = 0; i < steps.length; i++) {
+      const issues = getMissingForStep(steps[i].key, snapshot)
+      if (issues.length) {
+        setValidationMessage(`${steps[i].label}: ${issues.join(' · ')}`)
+        setStep(i)
+        return
+      }
+    }
+
+    const isValid = await methods.trigger()
+    if (!isValid) {
+      setValidationMessage('Revisa los campos con error antes de enviar.')
+      return
+    }
+
+    setValidationMessage(null)
 
     if (!user || !bus) {
       setBusAlert('Debes seleccionar un bus válido antes de enviar.')
@@ -597,6 +639,137 @@ export const InspectionFormPage = () => {
     } finally {
       setRefreshingGPS(false)
     }
+  }
+
+  const getMissingForStep = (
+    stepKey: StepKey,
+    values?: InspectionForm,
+    options?: { shallow?: boolean }
+  ): string[] => {
+    const snapshot = values ?? methods.getValues()
+    const missing: string[] = []
+
+    const requireBoolean = (value: boolean | null | undefined, label: string) => {
+      if (value === null || value === undefined) {
+        missing.push(label)
+      }
+    }
+
+    switch (stepKey) {
+      case 'estado':
+        if (!snapshot.terminalReportado?.trim()) {
+          missing.push('Selecciona el terminal detectado')
+        }
+        if (!snapshot.observacionGeneral?.trim() || snapshot.observacionGeneral.trim().length < 10) {
+          missing.push('Escribe la observación general (mínimo 10 caracteres)')
+        }
+        break
+      case 'tag':
+        if (typeof snapshot.tag.tiene !== 'boolean') {
+          missing.push('Indica si el bus tiene TAG')
+        } else if (snapshot.tag.tiene && !snapshot.tag.serie?.trim()) {
+          missing.push('Ingresa la serie del TAG')
+        } else if (!snapshot.tag.tiene && !snapshot.tag.observacion?.trim()) {
+          missing.push('Describe por qué el bus no tiene TAG')
+        }
+        break
+      case 'camaras': {
+        cameraHardwareQuestions.forEach((item) =>
+          requireBoolean(snapshot.camaras[item.field], `Cámaras · ${item.label}`)
+        )
+        requireBoolean(snapshot.camaras.visiblesMonitor, 'Cámaras · Visibilidad total')
+        requireBoolean(snapshot.camaras.activaReversa, 'Cámaras · Activación con reversa')
+        requireBoolean(snapshot.camaras.activaPuertas, 'Cámaras · Activación de puertas')
+        requireBoolean(
+          snapshot.camaras.visiblesPuertasCerradas,
+          'Cámaras · Visibles con puertas cerradas'
+        )
+        break
+      }
+      case 'extintores': {
+        const ext = snapshot.extintores
+        if (typeof ext.tiene !== 'boolean') {
+          missing.push('Indica si el bus tiene extintor')
+          break
+        }
+        if (ext.tiene) {
+          if (ext.vencimientoMes === undefined || Number.isNaN(ext.vencimientoMes)) {
+            missing.push('Extintor · Mes de vencimiento')
+          }
+          if (ext.vencimientoAnio === undefined || Number.isNaN(ext.vencimientoAnio)) {
+            missing.push('Extintor · Año de vencimiento')
+          }
+          if (!ext.certificacion) missing.push('Extintor · Certificación')
+          if (!ext.sonda) missing.push('Extintor · Estado de sonda')
+          if (!ext.manometro) missing.push('Extintor · Manómetro')
+          if (!ext.presion) missing.push('Extintor · Presión')
+          if (!ext.cilindro) missing.push('Extintor · Cilindro')
+          if (!ext.porta) missing.push('Extintor · Porta')
+        } else if (!ext.observacion?.trim()) {
+          missing.push('Explica por qué no hay extintor')
+        }
+        break
+      }
+      case 'mobileye': {
+        if (snapshot.mobileye.aplica) {
+          mobileyeQuestionList.forEach((item) =>
+            requireBoolean(snapshot.mobileye[item.field], `Mobileye · ${item.label}`)
+          )
+        }
+        break
+      }
+      case 'odometro':
+        if (
+          snapshot.odometro.lectura === undefined ||
+          snapshot.odometro.lectura === null ||
+          Number.isNaN(snapshot.odometro.lectura)
+        ) {
+          missing.push('Ingresa la lectura del odómetro')
+        }
+        break
+      case 'publicidad':
+        publicityAreas.forEach((area) => {
+          const lateral = snapshot.publicidad[area.key]
+          if (lateral.tiene === null || lateral.tiene === undefined) {
+            missing.push(`Publicidad · ${area.label} · Indica si tiene campaña`)
+          } else if (lateral.tiene) {
+            requireBoolean(lateral.danio, `Publicidad · ${area.label} · Define si hay daño`)
+            requireBoolean(lateral.residuos, `Publicidad · ${area.label} · Define si hay residuos`)
+          }
+        })
+        break
+      case 'cierre':
+        if (!options?.shallow) {
+          for (const stepConfig of steps) {
+            if (stepConfig.key === 'cierre') continue
+            const childMissing = getMissingForStep(stepConfig.key, snapshot, { shallow: true })
+            if (childMissing.length) {
+              missing.push(`${stepConfig.label}: ${childMissing[0]}`)
+            }
+          }
+        }
+        break
+    }
+
+    return missing
+  }
+
+  const attemptNavigateToStep = (targetIndex: number) => {
+    if (targetIndex < 0 || targetIndex >= steps.length) return false
+    if (targetIndex > step) {
+      const snapshot = methods.getValues()
+      for (let current = step; current < targetIndex; current++) {
+        const issues = getMissingForStep(steps[current].key, snapshot)
+        if (issues.length) {
+          setValidationMessage(`${steps[current].label}: ${issues.join(' · ')}`)
+          setStep(current)
+          return false
+        }
+      }
+    }
+    setValidationMessage(null)
+    setStep(targetIndex)
+    return true
   }
 
   const renderEstado = () => (
@@ -1127,13 +1300,19 @@ export const InspectionFormPage = () => {
                     ? 'bg-slate-900 text-white'
                     : 'bg-slate-100 text-slate-500 dark:bg-slate-900/40'
                 }`}
-                onClick={() => setStep(index)}
+                onClick={() => attemptNavigateToStep(index)}
               >
                 {item.label}
               </button>
             ))}
           </div>
         </Card>
+
+        {validationMessage && (
+          <div className="rounded-2xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+            {validationMessage}
+          </div>
+        )}
 
         <AnimatePresence mode="wait">
           <motion.div

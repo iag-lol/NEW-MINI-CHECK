@@ -20,6 +20,7 @@ export const PublicidadModulePage = () => {
       title="Publicidad"
       description="Control de campañas publicitarias y hallazgos"
       icon={Megaphone}
+      queryLimit={null}
       searchFields={['bus_ppu', 'terminal', 'nombre_publicidad']}
       getStats={(data: PublicidadRow[]) => {
         const total = data.length

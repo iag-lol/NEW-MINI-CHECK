@@ -54,6 +54,7 @@ interface ModuleLayoutProps<T extends TableName> {
   charts?: ChartConfig[]
   getCharts?: (data: TableRow<T>[]) => ChartConfig[]
   searchFields?: (keyof TableRow<T>)[]
+  queryLimit?: number | null
 }
 
 export const ModuleLayout = <T extends TableName>({
@@ -67,19 +68,17 @@ export const ModuleLayout = <T extends TableName>({
   charts = [],
   getCharts,
   searchFields = [],
+  queryLimit = 200,
 }: ModuleLayoutProps<T>) => {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterValues, setFilterValues] = useState<Record<string, string>>({})
   const [showFilters, setShowFilters] = useState(false)
 
   const { data, refetch, isFetching } = useQuery({
-    queryKey: ['module', table],
+    queryKey: ['module', table, queryLimit ?? 'all'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from(table)
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(120)
+      const baseQuery = supabase.from(table).select('*').order('created_at', { ascending: false })
+      const { data, error } = queryLimit ? await baseQuery.limit(queryLimit) : await baseQuery
       if (error) throw error
       return (data ?? []) as unknown as TableRow<T>[]
     },

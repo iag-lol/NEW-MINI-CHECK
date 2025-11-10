@@ -75,50 +75,73 @@ export const TagModulePage = () => {
           ],
         },
       ]}
-      charts={[
-        {
-          title: 'Estado de Instalación',
-          component: (
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={[]}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="estado" stroke="#64748b" fontSize={12} />
-                <YAxis stroke="#64748b" fontSize={12} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                />
-                <Legend />
-                <Bar dataKey="cantidad" fill="#6366f1" name="Cantidad" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ),
-        },
-        {
-          title: 'Distribución por Terminal',
-          component: (
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={[]}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry: any) => `${entry.name} ${entry.value}`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
+      getCharts={(rows) => {
+        const estadoData = [
+          { estado: 'Instalado', cantidad: rows.filter((row) => row.tiene).length },
+          { estado: 'Sin TAG', cantidad: rows.filter((row) => !row.tiene).length },
+        ]
+        const totalEstados = estadoData.reduce((sum, item) => sum + item.cantidad, 0)
+        const terminalCounts = rows.reduce<Record<string, number>>((acc, row) => {
+          acc[row.terminal] = (acc[row.terminal] ?? 0) + 1
+          return acc
+        }, {})
+        const terminalData = Object.entries(terminalCounts).map(([terminal, value]) => ({
+          name: terminal,
+          value,
+        }))
+        if (terminalData.length === 0) {
+          terminalData.push({ name: 'Sin datos', value: 1 })
+        }
+
+        return [
+          {
+            title: 'Estado de Instalación',
+            component: (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart
+                  data={
+                    totalEstados > 0 ? estadoData : [{ estado: 'Sin datos', cantidad: 0 }]
+                  }
                 >
-                  <Cell fill="#6366f1" />
-                  <Cell fill="#8b5cf6" />
-                  <Cell fill="#ec4899" />
-                  <Cell fill="#f59e0b" />
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          ),
-        },
-      ]}
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="estado" stroke="#64748b" fontSize={12} />
+                  <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="cantidad" fill="#6366f1" name="Cantidad" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ),
+          },
+          {
+            title: 'Distribución por Terminal',
+            component: (
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={terminalData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(entry: any) => `${entry.name}: ${entry.value}`}
+                    outerRadius={90}
+                    dataKey="value"
+                  >
+                    {terminalData.map((entry, index) => (
+                      <Cell
+                        key={`${entry.name}-${index}`}
+                        fill={['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#0ea5e9'][index % 5]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ),
+          },
+        ]
+      }}
       columns={[
         {
           label: 'Bus',

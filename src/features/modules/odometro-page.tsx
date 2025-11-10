@@ -77,49 +77,81 @@ export const OdometroModulePage = () => {
           ],
         },
       ]}
-      charts={[
-        {
-          title: 'Tendencia de Lecturas (Últimas 20)',
-          component: (
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={[]}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="date" stroke="#64748b" fontSize={12} />
-                <YAxis stroke="#64748b" fontSize={12} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                />
-                <Legend />
-                <Line type="monotone" dataKey="lectura" stroke="#6366f1" strokeWidth={2} name="Kilometraje" />
-              </LineChart>
-            </ResponsiveContainer>
-          ),
-        },
-        {
-          title: 'Distribución por Estado',
-          component: (
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={[]}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry: any) => `${entry.name} ${(entry.percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  <Cell fill="#10b981" />
-                  <Cell fill="#f59e0b" />
-                  <Cell fill="#ef4444" />
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          ),
-        },
-      ]}
+      getCharts={(rows) => {
+        const sorted = [...rows].sort(
+          (a, b) => dayjs(a.created_at).valueOf() - dayjs(b.created_at).valueOf()
+        )
+        const trendData = sorted
+          .slice(-20)
+          .map((row) => ({
+            date: dayjs(row.created_at).format('DD MMM'),
+            lectura: Number(row.lectura),
+          }))
+        if (!trendData.length) {
+          trendData.push({ date: 'Sin datos', lectura: 0 })
+        }
+        const stateMeta = [
+          { key: 'OK' as const, label: 'OK', color: '#10b981' },
+          { key: 'INCONSISTENTE' as const, label: 'Inconsistente', color: '#f59e0b' },
+          { key: 'NO_FUNCIONA' as const, label: 'No funciona', color: '#ef4444' },
+        ]
+        const stateData = stateMeta.map(({ key, label, color }) => ({
+          name: label,
+          value: rows.filter((row) => row.estado === key).length,
+          color,
+        }))
+        const stateDataFinal = stateData.some((entry) => entry.value > 0)
+          ? stateData
+          : [{ name: 'Sin datos', value: 1, color: '#cbd5f5' }]
+
+        return [
+          {
+            title: 'Tendencia de Lecturas (Últimas 20)',
+            component: (
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={trendData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="date" stroke="#64748b" fontSize={12} />
+                  <YAxis stroke="#64748b" fontSize={12} />
+                  <Tooltip />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="lectura"
+                    stroke="#6366f1"
+                    strokeWidth={2}
+                    name="Kilometraje"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ),
+          },
+          {
+            title: 'Distribución por Estado',
+            component: (
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={stateDataFinal}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(entry: any) => `${entry.name}: ${entry.value}`}
+                    outerRadius={90}
+                    dataKey="value"
+                  >
+                    {stateDataFinal.map((entry, index) => (
+                      <Cell key={`${entry.name}-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ),
+          },
+        ]
+      }}
       columns={[
         {
           label: 'Bus',

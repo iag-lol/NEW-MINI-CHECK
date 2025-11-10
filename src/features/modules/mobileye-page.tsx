@@ -15,6 +15,7 @@ export const MobileyeModulePage = () => {
       description="Sistema de sensores y alertas - Solo buses Volvo"
       icon={Radar}
       searchFields={['bus_ppu', 'terminal']}
+      queryLimit={null}
       getStats={(data: MobileyeRow[]) => {
         const total = data.length
         const completosOk = data.filter(r =>
@@ -80,49 +81,86 @@ export const MobileyeModulePage = () => {
           ],
         },
       ]}
-      charts={[
-        {
-          title: 'Estado de Componentes',
-          component: (
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={[]}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="componente" stroke="#64748b" fontSize={12} />
-                <YAxis stroke="#64748b" fontSize={12} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                />
-                <Legend />
-                <Bar dataKey="ok" fill="#10b981" name="OK" radius={[8, 8, 0, 0]} />
-                <Bar dataKey="falla" fill="#ef4444" name="Falla" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ),
-        },
-        {
-          title: 'Distribución de Estado General',
-          component: (
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={[]}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry: any) => `${entry.name} ${entry.value}`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  <Cell fill="#10b981" />
-                  <Cell fill="#f59e0b" />
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          ),
-        },
-      ]}
+      getCharts={(rows) => {
+        const componentFields = [
+          { key: 'alerta_izq' as const, label: 'Alerta izquierda' },
+          { key: 'alerta_der' as const, label: 'Alerta derecha' },
+          { key: 'consola' as const, label: 'Consola' },
+          { key: 'sensor_frontal' as const, label: 'Sensor frontal' },
+          { key: 'sensor_izq' as const, label: 'Sensor izquierdo' },
+          { key: 'sensor_der' as const, label: 'Sensor derecho' },
+        ]
+        const componentData = componentFields.map(({ key, label }) => ({
+          componente: label,
+          ok: rows.filter((row) => row[key] === true).length,
+          falla: rows.filter((row) => row[key] === false).length,
+        }))
+        const hasComponentData = componentData.some((row) => row.ok > 0 || row.falla > 0)
+        const cleanComponentData = hasComponentData
+          ? componentData
+          : [{ componente: 'Sin datos', ok: 0, falla: 0 }]
+
+        const systemsOk = rows.filter(
+          (row) =>
+            row.alerta_der &&
+            row.alerta_izq &&
+            row.consola &&
+            row.sensor_der &&
+            row.sensor_izq &&
+            row.sensor_frontal
+        ).length
+        const statusDataRaw = [
+          { name: 'Operativos', value: systemsOk, color: '#10b981' },
+          { name: 'Con fallas', value: rows.length - systemsOk, color: '#f97316' },
+        ]
+        const statusData =
+          statusDataRaw.some((item) => item.value > 0) ?
+            statusDataRaw :
+            [{ name: 'Sin datos', value: 1, color: '#cbd5f5' }]
+
+        return [
+          {
+            title: 'Estado de Componentes',
+            component: (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={cleanComponentData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="componente" stroke="#64748b" fontSize={12} />
+                  <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="ok" fill="#10b981" name="OK" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="falla" fill="#ef4444" name="Falla" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ),
+          },
+          {
+            title: 'Distribución de Estado General',
+            component: (
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(entry: any) => `${entry.name}: ${entry.value}`}
+                    outerRadius={90}
+                    dataKey="value"
+                  >
+                    {statusData.map((entry, index) => (
+                      <Cell key={`${entry.name}-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ),
+          },
+        ]
+      }}
       columns={[
         {
           label: 'Bus',

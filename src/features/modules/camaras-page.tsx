@@ -76,50 +76,81 @@ export const CamarasModulePage = () => {
           ],
         },
       ]}
-      charts={[
-        {
-          title: 'Estado de Monitores',
-          component: (
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={[]}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="estado" stroke="#64748b" fontSize={12} />
-                <YAxis stroke="#64748b" fontSize={12} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                />
-                <Legend />
-                <Bar dataKey="cantidad" fill="#6366f1" name="Cantidad" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ),
-        },
-        {
-          title: 'Distribución por Estado',
-          component: (
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={[]}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry: any) => `${entry.name} ${entry.value}`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
+      getCharts={(rows) => {
+        const monitorStates = [
+          { key: 'FUNCIONA', label: 'Funciona', color: '#10b981' },
+          { key: 'APAGADO', label: 'Apagado', color: '#94a3b8' },
+          { key: 'CON_DANO', label: 'Con daño', color: '#f59e0b' },
+          { key: 'SIN_SENAL', label: 'Sin señal', color: '#ef4444' },
+        ]
+        const estadoData = monitorStates.map(({ key, label, color }) => ({
+          estado: label,
+          cantidad: rows.filter((row) => row.monitor_estado === key).length,
+          color,
+        }))
+        const totalEstados = estadoData.reduce((sum, item) => sum + item.cantidad, 0)
+        const pieData =
+          totalEstados > 0
+            ? estadoData.map(({ estado, cantidad, color }) => ({
+                name: estado,
+                value: cantidad,
+                color,
+              }))
+            : [{ name: 'Sin datos', value: 1, color: '#cbd5f5' }]
+
+        return [
+          {
+            title: 'Estado de Monitores',
+            component: (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart
+                  data={
+                    totalEstados > 0
+                      ? estadoData
+                      : [{ estado: 'Sin datos', cantidad: 0, color: '#cbd5f5' }]
+                  }
                 >
-                  <Cell fill="#10b981" />
-                  <Cell fill="#64748b" />
-                  <Cell fill="#f59e0b" />
-                  <Cell fill="#ef4444" />
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          ),
-        },
-      ]}
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="estado" stroke="#64748b" fontSize={12} />
+                  <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar
+                    dataKey="cantidad"
+                    radius={[8, 8, 0, 0]}
+                    name="Cantidad"
+                    fill="#6366f1"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ),
+          },
+          {
+            title: 'Distribución por Estado',
+            component: (
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(entry: any) => `${entry.name}: ${entry.value}`}
+                    outerRadius={90}
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`${entry.name}-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ),
+          },
+        ]
+      }}
       columns={[
         {
           label: 'Bus',
