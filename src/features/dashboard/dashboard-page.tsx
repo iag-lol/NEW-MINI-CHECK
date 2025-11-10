@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
@@ -14,7 +14,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, Popup, Circle, LayerGroup } from 'react-leaflet'
+import type { Map as LeafletMap } from 'leaflet'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -34,11 +35,14 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { Tables } from '@/types/database'
+import { TERMINAL_GEOFENCES, type TerminalSlug } from '@/constants/geofences'
 
 interface WeekPayload {
   start: string
   end: string
 }
+
+type BaseLayerKey = 'street' | 'satellite'
 
 const getWeekRange = (): WeekPayload => {
   const start = dayjs().isoWeekday(1).startOf('day')
@@ -83,12 +87,30 @@ export const DashboardPage = () => {
   const { data: revisions, isLoading: revisionsLoading } = useWeeklyRevisions()
   const { data: tickets } = useTickets()
   const mapToken = import.meta.env.VITE_MAPBOX_TOKEN
-  const tileLayerUrl = mapToken
-    ? `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=${mapToken}`
-    : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-  const attribution = mapToken
-    ? '© Mapbox · © OpenStreetMap'
-    : '© OpenStreetMap contributors'
+  const mapRef = useRef<LeafletMap | null>(null)
+  const [mapLayer, setMapLayer] = useState<BaseLayerKey>('satellite')
+  const baseLayers = useMemo<Record<BaseLayerKey, { id: BaseLayerKey; label: string; url: string; attribution: string }>>(
+    () => ({
+      street: {
+        id: 'street',
+        label: 'Calles',
+        url: mapToken
+          ? `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=${mapToken}`
+          : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: mapToken ? '© Mapbox · © OpenStreetMap' : '© OpenStreetMap contributors',
+      },
+      satellite: {
+        id: 'satellite',
+        label: 'Satélite',
+        url: mapToken
+          ? `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=${mapToken}`
+          : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        attribution: mapToken ? '© Mapbox · © OpenStreetMap' : '© Esri · Earthstar Geographics',
+      },
+    }),
+    [mapToken]
+  )
+  const currentLayer = baseLayers[mapLayer] ?? baseLayers.street
 
   const stats = useMemo(() => {
     if (!revisions) {
@@ -136,9 +158,62 @@ export const DashboardPage = () => {
     }
   }, [revisions])
 
+  const revisionById = useMemo(() => {
+    const map = new Map<string, Tables<'revisiones'>>()
+    revisions?.forEach((revision) => map.set(revision.id, revision))
+    return map
+  }, [revisions])
+
+  const inspectorsActivos = useMemo(() => {
+    if (!revisions) return []
+    const now = dayjs()
+    const limitHours = 6
+    const ordered = [...revisions].sort(
+      (a, b) => dayjs(b.created_at).valueOf() - dayjs(a.created_at).valueOf()
+    )
+    const latestByInspector = new Map<string, Tables<'revisiones'>>()
+    ordered.forEach((revision) => {
+      if (now.diff(dayjs(revision.created_at), 'hour') > limitHours) return
+      if (!latestByInspector.has(revision.inspector_rut)) {
+        latestByInspector.set(revision.inspector_rut, revision)
+      }
+    })
+    return Array.from(latestByInspector.values())
+  }, [revisions])
+
+  const ticketMarkers = useMemo(() => {
+    if (!tickets) return []
+    return tickets
+      .map((ticket) => {
+        const revision = revisionById.get(ticket.revision_id)
+        if (!revision) return null
+        return { ticket, revision }
+      })
+      .filter(
+        (value): value is { ticket: Tables<'tickets'>; revision: Tables<'revisiones'> } => value !== null
+      )
+  }, [revisionById, tickets])
+
   const pendingTickets = tickets?.filter((ticket) => ticket.estado !== 'RESUELTO') ?? []
 
   const latestRevisions = revisions?.slice(0, 6) ?? []
+  const mapRevisions =
+    revisions?.filter(
+      (revision) => typeof revision.lat === 'number' && typeof revision.lon === 'number'
+    ) ?? []
+
+  const flyToTerminal = (terminal: TerminalSlug) => {
+    const fence = TERMINAL_GEOFENCES.find((item) => item.name === terminal)
+    if (fence && mapRef.current) {
+      mapRef.current.flyTo([fence.lat, fence.lon], 15, { duration: 1.2 })
+    }
+  }
+
+  const resetMapView = () => {
+    if (mapRef.current) {
+      mapRef.current.flyTo([-33.46, -70.65], 11, { duration: 1 })
+    }
+  }
 
   if (revisionsLoading) {
     return (
@@ -328,40 +403,187 @@ export const DashboardPage = () => {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardTitle>Mapa de revisiones</CardTitle>
-          <p className="text-sm text-slate-500">Ubicaciones GPS con color por estado</p>
-          <div className="mt-4 h-80 overflow-hidden rounded-2xl">
+      <Card className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle>Centro geoespacial en vivo</CardTitle>
+            <p className="text-sm text-slate-500">
+              Seguimiento satelital, inspectores conectados y tickets críticos.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(Object.values(baseLayers) as Array<(typeof baseLayers)[BaseLayerKey]>).map(
+              (layer) => (
+                <Button
+                  key={layer.id}
+                  variant={mapLayer === layer.id ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setMapLayer(layer.id)}
+                >
+                  {layer.label}
+                </Button>
+              )
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {TERMINAL_GEOFENCES.map((terminal) => (
+            <Button
+              key={terminal.name}
+              variant="outline"
+              size="sm"
+              onClick={() => flyToTerminal(terminal.name)}
+            >
+              {terminal.name}
+            </Button>
+          ))}
+          <Button variant="ghost" size="sm" onClick={resetMapView}>
+            Ver todos
+          </Button>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
+          <div className="h-[420px] overflow-hidden rounded-2xl border border-slate-100/80 dark:border-slate-900">
             <MapContainer
               center={[-33.46, -70.65]}
               zoom={11}
               scrollWheelZoom
               className="h-full w-full"
+              ref={mapRef}
             >
-              <TileLayer url={tileLayerUrl} attribution={attribution} />
-              {latestRevisions.map((revision) => (
-                <CircleMarker
-                  key={revision.id}
-                  center={[revision.lat, revision.lon]}
-                  radius={8}
-                  color={
-                    revision.estado_bus === 'EN_PANNE' ? '#f97316' : '#22c55e'
-                  }
-                  weight={2}
-                >
-                  <Popup>
-                    <p className="text-sm font-semibold">{revision.bus_ppu}</p>
-                    <p className="text-xs text-slate-500">
-                      {revision.terminal_detectado} ·{' '}
-                      {dayjs(revision.created_at).format('HH:mm')}
-                    </p>
-                  </Popup>
-                </CircleMarker>
-              ))}
+              <TileLayer
+                key={currentLayer.id}
+                url={currentLayer.url}
+                attribution={currentLayer.attribution}
+              />
+              <LayerGroup>
+                {TERMINAL_GEOFENCES.map((fence) => (
+                  <Circle
+                    key={fence.name}
+                    center={[fence.lat, fence.lon]}
+                    radius={fence.radius}
+                    pathOptions={{ color: '#0ea5e9', fillOpacity: 0.08 }}
+                  >
+                    <Popup>
+                      <p className="text-sm font-semibold">{fence.name}</p>
+                      <p className="text-xs text-slate-500">Geocerca de {fence.radius} m</p>
+                    </Popup>
+                  </Circle>
+                ))}
+              </LayerGroup>
+              <LayerGroup>
+                {mapRevisions.map((revision) => (
+                  <CircleMarker
+                    key={revision.id}
+                    center={[revision.lat, revision.lon]}
+                    radius={7}
+                    color={revision.estado_bus === 'EN_PANNE' ? '#f97316' : '#22c55e'}
+                    weight={2}
+                  >
+                    <Popup>
+                      <p className="text-sm font-semibold">{revision.bus_ppu}</p>
+                      <p className="text-xs text-slate-500">
+                        {revision.estado_bus === 'EN_PANNE' ? 'En panne' : 'Operativo'} ·{' '}
+                        {dayjs(revision.created_at).format('ddd HH:mm')}
+                      </p>
+                    </Popup>
+                  </CircleMarker>
+                ))}
+              </LayerGroup>
+              <LayerGroup>
+                {inspectorsActivos.map((revision) => (
+                  <CircleMarker
+                    key={`inspector-${revision.inspector_rut}`}
+                    center={[revision.lat, revision.lon]}
+                    radius={6}
+                    color="#0ea5e9"
+                    weight={2}
+                    opacity={0.9}
+                  >
+                    <Popup>
+                      <p className="text-sm font-semibold">{revision.inspector_nombre}</p>
+                      <p className="text-xs text-slate-500">
+                        Último registro {dayjs(revision.created_at).format('ddd HH:mm')}
+                      </p>
+                    </Popup>
+                  </CircleMarker>
+                ))}
+              </LayerGroup>
+              <LayerGroup>
+                {ticketMarkers.map(({ ticket, revision }) => (
+                  <CircleMarker
+                    key={`ticket-${ticket.id}`}
+                    center={[revision.lat, revision.lon]}
+                    radius={9}
+                    color={
+                      ticket.estado === 'PENDIENTE'
+                        ? '#ef4444'
+                        : ticket.estado === 'EN_PROCESO'
+                        ? '#facc15'
+                        : '#14b8a6'
+                    }
+                    weight={3}
+                    opacity={0.8}
+                  >
+                    <Popup>
+                      <p className="text-sm font-semibold">{ticket.modulo}</p>
+                      <p className="text-xs text-slate-500">
+                        {ticket.descripcion}
+                        <br />
+                        Estado: {ticket.estado}
+                      </p>
+                    </Popup>
+                  </CircleMarker>
+                ))}
+              </LayerGroup>
             </MapContainer>
           </div>
-        </Card>
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-100/80 p-4 dark:border-slate-900">
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                Inspectores activos ({inspectorsActivos.length})
+              </p>
+              <ScrollArea className="mt-3 h-40 pr-3">
+                {inspectorsActivos.length === 0 && (
+                  <p className="text-xs text-slate-400">Sin inspectores conectados en las últimas horas.</p>
+                )}
+                {inspectorsActivos.map((revision) => (
+                  <div key={revision.inspector_rut} className="mb-3 text-xs last:mb-0">
+                    <p className="font-semibold text-slate-800 dark:text-white">
+                      {revision.inspector_nombre}
+                    </p>
+                    <p className="text-slate-500">
+                      {revision.bus_ppu} · {revision.terminal_detectado} ·{' '}
+                      {dayjs(revision.created_at).format('HH:mm')} hrs
+                    </p>
+                  </div>
+                ))}
+              </ScrollArea>
+            </div>
+            <div className="rounded-2xl border border-slate-100/80 p-4 dark:border-slate-900">
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                Tickets geolocalizados ({ticketMarkers.length})
+              </p>
+              <ScrollArea className="mt-3 h-40 pr-3">
+                {ticketMarkers.length === 0 && (
+                  <p className="text-xs text-slate-400">Sin tickets con coordenadas disponibles.</p>
+                )}
+                {ticketMarkers.map(({ ticket, revision }) => (
+                  <div key={ticket.id} className="mb-3 text-xs last:mb-0">
+                    <p className="font-semibold text-slate-800 dark:text-white">
+                      {ticket.modulo} · {ticket.estado}
+                    </p>
+                    <p className="text-slate-500">
+                      {revision.bus_ppu} · {revision.terminal_detectado}
+                    </p>
+                  </div>
+                ))}
+              </ScrollArea>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardTitle>Últimas revisiones</CardTitle>
           <ScrollArea className="mt-4 h-80 pr-4">
@@ -396,6 +618,38 @@ export const DashboardPage = () => {
               {latestRevisions.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-slate-200/80 p-6 text-center text-sm text-slate-400 dark:border-slate-800">
                   Sin revisiones esta semana todavía.
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </Card>
+        <Card>
+          <CardTitle>Tickets activos</CardTitle>
+          <ScrollArea className="mt-4 h-80 pr-4">
+            <div className="space-y-4">
+              {pendingTickets.map((ticket) => (
+                <div
+                  key={ticket.id}
+                  className="rounded-2xl border border-slate-100/80 p-4 text-sm dark:border-slate-900"
+                >
+                  <p className="text-base font-semibold text-slate-900 dark:text-white">
+                    {ticket.modulo}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {ticket.terminal} · prioridad {ticket.prioridad.toLowerCase()}
+                  </p>
+                  <p className="mt-2 text-slate-600 dark:text-slate-300">{ticket.descripcion}</p>
+                  <Badge
+                    className="mt-3 uppercase"
+                    variant={ticket.estado === 'PENDIENTE' ? 'danger' : 'warning'}
+                  >
+                    {ticket.estado}
+                  </Badge>
+                </div>
+              ))}
+              {pendingTickets.length === 0 && (
+                <div className="rounded-2xl border border-dashed border-slate-200/80 p-6 text-center text-sm text-slate-400 dark:border-slate-800">
+                  Todos los tickets están resueltos.
                 </div>
               )}
             </div>

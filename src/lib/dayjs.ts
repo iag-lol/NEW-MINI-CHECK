@@ -1,5 +1,6 @@
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
+import 'dayjs/locale/es'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
@@ -7,6 +8,7 @@ import timezone from 'dayjs/plugin/timezone'
 dayjs.extend(isoWeek)
 dayjs.extend(utc)
 dayjs.extend(timezone)
+dayjs.locale('es')
 
 dayjs.tz.setDefault('America/Santiago')
 

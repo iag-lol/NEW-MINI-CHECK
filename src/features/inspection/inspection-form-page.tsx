@@ -360,12 +360,24 @@ export const InspectionFormPage = () => {
     const currentWeek = dayjs().isoWeek()
     const { data: revisiones } = await supabase
       .from('revisiones')
-      .select('id, created_at')
+      .select('id, created_at, inspector_nombre')
       .eq('bus_ppu', busRecord.ppu)
       .order('created_at', { ascending: false })
       .limit(1)
-    if (revisiones?.length && dayjs(revisiones[0].created_at).isoWeek() === currentWeek) {
-      setBusAlert('Este bus ya tiene revisión registrada en la semana en curso.')
+    if (revisiones?.length) {
+      const lastRevision = revisiones[0]
+      const lastDate = dayjs(lastRevision.created_at)
+      const currentWeekYear = getIsoWeekYear()
+      const lastWeekYear = getIsoWeekYear(lastDate)
+      if (lastDate.isoWeek() === currentWeek && lastWeekYear === currentWeekYear) {
+        setBusAlert(
+          `Este bus ya tiene revisión registrada esta semana (${lastDate.format(
+            'dddd D MMM · HH:mm'
+          )} hrs por ${lastRevision.inspector_nombre ?? 'otro inspector'}).`
+        )
+      } else {
+        setBusAlert(null)
+      }
     }
     methods.setValue(
       'mobileye.aplica',
