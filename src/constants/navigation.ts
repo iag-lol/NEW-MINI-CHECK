@@ -19,6 +19,7 @@ import {
   Layers,
   FolderKanban,
   BarChart3,
+  LineChart,
   Sliders,
   Ticket,
 } from 'lucide-react'
@@ -78,6 +79,7 @@ export const SIDEBAR_GROUPS: NavGroup[] = [
     roles: ['SUPERVISOR'],
     items: [
       { label: 'Reportes', path: '/app/reportes', icon: PieChart },
+      { label: 'Reportes Avanzados', path: '/app/analytics', icon: LineChart, roles: ['SUPERVISOR'] },
       { label: 'Informes', path: '/app/informes', icon: FileBarChart, roles: ['SUPERVISOR'] },
     ],
   },

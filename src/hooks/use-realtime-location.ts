@@ -2,12 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth-store'
 import { getUserIP } from '@/lib/ip-utils'
+import { useTrackingStore, type TrackingLocation } from '@/store/tracking-store'
 
-interface LocationData {
-  lat: number
-  lon: number
-  accuracy: number
-}
+type LocationData = TrackingLocation
 
 interface UseRealtimeLocationOptions {
   enabled?: boolean
@@ -33,6 +30,15 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
   const watchIdRef = useRef<number | null>(null)
   const heartbeatIntervalRef = useRef<number | null>(null)
   const lastUpdateRef = useRef<number>(0)
+  const lastLocationRef = useRef<LocationData | null>(null)
+  const setTrackingState = useTrackingStore((state) => state.setTrackingState)
+  const resetTrackingState = useTrackingStore((state) => state.resetTracking)
+
+  const updateLocationState = (nextLocation: LocationData) => {
+    setLocation(nextLocation)
+    lastLocationRef.current = nextLocation
+    setTrackingState({ location: nextLocation })
+  }
 
   // Obtener ubicación actual
   const getCurrentLocation = (): Promise<LocationData> => {
@@ -94,13 +100,22 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
       if (error) {
         console.error('Error sending heartbeat:', error)
         setError(error.message)
+        setTrackingState({ error: error.message })
       } else {
         setError(null)
+        setTrackingState({
+          error: null,
+          lastHeartbeat: Date.now(),
+          location: locationData,
+        })
         lastUpdateRef.current = Date.now()
       }
     } catch (err) {
       console.error('Error in sendHeartbeat:', err)
       setError(err instanceof Error ? err.message : 'Error desconocido')
+      setTrackingState({
+        error: err instanceof Error ? err.message : 'Error desconocido',
+      })
     }
   }
 
@@ -111,10 +126,11 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
     try {
       setIsTracking(true)
       setError(null)
+      setTrackingState({ isTracking: true, error: null })
 
       // Obtener ubicación inicial
       const initialLocation = await getCurrentLocation()
-      setLocation(initialLocation)
+      updateLocationState(initialLocation)
       await sendHeartbeat(initialLocation)
 
       // Configurar watch para actualizaciones continuas
@@ -126,7 +142,7 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
               lon: position.coords.longitude,
               accuracy: position.coords.accuracy,
             }
-            setLocation(newLocation)
+            updateLocationState(newLocation)
 
             // Solo enviar heartbeat si han pasado suficientes segundos
             const timeSinceLastUpdate = Date.now() - lastUpdateRef.current
@@ -137,6 +153,7 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
           (error) => {
             console.error('Error watching location:', error)
             setError(error.message)
+            setTrackingState({ error: error.message })
           },
           {
             enableHighAccuracy: highAccuracy,
@@ -148,12 +165,13 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
 
       // Configurar intervalo de heartbeat de respaldo
       heartbeatIntervalRef.current = window.setInterval(async () => {
-        if (location) {
-          await sendHeartbeat(location)
+        const latestLocation = lastLocationRef.current
+        if (latestLocation) {
+          await sendHeartbeat(latestLocation)
         } else {
           try {
             const currentLocation = await getCurrentLocation()
-            setLocation(currentLocation)
+            updateLocationState(currentLocation)
             await sendHeartbeat(currentLocation)
           } catch (err) {
             console.error('Error getting location in interval:', err)
@@ -164,6 +182,10 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
     } catch (err) {
       console.error('Error starting tracking:', err)
       setError(err instanceof Error ? err.message : 'Error al iniciar tracking')
+      setTrackingState({
+        error: err instanceof Error ? err.message : 'Error al iniciar tracking',
+        isTracking: false,
+      })
       setIsTracking(false)
     }
   }
@@ -171,6 +193,8 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
   // Detener tracking
   const stopTracking = async () => {
     setIsTracking(false)
+    resetTrackingState()
+    lastLocationRef.current = null
 
     // Limpiar watch de geolocalización
     if (watchIdRef.current !== null) {

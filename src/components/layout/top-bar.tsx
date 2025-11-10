@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/auth-store'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { NotificationCenter } from '@/components/notification-center'
 import { useLocation } from 'react-router-dom'
+import { TrackingStatus } from '@/components/layout/tracking-status'
 
 export const TopBar = () => {
   const { user } = useAuthStore()
@@ -28,6 +29,7 @@ export const TopBar = () => {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <TrackingStatus />
           <ThemeToggle />
           <NotificationCenter />
         </div>
