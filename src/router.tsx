@@ -11,6 +11,7 @@ import { OdometroModulePage } from '@/features/modules/odometro-page'
 import { PublicidadModulePage } from '@/features/modules/publicidad-page'
 import { FlotaPage } from '@/features/flota/flota-page'
 import { ReportesPage } from '@/features/reportes/reportes-page'
+import { ReportsPage } from '@/features/reports/reports-page'
 import { InformesPage } from '@/features/informes/informes-page'
 import { ComunicacionPage } from '@/features/comunicacion/comunicacion-page'
 import { PersonalPage } from '@/features/personal/personal-page'
@@ -40,6 +41,7 @@ export const router = createBrowserRouter([
       { path: 'publicidad', element: <PublicidadModulePage /> },
       { path: 'flota', element: <FlotaPage /> },
       { path: 'reportes', element: <ReportesPage /> },
+      { path: 'analytics', element: <ReportsPage /> },
       { path: 'informes', element: <InformesPage /> },
       { path: 'comunicacion', element: <ComunicacionPage /> },
       { path: 'personal', element: <PersonalPage /> },
