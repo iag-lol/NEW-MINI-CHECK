@@ -21,8 +21,8 @@ export const AppLayout = () => {
       <Sidebar />
       <div className="flex flex-1 flex-col md:pl-[var(--sidebar-width)]">
         <TopBar />
-        <main className="flex-1 px-4 pb-28 pt-6 md:px-8 md:pb-10">
-          <div className="mx-auto max-w-6xl">
+        <main className="flex-1 px-4 pb-32 pt-6 md:px-8 md:pb-10">
+          <div className="w-full">
             <Outlet />
           </div>
         </main>

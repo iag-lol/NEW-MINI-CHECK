@@ -38,7 +38,7 @@ type TagRow = {
 type CamarasRow = {
   id: string
   revision_id: string
-  monitor_estado: 'FUNCIONA' | 'APAGADO' | 'CON_DANO' | 'SIN_SENAL'
+  monitor_estado: 'FUNCIONA' | 'APAGADO' | 'CON_DAÑO' | 'SIN_SENAL'
   detalle: Record<string, unknown> | null
   observacion: string | null
   created_at: string

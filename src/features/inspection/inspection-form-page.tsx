@@ -34,7 +34,7 @@ const inspectionSchema = z.object({
     observacion: z.string().optional(),
   }),
   camaras: z.object({
-    monitorDanado: z.boolean().nullable(),
+    monitorEstado: z.enum(['FUNCIONA', 'APAGADO', 'CON_DAÑO', 'SIN_SENAL']),
     monitorDetalle: z.string().optional(),
     camDelantera: z.boolean().nullable(),
     camCabina: z.boolean().nullable(),
@@ -202,7 +202,7 @@ export const InspectionFormPage = () => {
       terminalReportado: user?.terminal ?? '',
       tag: { tiene: true, serie: '', observacion: '' },
       camaras: {
-        monitorDanado: null,
+        monitorEstado: 'FUNCIONA',
         monitorDetalle: '',
         camDelantera: null,
         camCabina: null,
@@ -347,7 +347,7 @@ export const InspectionFormPage = () => {
 
       await supabase.from('camaras').insert({
         revision_id: revisionData.id,
-        monitor_estado: values.camaras.monitorDanado ? 'CON_DANO' : 'FUNCIONA',
+        monitor_estado: values.camaras.monitorEstado,
         detalle: {
           monitorDetalle: values.camaras.monitorDetalle,
           camDelantera: values.camaras.camDelantera,
@@ -575,27 +575,24 @@ export const InspectionFormPage = () => {
     return (
       <SectionCard title="Cámaras" description="Preguntas específicas por componente">
         <div className="grid gap-4 md:grid-cols-2">
-          <BinaryQuestion
-            label="Monitor de cámaras"
-            description="¿Presenta daños visibles?"
-            value={
-              camaras.monitorDanado == null
-                ? null
-                : camaras.monitorDanado === false
-                ? true
-                : false
-            }
-            positiveLabel="Sin daños"
-            negativeLabel="Con daños"
-            onChange={(value) =>
-              methods.setValue('camaras.monitorDanado', value ? false : true, { shouldDirty: true })
-            }
-          />
           <div>
-            <Label>Detalle del monitor</Label>
+            <Label>Estado del Monitor</Label>
+            <select
+              value={camaras.monitorEstado}
+              onChange={(e) => methods.setValue('camaras.monitorEstado', e.target.value as any)}
+              className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-800 dark:bg-slate-900"
+            >
+              <option value="FUNCIONA">Funciona Correctamente</option>
+              <option value="APAGADO">Apagado / Sin Energía</option>
+              <option value="CON_DAÑO">Con Daño Físico</option>
+              <option value="SIN_SENAL">Sin Señal de Cámaras</option>
+            </select>
+          </div>
+          <div>
+            <Label>Detalle del Monitor</Label>
             <Textarea
               className="mt-2"
-              placeholder="Ej: cámara 2 sin señal"
+              placeholder="Ej: Cámara 2 sin señal, monitor con golpe"
               value={camaras.monitorDetalle ?? ''}
               onChange={(event) => methods.setValue('camaras.monitorDetalle', event.target.value)}
             />
