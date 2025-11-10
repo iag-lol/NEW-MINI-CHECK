@@ -5,10 +5,13 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { MobileNav } from '@/components/layout/mobile-nav'
 import { TopBar } from '@/components/layout/top-bar'
 import { useRealtimeSubscriptions } from '@/hooks/use-realtime'
+import { useRealtimeLocation } from '@/hooks/use-realtime-location'
 import { useAuthStore } from '@/store/auth-store'
 
 export const AppLayout = () => {
   useRealtimeSubscriptions()
+  // Activar tracking GPS automático en toda la app
+  useRealtimeLocation({ enabled: true, intervalMs: 10000 })
   const location = useLocation()
   const { setLastVisitedPath } = useAuthStore()
 
