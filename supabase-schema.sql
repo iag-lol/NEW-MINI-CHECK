@@ -1,15 +1,4 @@
--- =============================================
--- NEW MINI-CHECK - SUPABASE SCHEMA
--- Sistema de Revisión de Flota de Buses
--- =============================================
--- Este archivo contiene todas las migraciones SQL necesarias
--- para configurar la base de datos en Supabase.
---
--- Ejecutar en: Supabase SQL Editor
--- =============================================
 
--- 1. TABLA: usuarios
--- Almacena inspectores y supervisores con autenticación
 CREATE TABLE IF NOT EXISTS usuarios (
   rut TEXT PRIMARY KEY,
   nombre TEXT NOT NULL,

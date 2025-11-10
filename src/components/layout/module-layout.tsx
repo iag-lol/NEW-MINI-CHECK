@@ -52,6 +52,7 @@ interface ModuleLayoutProps<T extends TableName> {
   getStats: (data: TableRow<T>[]) => StatConfig[]
   filters?: FilterConfig[]
   charts?: ChartConfig[]
+  getCharts?: (data: TableRow<T>[]) => ChartConfig[]
   searchFields?: (keyof TableRow<T>)[]
 }
 
@@ -64,6 +65,7 @@ export const ModuleLayout = <T extends TableName>({
   getStats,
   filters = [],
   charts = [],
+  getCharts,
   searchFields = [],
 }: ModuleLayoutProps<T>) => {
   const [searchQuery, setSearchQuery] = useState('')
@@ -118,6 +120,12 @@ export const ModuleLayout = <T extends TableName>({
 
     return filtered
   }, [data, searchQuery, filterValues, searchFields])
+  const chartConfigs = useMemo(() => {
+    if (getCharts) {
+      return getCharts(filteredData)
+    }
+    return charts ?? []
+  }, [filteredData, getCharts, charts])
 
   return (
     <div className="space-y-6">
@@ -260,9 +268,9 @@ export const ModuleLayout = <T extends TableName>({
       )}
 
       {/* Charts */}
-      {charts.length > 0 && (
-        <div className={cn('grid gap-4', charts.length === 1 ? 'grid-cols-1' : 'md:grid-cols-2')}>
-          {charts.map((chart, index) => (
+      {chartConfigs.length > 0 && (
+        <div className={cn('grid gap-4', chartConfigs.length === 1 ? 'grid-cols-1' : 'md:grid-cols-2')}>
+          {chartConfigs.map((chart, index) => (
             <Card key={index} className="p-6">
               <h3 className="mb-4 text-lg font-bold text-slate-900 dark:text-white">
                 {chart.title}

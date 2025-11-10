@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAuthStore } from '@/store/auth-store'
 import type { Tables, Database } from '@/types/database'
 import { useNotificationStore } from '@/store/notification-store'
@@ -19,6 +20,7 @@ const publicidadAreaSchema = z.object({
   tiene: z.boolean(),
   danio: z.boolean().nullable(),
   residuos: z.boolean().nullable(),
+  observacion: z.string().optional(),
 })
 
 const inspectionSchema = z.object({
@@ -129,6 +131,74 @@ type StepKey = (typeof steps)[number]['key']
 type CameraPath = `camaras.${CameraHardwareField}`
 type MobileyePath = `mobileye.${MobileyeField}`
 type PublicidadPath = `publicidad.${PublicidadAreaKey}.${'tiene' | 'danio' | 'residuos'}`
+type ExtintorFieldKey = 'certificacion' | 'sonda' | 'manometro' | 'presion' | 'cilindro' | 'porta'
+
+const extinguisherFieldConfig = [
+  {
+    key: 'certificacion' as const,
+    label: 'Certificación',
+    placeholder: 'Selecciona estado',
+    options: [
+      { value: 'VIGENTE', label: 'Vigente' },
+      { value: 'VENCIDA', label: 'Vencida' },
+    ],
+  },
+  {
+    key: 'sonda' as const,
+    label: 'Sonda',
+    placeholder: 'Estado de la sonda',
+    options: [
+      { value: 'OK', label: 'OK' },
+      { value: 'SIN_LECTURA', label: 'Sin lectura' },
+      { value: 'FUERA_DE_RANGO', label: 'Fuera de rango' },
+    ],
+  },
+  {
+    key: 'manometro' as const,
+    label: 'Manómetro',
+    placeholder: 'Lectura del manómetro',
+    options: [
+      { value: 'OK', label: 'OK' },
+      { value: 'SIN_LECTURA', label: 'Sin lectura' },
+      { value: 'FUERA_DE_RANGO', label: 'Fuera de rango' },
+    ],
+  },
+  {
+    key: 'presion' as const,
+    label: 'Estado de carga en manómetro',
+    placeholder: 'Carga detectada',
+    options: [
+      { value: 'OPTIMO', label: 'Óptimo' },
+      { value: 'BAJA_CARGA', label: 'Baja carga' },
+      { value: 'SOBRECARGA', label: 'Sobrecarga' },
+    ],
+  },
+  {
+    key: 'cilindro' as const,
+    label: 'Estado del cilindro',
+    placeholder: 'Estado físico',
+    options: [
+      { value: 'OK', label: 'OK' },
+      { value: 'ABOLLADO', label: 'Abollado' },
+      { value: 'OXIDADO', label: 'Oxidado' },
+    ],
+  },
+  {
+    key: 'porta' as const,
+    label: 'Porta extintor',
+    placeholder: 'Condición del porta',
+    options: [
+      { value: 'TIENE', label: 'Instalado' },
+      { value: 'NO_TIENE', label: 'No tiene' },
+      { value: 'DANADO', label: 'Dañado' },
+    ],
+  },
+] satisfies Array<{
+  key: ExtintorFieldKey
+  label: string
+  placeholder: string
+  options: { value: string; label: string }[]
+}>
 
 interface BinaryQuestionProps {
   label: string
@@ -214,13 +284,13 @@ export const InspectionFormPage = () => {
         visiblesPuertasCerradas: null,
         observacion: '',
       },
-      extintores: { tiene: true },
+      extintores: { tiene: true, observacion: '' },
       mobileye: { aplica: false },
       odometro: { estado: 'OK', lectura: undefined, observacion: '' },
       publicidad: {
-        izquierda: { tiene: false, danio: null, residuos: null },
-        derecha: { tiene: false, danio: null, residuos: null },
-        luneta: { tiene: false, danio: null, residuos: null },
+        izquierda: { tiene: false, danio: null, residuos: null, observacion: '' },
+        derecha: { tiene: false, danio: null, residuos: null, observacion: '' },
+        luneta: { tiene: false, danio: null, residuos: null, observacion: '' },
         nombre: '',
         observacion: '',
       },
@@ -427,12 +497,17 @@ export const InspectionFormPage = () => {
 
       await supabase.from('publicidad').insert(publicidadPayload)
 
-      const tickets: Array<{ modulo: string; descripcion: string }> = []
-      if (
+      const extintorCritico =
         !values.extintores.tiene ||
         values.extintores.certificacion === 'VENCIDA' ||
-        values.extintores.presion !== 'OPTIMO'
-      ) {
+        (values.extintores.presion && values.extintores.presion !== 'OPTIMO') ||
+        (values.extintores.cilindro && values.extintores.cilindro !== 'OK') ||
+        (values.extintores.sonda && values.extintores.sonda !== 'OK') ||
+        (values.extintores.manometro && values.extintores.manometro !== 'OK') ||
+        (values.extintores.porta && values.extintores.porta !== 'TIENE')
+
+      const tickets: Array<{ modulo: string; descripcion: string }> = []
+      if (extintorCritico) {
         tickets.push({ modulo: 'Extintores', descripcion: 'Hallazgos críticos en extintores' })
       }
       if (publicidadDanio || publicidadResiduos) {
@@ -648,35 +723,94 @@ export const InspectionFormPage = () => {
     )
   }
 
-  const renderExtintores = () => (
-    <SectionCard title="Extintores" description="Completa vencimientos y estado físico">
-      <BinaryQuestion
-        label="¿Tiene extintor instalado?"
-        value={methods.watch('extintores.tiene')}
-        onChange={(value) => methods.setValue('extintores.tiene', value)}
-      />
-      {methods.watch('extintores.tiene') && (
-        <div className="grid gap-4 md:grid-cols-2">
-          <Input
-            type="number"
-            placeholder="Mes vencimiento"
-            value={methods.watch('extintores.vencimientoMes') ?? ''}
-            onChange={(event) =>
-              methods.setValue('extintores.vencimientoMes', Number(event.target.value))
-            }
-          />
-          <Input
-            type="number"
-            placeholder="Año vencimiento"
-            value={methods.watch('extintores.vencimientoAnio') ?? ''}
-            onChange={(event) =>
-              methods.setValue('extintores.vencimientoAnio', Number(event.target.value))
-            }
-          />
-        </div>
-      )}
-    </SectionCard>
-  )
+  const renderExtintores = () => {
+    const tieneExtintor = methods.watch('extintores.tiene')
+    return (
+      <SectionCard title="Extintores" description="Completa vencimientos y estado físico">
+        <BinaryQuestion
+          label="¿Tiene extintor instalado?"
+          value={tieneExtintor}
+          onChange={(value) => methods.setValue('extintores.tiene', value, { shouldDirty: true })}
+        />
+        {tieneExtintor && (
+          <div className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label>Mes de vencimiento</Label>
+                <Input
+                  type="number"
+                  placeholder="Ej: 05"
+                  className="mt-2"
+                  value={methods.watch('extintores.vencimientoMes') ?? ''}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    methods.setValue('extintores.vencimientoMes', value === '' ? undefined : Number(value), {
+                      shouldDirty: true,
+                    })
+                  }}
+                />
+              </div>
+              <div>
+                <Label>Año de vencimiento</Label>
+                <Input
+                  type="number"
+                  placeholder="Ej: 2025"
+                  className="mt-2"
+                  value={methods.watch('extintores.vencimientoAnio') ?? ''}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    methods.setValue('extintores.vencimientoAnio', value === '' ? undefined : Number(value), {
+                      shouldDirty: true,
+                    })
+                  }}
+                />
+              </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {extinguisherFieldConfig.map((field) => (
+                <div key={field.key}>
+                  <Label>{field.label}</Label>
+                  <Select
+                    value={methods.watch(`extintores.${field.key}` as `extintores.${ExtintorFieldKey}`) ?? undefined}
+                    onValueChange={(value) =>
+                      methods.setValue(
+                        `extintores.${field.key}` as `extintores.${ExtintorFieldKey}`,
+                        value as InspectionForm['extintores'][typeof field.key],
+                        { shouldDirty: true }
+                      )
+                    }
+                  >
+                    <SelectTrigger className="mt-2">
+                      <SelectValue placeholder={field.placeholder} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {field.options.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+            <div>
+              <Label>Observaciones</Label>
+              <Textarea
+                className="mt-2"
+                rows={3}
+                placeholder="Detalle certificación, sonda, cilindro o daños visibles"
+                value={methods.watch('extintores.observacion') ?? ''}
+                onChange={(event) =>
+                  methods.setValue('extintores.observacion', event.target.value, { shouldDirty: true })
+                }
+              />
+            </div>
+          </div>
+        )}
+      </SectionCard>
+    )
+  }
 
   const renderMobileye = () => (
     <SectionCard title="Mobileye" description="Aplica solo a buses Volvo">
@@ -809,6 +943,24 @@ export const InspectionFormPage = () => {
                   })
                 }
               />
+              <div>
+                <Label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  Observación específica
+                </Label>
+                <Textarea
+                  className="mt-2"
+                  rows={2}
+                  placeholder="Campaña instalada, daños, notas"
+                  value={publicityState?.[area.key].observacion ?? ''}
+                  onChange={(event) =>
+                    methods.setValue(
+                      `publicidad.${area.key}.observacion` as `publicidad.${PublicidadAreaKey}.observacion`,
+                      event.target.value,
+                      { shouldDirty: true }
+                    )
+                  }
+                />
+              </div>
             </div>
           </div>
         ))}

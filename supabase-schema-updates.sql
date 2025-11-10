@@ -2,116 +2,237 @@
 -- MINI-CHECK - ACTUALIZACIONES DE SCHEMA
 -- =============================================
 -- Ejecuta este script en Supabase SQL Editor
--- para actualizar las tablas existentes
+-- Script idempotente - puede ejecutarse múltiples veces
 -- =============================================
 
--- 1. ACTUALIZAR TABLA CAMARAS
--- Cambiar el tipo del campo monitor_estado para incluir todas las opciones
-ALTER TABLE camaras
-DROP CONSTRAINT IF EXISTS camaras_monitor_estado_check;
+-- 1. ACTUALIZAR CONSTRAINT DE CAMARAS (monitor_estado)
+DO $$
+BEGIN
+    -- Eliminar constraint antiguo si existe
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'camaras_monitor_estado_check'
+    ) THEN
+        ALTER TABLE camaras DROP CONSTRAINT camaras_monitor_estado_check;
+    END IF;
 
-ALTER TABLE camaras
-ADD CONSTRAINT camaras_monitor_estado_check
-CHECK (monitor_estado IN ('FUNCIONA', 'APAGADO', 'CON_DAÑO', 'SIN_SENAL'));
+    -- Crear nuevo constraint con todos los valores correctos
+    ALTER TABLE camaras ADD CONSTRAINT camaras_monitor_estado_check
+    CHECK (monitor_estado IN ('FUNCIONA', 'APAGADO', 'CON_DAÑO', 'SIN_SENAL'));
+END $$;
 
--- Actualizar registros existentes con el valor mal escrito
+-- 2. MIGRAR DATOS ANTIGUOS (CON_DANO → CON_DAÑO)
 UPDATE camaras
 SET monitor_estado = 'CON_DAÑO'
 WHERE monitor_estado = 'CON_DANO';
 
--- 2. AGREGAR COLUMNAS ADICIONALES PARA MEJOR TRACKING
-ALTER TABLE camaras
-ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+-- 3. AGREGAR COLUMNA updated_at EN CAMARAS
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'camaras' AND column_name = 'updated_at'
+    ) THEN
+        ALTER TABLE camaras ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
+    END IF;
+END $$;
 
-ALTER TABLE tags
-ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+-- 4. AGREGAR COLUMNA updated_at EN TAGS
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tags' AND column_name = 'updated_at'
+    ) THEN
+        ALTER TABLE tags ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
+    END IF;
+END $$;
 
-ALTER TABLE extintores
-ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+-- 5. AGREGAR COLUMNA updated_at EN EXTINTORES
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'extintores' AND column_name = 'updated_at'
+    ) THEN
+        ALTER TABLE extintores ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
+    END IF;
+END $$;
 
-ALTER TABLE mobileye
-ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+-- 6. AGREGAR COLUMNA updated_at EN MOBILEYE
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'mobileye' AND column_name = 'updated_at'
+    ) THEN
+        ALTER TABLE mobileye ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
+    END IF;
+END $$;
 
-ALTER TABLE odometro
-ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+-- 7. AGREGAR COLUMNA updated_at EN ODOMETRO
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'odometro' AND column_name = 'updated_at'
+    ) THEN
+        ALTER TABLE odometro ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
+    END IF;
+END $$;
 
-ALTER TABLE publicidad
-ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+-- 8. AGREGAR COLUMNA updated_at EN PUBLICIDAD
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'publicidad' AND column_name = 'updated_at'
+    ) THEN
+        ALTER TABLE publicidad ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
+    END IF;
+END $$;
 
--- 3. CREAR FUNCIÓN PARA AUTO-ACTUALIZAR updated_at
+-- 9. AGREGAR COLUMNAS ADICIONALES EN TICKETS (una por una)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tickets' AND column_name = 'responsable'
+    ) THEN
+        ALTER TABLE tickets ADD COLUMN responsable TEXT;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tickets' AND column_name = 'fecha_limite'
+    ) THEN
+        ALTER TABLE tickets ADD COLUMN fecha_limite TIMESTAMPTZ;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tickets' AND column_name = 'completado_por'
+    ) THEN
+        ALTER TABLE tickets ADD COLUMN completado_por TEXT;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'tickets' AND column_name = 'completado_en'
+    ) THEN
+        ALTER TABLE tickets ADD COLUMN completado_en TIMESTAMPTZ;
+    END IF;
+END $$;
+
+-- 10. CREAR FUNCIÓN PARA AUTO-ACTUALIZAR updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
 BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$;
 
--- 4. CREAR TRIGGERS PARA AUTO-ACTUALIZAR updated_at
+-- 11. CREAR TRIGGERS PARA AUTO-ACTUALIZAR updated_at
+
+-- Trigger para camaras
 DROP TRIGGER IF EXISTS update_camaras_updated_at ON camaras;
 CREATE TRIGGER update_camaras_updated_at
     BEFORE UPDATE ON camaras
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+-- Trigger para tags
 DROP TRIGGER IF EXISTS update_tags_updated_at ON tags;
 CREATE TRIGGER update_tags_updated_at
     BEFORE UPDATE ON tags
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+-- Trigger para extintores
 DROP TRIGGER IF EXISTS update_extintores_updated_at ON extintores;
 CREATE TRIGGER update_extintores_updated_at
     BEFORE UPDATE ON extintores
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+-- Trigger para mobileye
 DROP TRIGGER IF EXISTS update_mobileye_updated_at ON mobileye;
 CREATE TRIGGER update_mobileye_updated_at
     BEFORE UPDATE ON mobileye
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+-- Trigger para odometro
 DROP TRIGGER IF EXISTS update_odometro_updated_at ON odometro;
 CREATE TRIGGER update_odometro_updated_at
     BEFORE UPDATE ON odometro
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+-- Trigger para publicidad
 DROP TRIGGER IF EXISTS update_publicidad_updated_at ON publicidad;
 CREATE TRIGGER update_publicidad_updated_at
     BEFORE UPDATE ON publicidad
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
--- 5. AGREGAR ÍNDICES ADICIONALES PARA MEJOR PERFORMANCE
+-- 12. CREAR ÍNDICES PARA MEJOR PERFORMANCE
+
+-- Índices para camaras
 CREATE INDEX IF NOT EXISTS idx_camaras_monitor_estado ON camaras(monitor_estado);
 CREATE INDEX IF NOT EXISTS idx_camaras_updated_at ON camaras(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_camaras_bus_ppu ON camaras(bus_ppu);
+CREATE INDEX IF NOT EXISTS idx_camaras_terminal ON camaras(terminal);
 
+-- Índices para tags
 CREATE INDEX IF NOT EXISTS idx_tags_tiene ON tags(tiene);
 CREATE INDEX IF NOT EXISTS idx_tags_updated_at ON tags(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tags_bus_ppu ON tags(bus_ppu);
+CREATE INDEX IF NOT EXISTS idx_tags_terminal ON tags(terminal);
 
+-- Índices para extintores
 CREATE INDEX IF NOT EXISTS idx_extintores_certificacion ON extintores(certificacion);
 CREATE INDEX IF NOT EXISTS idx_extintores_presion ON extintores(presion);
 CREATE INDEX IF NOT EXISTS idx_extintores_updated_at ON extintores(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_extintores_bus_ppu ON extintores(bus_ppu);
+CREATE INDEX IF NOT EXISTS idx_extintores_terminal ON extintores(terminal);
 
+-- Índices para mobileye
 CREATE INDEX IF NOT EXISTS idx_mobileye_updated_at ON mobileye(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_mobileye_bus_ppu ON mobileye(bus_ppu);
+CREATE INDEX IF NOT EXISTS idx_mobileye_terminal ON mobileye(terminal);
 
+-- Índices para odometro
 CREATE INDEX IF NOT EXISTS idx_odometro_estado ON odometro(estado);
 CREATE INDEX IF NOT EXISTS idx_odometro_updated_at ON odometro(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_odometro_bus_ppu ON odometro(bus_ppu);
+CREATE INDEX IF NOT EXISTS idx_odometro_terminal ON odometro(terminal);
 
+-- Índices para publicidad
 CREATE INDEX IF NOT EXISTS idx_publicidad_tiene ON publicidad(tiene);
 CREATE INDEX IF NOT EXISTS idx_publicidad_danio ON publicidad(danio);
 CREATE INDEX IF NOT EXISTS idx_publicidad_updated_at ON publicidad(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_publicidad_bus_ppu ON publicidad(bus_ppu);
+CREATE INDEX IF NOT EXISTS idx_publicidad_terminal ON publicidad(terminal);
 
--- 6. AGREGAR COLUMNA DE PRIORIDAD A TICKETS
-ALTER TABLE tickets
-ADD COLUMN IF NOT EXISTS responsable TEXT,
-ADD COLUMN IF NOT EXISTS fecha_limite TIMESTAMPTZ,
-ADD COLUMN IF NOT EXISTS completado_por TEXT,
-ADD COLUMN IF NOT EXISTS completado_en TIMESTAMPTZ;
+-- Índices adicionales para tickets
+CREATE INDEX IF NOT EXISTS idx_tickets_responsable ON tickets(responsable);
+CREATE INDEX IF NOT EXISTS idx_tickets_fecha_limite ON tickets(fecha_limite);
+CREATE INDEX IF NOT EXISTS idx_tickets_completado_por ON tickets(completado_por);
 
--- 7. CREAR VISTA PARA ESTADÍSTICAS RÁPIDAS
+-- 13. CREAR VISTA PARA ESTADÍSTICAS RÁPIDAS
 CREATE OR REPLACE VIEW estadisticas_modulos AS
 SELECT
     'camaras' as modulo,
@@ -145,14 +266,16 @@ SELECT
     MAX(created_at) as ultima_revision
 FROM odometro;
 
--- 8. CREAR FUNCIÓN PARA OBTENER HISTORIAL DE REVISIONES POR BUS
+-- 14. CREAR FUNCIÓN PARA OBTENER HISTORIAL DE REVISIONES POR BUS
 CREATE OR REPLACE FUNCTION get_historial_bus(bus_ppu_param TEXT)
 RETURNS TABLE (
     fecha TIMESTAMPTZ,
     modulo TEXT,
     estado TEXT,
     detalles JSONB
-) AS $$
+)
+LANGUAGE plpgsql
+AS $$
 BEGIN
     RETURN QUERY
     SELECT
@@ -223,36 +346,95 @@ BEGIN
 
     ORDER BY fecha DESC;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
--- 9. VERIFICACIÓN FINAL
--- Consulta para verificar que todo está correcto
+-- 15. CREAR VISTA PARA REPORTE DE CÁMARAS
+CREATE OR REPLACE VIEW reporte_camaras AS
+SELECT
+    c.bus_ppu,
+    c.terminal,
+    c.monitor_estado,
+    c.observacion,
+    c.created_at as fecha_revision,
+    r.inspector_nombre,
+    r.estado_bus as estado_bus_general
+FROM camaras c
+LEFT JOIN revisiones r ON c.revision_id = r.id
+ORDER BY c.created_at DESC;
+
+-- 16. CREAR VISTA PARA ALERTAS DE EXTINTORES VENCIDOS
+CREATE OR REPLACE VIEW extintores_vencidos AS
+SELECT
+    e.bus_ppu,
+    e.terminal,
+    e.vencimiento_mes,
+    e.vencimiento_anio,
+    e.certificacion,
+    e.presion,
+    e.created_at as fecha_revision,
+    CASE
+        WHEN e.vencimiento_mes IS NOT NULL AND e.vencimiento_anio IS NOT NULL THEN
+            DATE(e.vencimiento_anio || '-' || LPAD(e.vencimiento_mes::TEXT, 2, '0') || '-01')
+        ELSE NULL
+    END as fecha_vencimiento,
+    CASE
+        WHEN e.vencimiento_mes IS NOT NULL AND e.vencimiento_anio IS NOT NULL THEN
+            CURRENT_DATE > DATE(e.vencimiento_anio || '-' || LPAD(e.vencimiento_mes::TEXT, 2, '0') || '-01')
+        ELSE false
+    END as esta_vencido
+FROM extintores e
+WHERE e.certificacion = 'VENCIDA'
+   OR (e.vencimiento_mes IS NOT NULL
+       AND e.vencimiento_anio IS NOT NULL
+       AND CURRENT_DATE > DATE(e.vencimiento_anio || '-' || LPAD(e.vencimiento_mes::TEXT, 2, '0') || '-01'))
+ORDER BY e.created_at DESC;
+
+-- 17. VERIFICACIÓN FINAL
+-- Muestra un resumen de los datos actualizados
 SELECT
     'camaras' as tabla,
-    COUNT(*) as registros,
-    COUNT(DISTINCT monitor_estado) as estados_distintos
+    COUNT(*) as total_registros,
+    COUNT(DISTINCT monitor_estado) as estados_distintos,
+    COUNT(*) FILTER (WHERE monitor_estado = 'CON_DAÑO') as con_dano_corregido
 FROM camaras
 UNION ALL
 SELECT
     'tags' as tabla,
-    COUNT(*) as registros,
-    COUNT(*) FILTER (WHERE tiene = true) as con_tag
+    COUNT(*) as total_registros,
+    COUNT(*) FILTER (WHERE tiene = true) as con_tag,
+    NULL as extra
 FROM tags
 UNION ALL
 SELECT
     'extintores' as tabla,
-    COUNT(*) as registros,
-    COUNT(*) FILTER (WHERE certificacion = 'VIGENTE') as vigentes
-FROM extintores;
+    COUNT(*) as total_registros,
+    COUNT(*) FILTER (WHERE certificacion = 'VIGENTE') as vigentes,
+    COUNT(*) FILTER (WHERE certificacion = 'VENCIDA') as vencidos
+FROM extintores
+UNION ALL
+SELECT
+    'tickets' as tabla,
+    COUNT(*) as total_registros,
+    COUNT(*) FILTER (WHERE responsable IS NOT NULL) as con_responsable,
+    NULL as extra
+FROM tickets;
 
 -- =============================================
--- RESUMEN DE CAMBIOS:
+-- ✅ SCRIPT COMPLETADO
 -- =============================================
--- ✅ Corregido: monitor_estado ahora acepta 'CON_DAÑO' (con tilde)
--- ✅ Agregado: Columnas updated_at en todas las tablas de módulos
--- ✅ Agregado: Triggers automáticos para actualizar updated_at
--- ✅ Agregado: Índices adicionales para mejor performance
--- ✅ Agregado: Campos en tickets para mejor gestión
--- ✅ Agregado: Vista de estadísticas rápidas
--- ✅ Agregado: Función para obtener historial completo por bus
+-- RESUMEN DE CAMBIOS APLICADOS:
+--
+-- ✅ Constraint de monitor_estado actualizado (CON_DAÑO con tilde)
+-- ✅ Datos migrados automáticamente (CON_DANO → CON_DAÑO)
+-- ✅ Columnas updated_at agregadas en 6 tablas
+-- ✅ Triggers automáticos creados para updated_at
+-- ✅ 4 columnas nuevas en tickets (responsable, fecha_limite, completado_por, completado_en)
+-- ✅ 25+ índices creados para mejor performance
+-- ✅ Vista estadisticas_modulos para consultas rápidas
+-- ✅ Función get_historial_bus() para historial completo
+-- ✅ Vista reporte_camaras para análisis
+-- ✅ Vista extintores_vencidos para alertas
+-- ✅ Verificación final con conteo de registros
+--
+-- El script es idempotente y puede ejecutarse múltiples veces sin errores.
 -- =============================================

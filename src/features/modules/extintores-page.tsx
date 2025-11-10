@@ -7,6 +7,39 @@ import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Toolti
 
 type ExtintoresRow = Database['public']['Tables']['extintores']['Row']
 
+const extinguisherLabelMap: Record<string, string> = {
+  OPTIMO: 'Óptimo',
+  BAJA_CARGA: 'Baja carga',
+  SOBRECARGA: 'Sobrecarga',
+  SIN_LECTURA: 'Sin lectura',
+  FUERA_DE_RANGO: 'Fuera de rango',
+  VIGENTE: 'Vigente',
+  VENCIDA: 'Vencida',
+  ABOLLADO: 'Abollado',
+  OXIDADO: 'Oxidado',
+  TIENE: 'Instalado',
+  NO_TIENE: 'Sin porta',
+  DANADO: 'Porta dañado',
+}
+
+const formatEnumValue = (value?: string | null) => {
+  if (!value) return 'Sin dato'
+  return extinguisherLabelMap[value] ?? value
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+const getVariant = (
+  value: string | null | undefined,
+  { ok = [], warning = [] }: { ok?: string[]; warning?: string[] } = {}
+): 'success' | 'warning' | 'danger' | 'outline' => {
+  if (!value) return 'outline'
+  if (ok.includes(value)) return 'success'
+  if (warning.includes(value)) return 'warning'
+  return 'danger'
+}
+
 export const ExtintoresModulePage = () => {
   return (
     <ModuleLayout
@@ -85,52 +118,68 @@ export const ExtintoresModulePage = () => {
           ],
         },
       ]}
-      charts={[
-        {
-          title: 'Estado de Certificaciones',
-          component: (
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={[]}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="estado" stroke="#64748b" fontSize={12} />
-                <YAxis stroke="#64748b" fontSize={12} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                />
-                <Legend />
-                <Bar dataKey="cantidad" fill="#6366f1" name="Cantidad" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ),
-        },
-        {
-          title: 'Distribución de Presión',
-          component: (
-            <ResponsiveContainer width="100%" height={250}>
-              <PieChart>
-                <Pie
-                  data={[]}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry: any) => `${entry.name} ${entry.value}`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  <Cell fill="#10b981" />
-                  <Cell fill="#f59e0b" />
-                  <Cell fill="#ef4444" />
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          ),
-        },
-      ]}
+      getCharts={(rows) => {
+        const certificacionData = [
+          { estado: 'Vigente', cantidad: rows.filter((r) => r.certificacion === 'VIGENTE').length },
+          { estado: 'Vencida', cantidad: rows.filter((r) => r.certificacion === 'VENCIDA').length },
+          { estado: 'Sin dato', cantidad: rows.filter((r) => !r.certificacion).length },
+        ]
+        const presionDataRaw = [
+          { name: 'Óptimo', value: rows.filter((r) => r.presion === 'OPTIMO').length, color: '#10b981' },
+          { name: 'Baja carga', value: rows.filter((r) => r.presion === 'BAJA_CARGA').length, color: '#f59e0b' },
+          { name: 'Sobrecarga', value: rows.filter((r) => r.presion === 'SOBRECARGA').length, color: '#ef4444' },
+          { name: 'Sin dato', value: rows.filter((r) => !r.presion).length, color: '#cbd5f5' },
+        ]
+        const presionData = presionDataRaw.filter((item) => item.value > 0)
+        if (presionData.length === 0) presionData.push({ name: 'Sin registros', value: 1, color: '#e2e8f0' })
+        return [
+          {
+            title: 'Estado de certificaciones',
+            component: (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={certificacionData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="estado" stroke="#64748b" fontSize={12} />
+                  <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
+                  />
+                  <Legend />
+                  <Bar dataKey="cantidad" fill="#0ea5e9" name="Cantidad" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ),
+          },
+          {
+            title: 'Distribución de carga en manómetro',
+            component: (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie
+                    data={presionData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(entry: any) => `${entry.name}: ${entry.value}`}
+                    outerRadius={90}
+                    dataKey="value"
+                  >
+                    {presionData.map((entry, index) => (
+                      <Cell key={`cell-${entry.name}-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ),
+          },
+        ]
+      }}
       columns={[
         {
           label: 'Bus',
+          className: 'min-w-[160px]',
           render: (row: ExtintoresRow) => (
             <div>
               <p className="font-semibold text-slate-900 dark:text-white">{row.bus_ppu}</p>
@@ -139,78 +188,105 @@ export const ExtintoresModulePage = () => {
           ),
         },
         {
-          label: 'Tiene',
+          label: 'Instalación',
+          className: 'min-w-[150px]',
           render: (row) => (
-            <Badge variant={row.tiene ? 'success' : 'danger'}>
-              {row.tiene ? 'Instalado' : 'No tiene'}
-            </Badge>
+            <div className="space-y-1">
+              <Badge variant={row.tiene ? 'success' : 'danger'}>
+                {row.tiene ? 'Instalado' : 'Sin extintor'}
+              </Badge>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Terminal {row.terminal}</p>
+            </div>
           ),
         },
         {
-          label: 'Certificación',
-          render: (row) => (
-            <Badge variant={row.certificacion === 'VIGENTE' ? 'success' : 'danger'}>
-              {row.certificacion ?? '—'}
-            </Badge>
-          ),
-        },
-        {
-          label: 'Vencimiento',
+          label: 'Certificación y vencimiento',
+          className: 'min-w-[200px]',
           render: (row) => {
-            if (!row.vencimiento_mes || !row.vencimiento_anio) return <span className="text-slate-400">—</span>
-            const fechaVencimiento = new Date(row.vencimiento_anio, row.vencimiento_mes - 1)
-            const hoy = new Date()
-            const estaVencido = fechaVencimiento < hoy
+            const tieneFecha = row.vencimiento_mes != null && row.vencimiento_anio != null
+            const fechaVencimiento = tieneFecha
+              ? new Date(row.vencimiento_anio!, row.vencimiento_mes! - 1)
+              : null
+            const estaVencido = fechaVencimiento ? fechaVencimiento < new Date() : false
             return (
-              <span className={`font-semibold ${estaVencido ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>
-                {row.vencimiento_mes}/{row.vencimiento_anio}
-              </span>
+              <div className="space-y-1">
+                <Badge variant={getVariant(row.certificacion, { ok: ['VIGENTE'] })}>
+                  {formatEnumValue(row.certificacion)}
+                </Badge>
+                <p
+                  className={`text-xs ${
+                    estaVencido ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  {tieneFecha ? `Vence ${row.vencimiento_mes}/${row.vencimiento_anio}` : 'Sin fecha registrada'}
+                </p>
+              </div>
             )
           },
         },
         {
-          label: 'Presión',
-          render: (row) => (
-            <Badge
-              variant={
-                row.presion === 'OPTIMO' ? 'success' :
-                row.presion === 'BAJA_CARGA' ? 'warning' :
-                row.presion === 'SOBRECARGA' ? 'danger' : 'default'
-              }
-            >
-              {row.presion ?? '—'}
-            </Badge>
-          ),
+          label: 'Diagnóstico técnico',
+          className: 'min-w-[260px]',
+          render: (row) => {
+            const items = [
+              { label: 'Sonda', value: row.sonda, ok: ['OK'] },
+              { label: 'Manómetro', value: row.manometro, ok: ['OK'] },
+              { label: 'Carga', value: row.presion, ok: ['OPTIMO'], warning: ['BAJA_CARGA'] },
+            ]
+            return (
+              <div className="flex flex-wrap gap-2">
+                {items.map((item) => (
+                  <Badge
+                    key={item.label}
+                    variant={getVariant(item.value, { ok: item.ok, warning: item.warning ?? [] })}
+                  >
+                    {item.label}: {formatEnumValue(item.value)}
+                  </Badge>
+                ))}
+              </div>
+            )
+          },
         },
         {
-          label: 'Estado Físico',
+          label: 'Estado físico',
+          className: 'min-w-[220px]',
           render: (row) => (
-            <div className="space-y-1">
-              <div className="flex gap-2 text-xs">
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center gap-2">
                 {row.cilindro === 'OK' ? (
-                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="h-3 w-3" /> Cilindro
-                  </span>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                 ) : (
-                  <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
-                    <XCircle className="h-3 w-3" /> Cilindro
-                  </span>
+                  <XCircle className="h-4 w-4 text-red-500" />
                 )}
+                <span className="font-semibold text-slate-700 dark:text-slate-200">
+                  Cilindro:
+                </span>
+                <span className="text-slate-600 dark:text-slate-400">{formatEnumValue(row.cilindro)}</span>
+              </div>
+              <div className="flex items-center gap-2">
                 {row.porta === 'TIENE' ? (
-                  <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="h-3 w-3" /> Porta
-                  </span>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
                 ) : (
-                  <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
-                    <XCircle className="h-3 w-3" /> Porta
-                  </span>
+                  <XCircle className="h-4 w-4 text-red-500" />
                 )}
+                <span className="font-semibold text-slate-700 dark:text-slate-200">Porta:</span>
+                <span className="text-slate-600 dark:text-slate-400">{formatEnumValue(row.porta)}</span>
               </div>
             </div>
           ),
         },
         {
+          label: 'Observación',
+          className: 'min-w-[220px]',
+          render: (row) => (
+            <span className="text-sm text-slate-600 dark:text-slate-400">
+              {row.observacion || 'Sin observaciones'}
+            </span>
+          ),
+        },
+        {
           label: 'Fecha',
+          className: 'min-w-[110px]',
           render: (row) => (
             <div className="text-sm">
               <p className="font-semibold text-slate-900 dark:text-white">
