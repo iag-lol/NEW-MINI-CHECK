@@ -16,6 +16,11 @@ import {
   Users2,
   Settings,
   Activity,
+  Layers,
+  FolderKanban,
+  BarChart3,
+  Sliders,
+  Ticket,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -23,25 +28,72 @@ export interface NavItem {
   path: string
   icon: ComponentType<{ className?: string }>
   roles?: Array<'INSPECTOR' | 'SUPERVISOR'>
+  badge?: string
 }
 
-export const SIDEBAR_ITEMS: NavItem[] = [
-  { label: 'Dashboard', path: '/app/dashboard', icon: LayoutDashboard },
-  { label: 'Formulario', path: '/app/formulario', icon: ClipboardList },
-  { label: 'Registros', path: '/app/registros', icon: Activity },
-  { label: 'Cámaras', path: '/app/camaras', icon: Camera },
-  { label: 'Tag', path: '/app/tag', icon: ShieldCheck },
-  { label: 'Extintores', path: '/app/extintores', icon: BadgeCheck },
-  { label: 'Mobileye', path: '/app/mobileye', icon: Radar },
-  { label: 'Odómetro', path: '/app/odometro', icon: Gauge },
-  { label: 'Publicidad', path: '/app/publicidad', icon: Megaphone },
-  { label: 'Flota', path: '/app/flota', icon: Bus },
-  { label: 'Reportes', path: '/app/reportes', icon: PieChart },
-  { label: 'Informes', path: '/app/informes', icon: FileBarChart, roles: ['SUPERVISOR'] },
-  { label: 'Comunicación', path: '/app/comunicacion', icon: MessageSquare, roles: ['SUPERVISOR'] },
-  { label: 'Personal', path: '/app/personal', icon: Users2 },
-  { label: 'Configuración', path: '/app/configuracion', icon: Settings, roles: ['SUPERVISOR'] },
+export interface NavGroup {
+  label: string
+  icon: ComponentType<{ className?: string }>
+  items: NavItem[]
+  defaultOpen?: boolean
+  roles?: Array<'INSPECTOR' | 'SUPERVISOR'>
+}
+
+// Navegación agrupada y organizada
+export const SIDEBAR_GROUPS: NavGroup[] = [
+  {
+    label: 'Principal',
+    icon: LayoutDashboard,
+    defaultOpen: true,
+    items: [
+      { label: 'Dashboard', path: '/app/dashboard', icon: LayoutDashboard },
+      { label: 'Nueva Inspección', path: '/app/formulario', icon: ClipboardList },
+      { label: 'Tickets', path: '/app/pendientes', icon: Ticket },
+    ],
+  },
+  {
+    label: 'Módulos de Inspección',
+    icon: Layers,
+    items: [
+      { label: 'Cámaras', path: '/app/camaras', icon: Camera },
+      { label: 'TAG', path: '/app/tag', icon: ShieldCheck },
+      { label: 'Extintores', path: '/app/extintores', icon: BadgeCheck },
+      { label: 'Mobileye', path: '/app/mobileye', icon: Radar },
+      { label: 'Odómetro', path: '/app/odometro', icon: Gauge },
+      { label: 'Publicidad', path: '/app/publicidad', icon: Megaphone },
+    ],
+  },
+  {
+    label: 'Gestión',
+    icon: FolderKanban,
+    items: [
+      { label: 'Flota', path: '/app/flota', icon: Bus },
+      { label: 'Personal', path: '/app/personal', icon: Users2 },
+      { label: 'Registros', path: '/app/registros', icon: Activity },
+    ],
+  },
+  {
+    label: 'Análisis',
+    icon: BarChart3,
+    roles: ['SUPERVISOR'],
+    items: [
+      { label: 'Reportes', path: '/app/reportes', icon: PieChart },
+      { label: 'Informes', path: '/app/informes', icon: FileBarChart, roles: ['SUPERVISOR'] },
+    ],
+  },
+  {
+    label: 'Sistema',
+    icon: Sliders,
+    roles: ['SUPERVISOR'],
+    items: [
+      { label: 'Comunicación', path: '/app/comunicacion', icon: MessageSquare, roles: ['SUPERVISOR'] },
+      { label: 'Configuración', path: '/app/configuracion', icon: Settings, roles: ['SUPERVISOR'] },
+    ],
+  },
 ]
+
+// Lista plana para compatibilidad (deprecated)
+export const SIDEBAR_ITEMS: NavItem[] = SIDEBAR_GROUPS.flatMap(group => group.items)
 
 export interface MobileNavItem {
   label: string
