@@ -22,6 +22,13 @@ type RevisionRow = {
   observaciones: string | null
   semana_iso: string
   operativo: boolean
+  ip_address: string | null
+  ip_info: {
+    city: string | null
+    region: string | null
+    country: string | null
+    isp: string | null
+  } | null
 }
 
 type TagRow = {

@@ -6,6 +6,7 @@ import { z } from 'zod'
 import dayjs, { getIsoWeekYear } from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
 import { detectTerminal } from '@/lib/geofence'
+import { getUserIP, getIPGeoLocation } from '@/lib/ip-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -390,6 +391,12 @@ export const InspectionFormPage = () => {
   const handlePrev = () => setStep((prev) => Math.max(prev - 1, 0))
 
   const submitInspection = async (values: InspectionForm) => {
+    // CRÍTICO: Solo permitir envío en el paso final
+    if (step !== steps.length - 1) {
+      console.warn('Intento de envío antes del paso final bloqueado')
+      return
+    }
+
     if (!user || !bus) {
       setBusAlert('Debes seleccionar un bus válido antes de enviar.')
       return
@@ -397,6 +404,10 @@ export const InspectionFormPage = () => {
 
     setSaving(true)
     try {
+      // Capturar IP del usuario
+      const userIP = await getUserIP()
+      const ipInfo = userIP ? await getIPGeoLocation(userIP) : null
+
       const revisionInsert = {
         inspector_rut: user.rut,
         inspector_nombre: user.nombre,
@@ -410,6 +421,13 @@ export const InspectionFormPage = () => {
         observaciones: values.observacionGeneral,
         semana_iso: `${getIsoWeekYear()}-W${String(dayjs().isoWeek()).padStart(2, '0')}`,
         operativo: values.estadoBus === 'OPERATIVO',
+        ip_address: userIP,
+        ip_info: ipInfo ? {
+          city: ipInfo.city,
+          region: ipInfo.region,
+          country: ipInfo.country,
+          isp: ipInfo.isp,
+        } : null,
       }
       const { data: revisionData, error } = await supabase
         .from('revisiones')
@@ -1038,6 +1056,12 @@ export const InspectionFormPage = () => {
     <FormProvider {...methods}>
       <form
         onSubmit={methods.handleSubmit(submitInspection)}
+        onKeyDown={(e) => {
+          // Prevenir envío con Enter si no estamos en el paso final
+          if (e.key === 'Enter' && step !== steps.length - 1) {
+            e.preventDefault()
+          }
+        }}
         className="space-y-8"
         aria-label="Formulario principal New Mini-Check"
       >
