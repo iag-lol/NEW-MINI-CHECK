@@ -5,17 +5,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Send,
-  Image as ImageIcon,
   X,
   Check,
   CheckCheck,
   Users,
   Loader2,
+  Smile,
+  Paperclip,
 } from 'lucide-react'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/es'
 import type { RealtimeChannel } from '@supabase/supabase-js'
+import { ChatToastContainer, type ChatToast } from '@/components/chat-toast'
+import { useNotificationStore } from '@/store/notification-store'
 
 dayjs.extend(relativeTime)
 dayjs.locale('es')
@@ -43,42 +46,19 @@ interface Usuario {
   foto_perfil: string | null
 }
 
-// Sonido de notificación
-const playNotificationSound = () => {
-  const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZSBQNY6zn77BZGQg+ltryxHEoBSuAzfLaizsIGGS57OihUBELTKXh8bllHAU2jtjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LZjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMT6fi8LdjHQU2jtjxyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LZjHAU3kdjyyHAmBSh+y/HajT4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmW56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8LdjHAU3kdjyyHAmBSh+y/HajD4JFmS56+mjUxEMUKjj8A==')
-  audio.volume = 0.5
-  audio.play().catch(() => {})
-}
-
-// Solicitar permiso de notificaciones
-const requestNotificationPermission = async () => {
-  if ('Notification' in window && Notification.permission === 'default') {
-    await Notification.requestPermission()
-  }
-}
-
-// Mostrar notificación del navegador
-const showBrowserNotification = (titulo: string, mensaje: string) => {
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification(titulo, {
-      body: mensaje,
-      icon: '/icon-192x192.png',
-      badge: '/icon-192x192.png',
-      tag: 'chat-notification',
-      requireInteraction: false,
-    })
-  }
-}
-
 export function ChatPage() {
   const { user } = useAuthStore()
   const queryClient = useQueryClient()
+  const notificationStore = useNotificationStore()
+
   const [mensaje, setMensaje] = useState('')
   const [imagenPreview, setImagenPreview] = useState<string | null>(null)
   const [imagenFile, setImagenFile] = useState<File | null>(null)
   const [mostrarMenciones, setMostrarMenciones] = useState(false)
   const [mencionQuery, setMencionQuery] = useState('')
   const [cursorPosition, setCursorPosition] = useState(0)
+  const [toasts, setToasts] = useState<ChatToast[]>([])
+
   const mensajesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -86,7 +66,7 @@ export function ChatPage() {
 
   // Solicitar permiso de notificaciones al cargar
   useEffect(() => {
-    requestNotificationPermission()
+    notificationStore.requestPermission()
   }, [])
 
   // Query para obtener mensajes
@@ -130,6 +110,16 @@ export function ChatPage() {
     )
   }, [mencionQuery, usuarios])
 
+  // Agregar toast
+  const addToast = (toast: ChatToast) => {
+    setToasts(prev => [...prev, toast])
+  }
+
+  // Remover toast
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id))
+  }
+
   // Suscripción en tiempo real a nuevos mensajes
   useEffect(() => {
     if (!user) return
@@ -154,16 +144,25 @@ export function ChatPage() {
             // Verificar si fui mencionado
             const fuiMencionado = nuevoMensaje.menciones.includes(user.rut)
 
-            if (fuiMencionado) {
-              playNotificationSound()
-              showBrowserNotification(
-                `${nuevoMensaje.usuario_nombre} te mencionó`,
-                nuevoMensaje.mensaje.substring(0, 100)
-              )
-            } else {
-              // Sonido más suave para mensajes generales
-              playNotificationSound()
-            }
+            // Toast flotante
+            addToast({
+              id: nuevoMensaje.id,
+              nombre: nuevoMensaje.usuario_nombre,
+              mensaje: nuevoMensaje.mensaje || '📷 Imagen',
+              foto: nuevoMensaje.usuario_foto,
+              cargo: nuevoMensaje.usuario_cargo,
+            })
+
+            // Notificación del sistema
+            notificationStore.push({
+              id: `chat-${nuevoMensaje.id}`,
+              title: fuiMencionado
+                ? `🔔 ${nuevoMensaje.usuario_nombre} te mencionó`
+                : `💬 ${nuevoMensaje.usuario_nombre}`,
+              body: nuevoMensaje.mensaje.substring(0, 100) || 'Envió una imagen',
+              type: fuiMencionado ? 'warning' : 'info',
+              metadata: { mensajeId: nuevoMensaje.id },
+            })
 
             // Marcar como leído después de 2 segundos
             setTimeout(() => {
@@ -196,7 +195,7 @@ export function ChatPage() {
         channelRef.current = null
       }
     }
-  }, [user, queryClient])
+  }, [user, queryClient, notificationStore])
 
   // Marcar mensajes como leídos
   const marcarComoLeidoMutation = useMutation({
@@ -414,253 +413,302 @@ export function ChatPage() {
 
   if (!user) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <p>Debes iniciar sesión para usar el chat</p>
+      <div className="flex h-[calc(100vh-12rem)] items-center justify-center">
+        <p className="text-slate-600 dark:text-slate-400">Debes iniciar sesión para usar el chat</p>
       </div>
     )
   }
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50 dark:bg-slate-950">
-      {/* Header */}
-      <div className="border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-500 text-white">
-            <Users className="h-5 w-5" />
+    <>
+      {/* Toasts flotantes */}
+      <ChatToastContainer toasts={toasts} onDismiss={removeToast} />
+
+      {/* Contenedor principal del chat - ajustado al layout */}
+      <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900" style={{ height: 'calc(100vh - 10rem)' }}>
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-brand-500 to-brand-600 px-6 py-4 dark:border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
+              <Users className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white">
+                Chat General
+              </h1>
+              <p className="text-sm text-white/80">
+                {usuarios.length} usuarios en línea
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Chat General
-            </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              {usuarios.length} usuarios disponibles
+          <div className="hidden items-center gap-2 md:flex">
+            <div className="flex h-2 w-2 animate-pulse rounded-full bg-green-400"></div>
+            <span className="text-sm text-white/90">Conectado</span>
+          </div>
+        </div>
+
+        {/* Mensajes - área con scroll */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6">
+          {isLoading ? (
+            <div className="flex h-full items-center justify-center">
+              <div className="text-center">
+                <Loader2 className="mx-auto h-12 w-12 animate-spin text-brand-500" />
+                <p className="mt-3 text-sm text-slate-500">Cargando mensajes...</p>
+              </div>
+            </div>
+          ) : mensajes.length === 0 ? (
+            <div className="flex h-full items-center justify-center">
+              <div className="text-center">
+                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-brand-100 dark:bg-brand-900/30">
+                  <Smile className="h-10 w-10 text-brand-500" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  ¡Sé el primero en escribir!
+                </h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                  Inicia la conversación con tu equipo
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="mx-auto max-w-5xl space-y-6">
+              {Object.entries(mensajesAgrupados).map(([fecha, mensajesDia]) => (
+                <div key={fecha}>
+                  {/* Separador de fecha */}
+                  <div className="mb-6 flex items-center justify-center">
+                    <div className="rounded-full bg-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm dark:bg-slate-800 dark:text-slate-300">
+                      {formatearFechaSeparador(fecha)}
+                    </div>
+                  </div>
+
+                  {/* Mensajes del día */}
+                  <AnimatePresence mode="popLayout">
+                    {mensajesDia.map((msg) => {
+                      const esMio = msg.usuario_rut === user.rut
+                      const fueLeido = msg.leido_por.length > 1
+                      const fuiMencionado = msg.menciones.includes(user.rut)
+
+                      return (
+                        <motion.div
+                          key={msg.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.9 }}
+                          transition={{ duration: 0.2 }}
+                          className={`mb-4 flex ${esMio ? 'justify-end' : 'justify-start'}`}
+                        >
+                          <div className={`flex max-w-[75%] gap-3 ${esMio ? 'flex-row-reverse' : 'flex-row'}`}>
+                            {/* Avatar */}
+                            {!esMio && (
+                              <div className="flex-shrink-0">
+                                {msg.usuario_foto ? (
+                                  <img
+                                    src={msg.usuario_foto}
+                                    alt={msg.usuario_nombre}
+                                    className="h-10 w-10 rounded-full object-cover ring-2 ring-slate-200 dark:ring-slate-700"
+                                  />
+                                ) : (
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-sm font-bold text-white ring-2 ring-slate-200 dark:ring-slate-700">
+                                    {msg.usuario_nombre.charAt(0)}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Burbuja de mensaje */}
+                            <div>
+                              {!esMio && (
+                                <div className="mb-1.5 flex items-center gap-2 px-1">
+                                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                                    {msg.usuario_nombre}
+                                  </p>
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                                    {msg.usuario_cargo}
+                                  </span>
+                                </div>
+                              )}
+
+                              <div
+                                className={`rounded-2xl px-4 py-3 shadow-md ${
+                                  esMio
+                                    ? fuiMencionado
+                                      ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white'
+                                      : 'bg-gradient-to-br from-brand-500 to-brand-600 text-white'
+                                    : fuiMencionado
+                                    ? 'bg-gradient-to-br from-amber-50 to-amber-100 text-amber-900 ring-2 ring-amber-200 dark:from-amber-900 dark:to-amber-800 dark:text-amber-100 dark:ring-amber-700'
+                                    : 'bg-white text-slate-900 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700'
+                                }`}
+                              >
+                                {/* Imagen si existe */}
+                                {msg.imagen_url && (
+                                  <img
+                                    src={msg.imagen_url}
+                                    alt="Imagen adjunta"
+                                    className="mb-2 max-h-80 rounded-xl"
+                                  />
+                                )}
+
+                                {/* Texto */}
+                                {msg.mensaje && (
+                                  <p className="break-words text-sm leading-relaxed">
+                                    {renderMensajeConMenciones(msg.mensaje, msg.menciones)}
+                                  </p>
+                                )}
+
+                                {/* Hora y estado */}
+                                <div className="mt-2 flex items-center justify-end gap-1.5 text-xs opacity-75">
+                                  <span>{dayjs(msg.created_at).format('HH:mm')}</span>
+                                  {esMio && (
+                                    <>
+                                      {fueLeido ? (
+                                        <CheckCheck className="h-3.5 w-3.5" />
+                                      ) : (
+                                        <Check className="h-3.5 w-3.5" />
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      )
+                    })}
+                  </AnimatePresence>
+                </div>
+              ))}
+              <div ref={mensajesEndRef} />
+            </div>
+          )}
+        </div>
+
+        {/* Input de mensaje */}
+        <div className="border-t border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50 md:p-6">
+          <div className="mx-auto max-w-5xl">
+            {/* Preview de imagen */}
+            <AnimatePresence>
+              {imagenPreview && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="mb-3 relative inline-block"
+                >
+                  <img
+                    src={imagenPreview}
+                    alt="Preview"
+                    className="max-h-40 rounded-xl shadow-lg"
+                  />
+                  <button
+                    onClick={() => {
+                      setImagenPreview(null)
+                      setImagenFile(null)
+                    }}
+                    className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1.5 text-white shadow-lg hover:bg-red-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Menciones dropdown */}
+            <AnimatePresence>
+              {mostrarMenciones && usuariosFiltrados.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="mb-3 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
+                >
+                  {usuariosFiltrados.slice(0, 5).map((usuario) => (
+                    <button
+                      key={usuario.rut}
+                      onClick={() => seleccionarMencion(usuario)}
+                      className="flex w-full items-center gap-3 px-4 py-3 transition-colors hover:bg-brand-50 dark:hover:bg-brand-900/20"
+                    >
+                      {usuario.foto_perfil ? (
+                        <img
+                          src={usuario.foto_perfil}
+                          alt={usuario.nombre}
+                          className="h-10 w-10 rounded-full object-cover ring-2 ring-slate-200"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-500 text-sm font-semibold text-white">
+                          {usuario.nombre.charAt(0)}
+                        </div>
+                      )}
+                      <div className="text-left">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                          {usuario.nombre}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {usuario.cargo}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="flex items-end gap-2">
+              {/* Botón de imagen */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-white text-slate-600 shadow-md transition-all hover:bg-brand-50 hover:text-brand-600 hover:shadow-lg dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
+                title="Adjuntar imagen"
+              >
+                <Paperclip className="h-5 w-5" />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="hidden"
+              />
+
+              {/* Textarea */}
+              <div className="relative flex-1">
+                <textarea
+                  ref={textareaRef}
+                  value={mensaje}
+                  onChange={(e) => {
+                    setMensaje(e.target.value)
+                    setCursorPosition(e.target.selectionStart)
+                  }}
+                  onKeyDown={handleKeyDown}
+                  onClick={(e) => setCursorPosition(e.currentTarget.selectionStart)}
+                  placeholder="Escribe un mensaje... (usa @ para mencionar)"
+                  rows={1}
+                  className="w-full resize-none rounded-xl border-2 border-slate-200 bg-white px-4 py-3 pr-12 text-sm shadow-md transition-all placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                  style={{ minHeight: '44px', maxHeight: '120px' }}
+                />
+              </div>
+
+              {/* Botón enviar */}
+              <button
+                onClick={() => enviarMensajeMutation.mutate()}
+                disabled={enviarMensajeMutation.isPending || (!mensaje.trim() && !imagenFile)}
+                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 text-white shadow-lg transition-all hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-lg"
+                title="Enviar mensaje"
+              >
+                {enviarMensajeMutation.isPending ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+              </button>
+            </div>
+
+            <p className="mt-2 text-center text-xs text-slate-500 dark:text-slate-400">
+              <kbd className="rounded bg-slate-200 px-1.5 py-0.5 text-xs dark:bg-slate-800">Enter</kbd> para enviar •
+              <kbd className="ml-1 rounded bg-slate-200 px-1.5 py-0.5 text-xs dark:bg-slate-800">Shift+Enter</kbd> para nueva línea
             </p>
           </div>
         </div>
       </div>
-
-      {/* Mensajes */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        {isLoading ? (
-          <div className="flex h-full items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
-          </div>
-        ) : (
-          <div className="mx-auto max-w-4xl space-y-4">
-            {Object.entries(mensajesAgrupados).map(([fecha, mensajesDia]) => (
-              <div key={fecha}>
-                {/* Separador de fecha */}
-                <div className="mb-4 flex items-center justify-center">
-                  <div className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                    {formatearFechaSeparador(fecha)}
-                  </div>
-                </div>
-
-                {/* Mensajes del día */}
-                <AnimatePresence mode="popLayout">
-                  {mensajesDia.map((msg) => {
-                    const esMio = msg.usuario_rut === user.rut
-                    const fueLeido = msg.leido_por.length > 1 // Más de solo el autor
-                    const fuiMencionado = msg.menciones.includes(user.rut)
-
-                    return (
-                      <motion.div
-                        key={msg.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.9 }}
-                        className={`mb-3 flex ${esMio ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div className={`flex max-w-[85%] gap-2 ${esMio ? 'flex-row-reverse' : 'flex-row'}`}>
-                          {/* Avatar */}
-                          {!esMio && (
-                            <div className="flex-shrink-0">
-                              {msg.usuario_foto ? (
-                                <img
-                                  src={msg.usuario_foto}
-                                  alt={msg.usuario_nombre}
-                                  className="h-8 w-8 rounded-full object-cover"
-                                />
-                              ) : (
-                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-xs font-medium text-white">
-                                  {msg.usuario_nombre.charAt(0)}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Burbuja de mensaje */}
-                          <div>
-                            {!esMio && (
-                              <p className="mb-1 px-1 text-xs font-medium text-slate-700 dark:text-slate-300">
-                                {msg.usuario_nombre}
-                                <span className="ml-1 text-slate-400">
-                                  ({msg.usuario_cargo})
-                                </span>
-                              </p>
-                            )}
-
-                            <div
-                              className={`rounded-2xl px-4 py-2 ${
-                                esMio
-                                  ? fuiMencionado
-                                    ? 'bg-amber-500 text-white'
-                                    : 'bg-brand-500 text-white'
-                                  : fuiMencionado
-                                  ? 'bg-amber-100 text-amber-900 dark:bg-amber-900 dark:text-amber-100'
-                                  : 'bg-white text-slate-900 dark:bg-slate-800 dark:text-slate-100'
-                              }`}
-                            >
-                              {/* Imagen si existe */}
-                              {msg.imagen_url && (
-                                <img
-                                  src={msg.imagen_url}
-                                  alt="Imagen adjunta"
-                                  className="mb-2 max-h-64 rounded-lg"
-                                />
-                              )}
-
-                              {/* Texto */}
-                              {msg.mensaje && (
-                                <p className="break-words text-sm">
-                                  {renderMensajeConMenciones(msg.mensaje, msg.menciones)}
-                                </p>
-                              )}
-
-                              {/* Hora y estado */}
-                              <div className="mt-1 flex items-center justify-end gap-1 text-xs opacity-70">
-                                <span>{dayjs(msg.created_at).format('HH:mm')}</span>
-                                {esMio && (
-                                  <>
-                                    {fueLeido ? (
-                                      <CheckCheck className="h-3 w-3" />
-                                    ) : (
-                                      <Check className="h-3 w-3" />
-                                    )}
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )
-                  })}
-                </AnimatePresence>
-              </div>
-            ))}
-            <div ref={mensajesEndRef} />
-          </div>
-        )}
-      </div>
-
-      {/* Input de mensaje */}
-      <div className="border-t border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <div className="mx-auto max-w-4xl">
-          {/* Preview de imagen */}
-          {imagenPreview && (
-            <div className="mb-2 relative inline-block">
-              <img
-                src={imagenPreview}
-                alt="Preview"
-                className="max-h-32 rounded-lg"
-              />
-              <button
-                onClick={() => {
-                  setImagenPreview(null)
-                  setImagenFile(null)
-                }}
-                className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          )}
-
-          {/* Menciones dropdown */}
-          {mostrarMenciones && usuariosFiltrados.length > 0 && (
-            <div className="mb-2 max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800">
-              {usuariosFiltrados.slice(0, 5).map((usuario) => (
-                <button
-                  key={usuario.rut}
-                  onClick={() => seleccionarMencion(usuario)}
-                  className="flex w-full items-center gap-3 px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700"
-                >
-                  {usuario.foto_perfil ? (
-                    <img
-                      src={usuario.foto_perfil}
-                      alt={usuario.nombre}
-                      className="h-8 w-8 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500 text-xs font-medium text-white">
-                      {usuario.nombre.charAt(0)}
-                    </div>
-                  )}
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                      {usuario.nombre}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {usuario.cargo}
-                    </p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="flex items-end gap-2">
-            {/* Botón de imagen */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
-            >
-              <ImageIcon className="h-5 w-5" />
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="hidden"
-            />
-
-            {/* Textarea */}
-            <textarea
-              ref={textareaRef}
-              value={mensaje}
-              onChange={(e) => {
-                setMensaje(e.target.value)
-                setCursorPosition(e.target.selectionStart)
-              }}
-              onKeyDown={handleKeyDown}
-              onClick={(e) => setCursorPosition(e.currentTarget.selectionStart)}
-              placeholder="Escribe un mensaje... (usa @ para mencionar)"
-              rows={1}
-              className="flex-1 resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              style={{ minHeight: '40px', maxHeight: '120px' }}
-            />
-
-            {/* Botón enviar */}
-            <button
-              onClick={() => enviarMensajeMutation.mutate()}
-              disabled={enviarMensajeMutation.isPending || (!mensaje.trim() && !imagenFile)}
-              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50"
-            >
-              {enviarMensajeMutation.isPending ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Send className="h-5 w-5" />
-              )}
-            </button>
-          </div>
-
-          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-            Presiona Enter para enviar, Shift+Enter para nueva línea
-          </p>
-        </div>
-      </div>
-    </div>
+    </>
   )
 }
