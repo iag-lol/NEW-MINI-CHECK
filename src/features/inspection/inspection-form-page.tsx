@@ -32,7 +32,8 @@ const inspectionSchema = z
     estadoBus: z.enum(['OPERATIVO', 'EN_PANNE']),
     observacionGeneral: z
       .string()
-      .max(600, 'Máximo 600 caracteres'),
+      .max(600, 'Máximo 600 caracteres')
+      .optional(),
   terminalReportado: z.string().min(2, 'Selecciona el terminal'),
   tag: z.object({
     tiene: z.boolean(),
@@ -87,18 +88,6 @@ const inspectionSchema = z
       derecha: publicidadAreaSchema,
       luneta: publicidadAreaSchema,
     }),
-  })
-  .superRefine((values, ctx) => {
-    if (
-      values.estadoBus === 'EN_PANNE' &&
-      values.observacionGeneral.trim().length < 10
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Describe brevemente el estado del bus (mínimo 10 caracteres)',
-        path: ['observacionGeneral'],
-      })
-    }
   })
 
 const steps = [
@@ -711,9 +700,6 @@ export const InspectionFormPage = () => {
         if (!snapshot.terminalReportado?.trim()) {
           missing.push('Selecciona el terminal detectado')
         }
-        if (!snapshot.observacionGeneral?.trim() || snapshot.observacionGeneral.trim().length < 10) {
-          missing.push('Escribe la observación general (mínimo 10 caracteres)')
-        }
         break
       case 'tag':
         if (typeof snapshot.tag.tiene !== 'boolean') {
@@ -900,8 +886,9 @@ export const InspectionFormPage = () => {
         </div>
       </div>
       <div>
-        <Label>Observación general</Label>
+        <Label>Observación general (opcional)</Label>
         <Textarea
+          placeholder="Detalles adicionales sobre el estado del bus"
           value={methods.watch('observacionGeneral')}
           onChange={(event) => methods.setValue('observacionGeneral', event.target.value)}
         />
