@@ -109,7 +109,7 @@ export interface MobileNavItem {
 export const MOBILE_ITEMS: MobileNavItem[] = [
   { label: 'Inicio', path: '/app/formulario', key: 'formulario', icon: ClipboardList },
   { label: 'Dashboard', path: '/app/dashboard', key: 'dashboard', icon: LayoutDashboard },
-  { label: 'Chat', path: '/app/comunicacion', key: 'comunicacion', icon: MessageSquare },
+  { label: 'Chat', path: '/app/chat', key: 'comunicacion', icon: MessageSquare },
   { label: 'Pendientes', path: '/app/pendientes', key: 'pendientes', icon: Map },
   { label: 'Perfil', path: '/app/perfil', key: 'perfil', icon: Users2 },
 ]
