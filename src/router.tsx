@@ -16,7 +16,8 @@ import { InformesPage } from '@/features/informes/informes-page'
 import { ComunicacionPage } from '@/features/comunicacion/comunicacion-page'
 import { PersonalPage } from '@/features/personal/personal-page'
 import { ConfiguracionPage } from '@/features/configuracion/configuracion-page'
-import { PendientesPage } from '@/features/tickets/pendientes-page'
+import { PendientesPage } from '@/features/pendientes/pendientes-page'
+import { TicketsPage } from '@/features/tickets/tickets-page'
 import { PerfilPage } from '@/features/perfil/perfil-page'
 import { ProtectedRoute } from '@/routes/protected-route'
 import { RootRedirect } from '@/routes/root-redirect'
@@ -47,6 +48,7 @@ export const router = createBrowserRouter([
       { path: 'personal', element: <PersonalPage /> },
       { path: 'configuracion', element: <ConfiguracionPage /> },
       { path: 'pendientes', element: <PendientesPage /> },
+      { path: 'tickets', element: <TicketsPage /> },
       { path: 'perfil', element: <PerfilPage /> },
     ],
   },

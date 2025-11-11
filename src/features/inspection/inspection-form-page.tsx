@@ -1,7 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { FormProvider, useForm } from 'react-hook-form'
 import { AnimatePresence, motion } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, Loader2, MapPin, Search } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 import dayjs, { getIsoWeekYear } from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
@@ -262,6 +264,7 @@ const SectionCard = ({
 )
 
 export const InspectionFormPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuthStore()
   const { push } = useNotificationStore()
   const methods = useForm<InspectionForm>({
@@ -321,6 +324,18 @@ export const InspectionFormPage = () => {
   const [saving, setSaving] = useState(false)
   const [terminalDetected, setTerminalDetected] = useState<{ name: string; distance: number } | null>(null)
   const [refreshingGPS, setRefreshingGPS] = useState(false)
+  const { data: flotaCatalog } = useQuery({
+    queryKey: ['flota-catalog'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('flota')
+        .select('*')
+        .order('numero_interno', { ascending: true })
+      if (error) throw error
+      return (data ?? []) as Tables<'flota'>[]
+    },
+    staleTime: 60_000,
+  })
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
   const {
     location: trackingLocation,
@@ -334,35 +349,22 @@ export const InspectionFormPage = () => {
   const mobileyeState = methods.watch('mobileye')
   const publicityState = methods.watch('publicidad')
   const stepKey: StepKey = steps[step].key
-
-  useEffect(() => {
-    if (!trackingLocation) {
-      setTerminalDetected(null)
-      return
-    }
-
-    const detected = detectTerminal(trackingLocation.lat, trackingLocation.lon)
-    if (!detected) {
-      setTerminalDetected(null)
-      return
-    }
-
-    setTerminalDetected({ name: detected.terminal, distance: detected.distance })
-    const currentTerminal = methods.getValues('terminalReportado')
-    if (!currentTerminal || currentTerminal === user?.terminal) {
-      methods.setValue('terminalReportado', detected.terminal, { shouldDirty: true })
-    }
-  }, [trackingLocation, methods, user?.terminal])
-
-  useEffect(() => {
-    if (estadoBus === 'EN_PANNE' && step !== 0 && step !== steps.length - 1) {
-      setStep(0)
-    }
-  }, [estadoBus, step])
-
-  const searchBus = async () => {
-    if (!busQuery.trim()) return
+  const suggestions = useMemo(() => {
     const query = busQuery.trim().toUpperCase()
+    if (!query || !flotaCatalog) return []
+    return flotaCatalog
+      .filter(
+        (record) =>
+          record.ppu.toUpperCase().includes(query) ||
+          record.numero_interno.toUpperCase().includes(query)
+      )
+      .slice(0, 5)
+  }, [busQuery, flotaCatalog])
+
+  const searchBus = async (override?: string) => {
+    const source = override ?? busQuery
+    if (!source.trim()) return
+    const query = source.trim().toUpperCase()
     const { data, error } = await supabase
       .from('flota')
       .select('*')
@@ -409,6 +411,43 @@ export const InspectionFormPage = () => {
       { shouldDirty: true }
     )
   }
+
+  useEffect(() => {
+    if (!trackingLocation) {
+      setTerminalDetected(null)
+      return
+    }
+
+    const detected = detectTerminal(trackingLocation.lat, trackingLocation.lon)
+    if (!detected) {
+      setTerminalDetected(null)
+      return
+    }
+
+    setTerminalDetected({ name: detected.terminal, distance: detected.distance })
+    const currentTerminal = methods.getValues('terminalReportado')
+    if (!currentTerminal || currentTerminal === user?.terminal) {
+      methods.setValue('terminalReportado', detected.terminal, { shouldDirty: true })
+    }
+  }, [trackingLocation, methods, user?.terminal])
+
+  useEffect(() => {
+    if (estadoBus === 'EN_PANNE' && step !== 0 && step !== steps.length - 1) {
+      setStep(0)
+    }
+  }, [estadoBus, step])
+
+  useEffect(() => {
+    const ppuParam = searchParams.get('ppu')
+    if (ppuParam) {
+      const normalized = ppuParam.toUpperCase()
+      setBusQuery(normalized)
+      searchBus(normalized)
+      const next = new URLSearchParams(searchParams.toString())
+      next.delete('ppu')
+      setSearchParams(next, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   const handleNext = () => {
     attemptNavigateToStep(Math.min(step + 1, steps.length - 1))
@@ -1269,8 +1308,29 @@ export const InspectionFormPage = () => {
                 value={busQuery}
                 onChange={(event) => setBusQuery(event.target.value.toUpperCase())}
               />
+              {suggestions.length > 0 && (
+                <div className="mt-2 rounded-2xl border border-slate-100 bg-white shadow-lg dark:border-slate-800 dark:bg-slate-900">
+                  {suggestions.map((record) => (
+                    <button
+                      key={record.id}
+                      type="button"
+                      className="flex w-full flex-col gap-0.5 px-4 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                      onClick={() => {
+                        const value = record.ppu.toUpperCase()
+                        setBusQuery(value)
+                        searchBus(value)
+                      }}
+                    >
+                      <span className="font-semibold text-slate-900 dark:text-white">
+                        {record.ppu} · #{record.numero_interno}
+                      </span>
+                      <span className="text-xs text-slate-500">Terminal {record.terminal}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <Button type="button" className="gap-2 rounded-2xl" variant="outline" onClick={searchBus}>
+            <Button type="button" className="gap-2 rounded-2xl" variant="outline" onClick={() => searchBus()}>
               <Search className="h-4 w-4" /> Buscar bus
             </Button>
           </div>

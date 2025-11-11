@@ -51,7 +51,7 @@ interface BusTicketGroup {
   lastUpdate: string
 }
 
-export const PendientesPage = () => {
+export const TicketsPage = () => {
   const [searchQuery, setSearchQuery] = useState('')
   const [estadoFilter, setEstadoFilter] = useState<TicketEstado | 'TODOS'>('TODOS')
   const [prioridadFilter, setPrioridadFilter] = useState<TicketPrioridad | 'TODOS'>('TODOS')

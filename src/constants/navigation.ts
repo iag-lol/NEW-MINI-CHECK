@@ -22,6 +22,7 @@ import {
   LineChart,
   Sliders,
   Ticket,
+  ClipboardCheck,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -49,7 +50,8 @@ export const SIDEBAR_GROUPS: NavGroup[] = [
     items: [
       { label: 'Dashboard', path: '/app/dashboard', icon: LayoutDashboard },
       { label: 'Nueva Inspección', path: '/app/formulario', icon: ClipboardList },
-      { label: 'Tickets', path: '/app/pendientes', icon: Ticket },
+      { label: 'Pendientes', path: '/app/pendientes', icon: ClipboardCheck },
+      { label: 'Tickets', path: '/app/tickets', icon: Ticket },
     ],
   },
   {
