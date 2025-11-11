@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 
 interface UIState {
   sidebarCollapsed: boolean
-  mobileRoute: 'formulario' | 'dashboard' | 'pendientes' | 'perfil'
+  mobileRoute: 'formulario' | 'dashboard' | 'comunicacion' | 'pendientes' | 'perfil'
   pendingCount: number
   toggleSidebar: () => void
   setMobileRoute: (route: UIState['mobileRoute']) => void
