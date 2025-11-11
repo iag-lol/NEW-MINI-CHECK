@@ -24,6 +24,17 @@ export default {
         slate: {
           950: '#0f1729',
         },
+        theme: {
+          bg: 'var(--color-theme-bg)',
+          'bg-dark': 'var(--color-theme-bg-dark)',
+          card: 'var(--color-theme-card)',
+          text: 'var(--color-theme-text)',
+        },
+      },
+      backgroundColor: {
+        'theme': 'var(--color-theme-bg)',
+        'theme-dark': 'var(--color-theme-bg-dark)',
+        'theme-card': 'var(--color-theme-card)',
       },
       fontFamily: {
         sans: ['"Inter Tight"', ...defaultTheme.fontFamily.sans],

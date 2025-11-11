@@ -290,23 +290,31 @@ export function ProfilePage() {
                 onClick={() => handleCambiarTema(id as TemaId)}
                 className={`rounded-xl border-2 p-4 text-left transition ${
                   temaActual === id
-                    ? 'border-brand-500 bg-brand-50 dark:bg-brand-950'
-                    : 'border-slate-200 hover:border-brand-300 dark:border-slate-800'
+                    ? 'border-brand-500 shadow-lg'
+                    : 'border-slate-200 hover:border-brand-300 dark:border-slate-800 hover:shadow-md'
                 }`}
               >
-                <div className="mb-3 flex gap-2">
+                <div className="mb-3 space-y-2">
+                  {/* Fondo del tema */}
                   <div
-                    className="h-10 w-10 rounded-lg"
-                    style={{ backgroundColor: tema.colors.primary }}
+                    className="h-12 w-full rounded-lg shadow-sm border border-slate-200"
+                    style={{ backgroundColor: tema.colors.bg }}
                   />
-                  <div
-                    className="h-10 w-10 rounded-lg"
-                    style={{ backgroundColor: tema.colors.primaryLight }}
-                  />
+                  {/* Colores de acento */}
+                  <div className="flex gap-2">
+                    <div
+                      className="h-8 flex-1 rounded-md shadow-sm"
+                      style={{ backgroundColor: tema.colors.primary }}
+                    />
+                    <div
+                      className="h-8 flex-1 rounded-md shadow-sm"
+                      style={{ backgroundColor: tema.colors.primaryLight }}
+                    />
+                  </div>
                 </div>
                 <p className="font-semibold">{tema.nombre}</p>
                 {temaActual === id && (
-                  <p className="text-sm text-brand-600">✓ Tema activo</p>
+                  <p className="text-sm text-brand-600 font-medium">✓ Tema activo</p>
                 )}
               </button>
             ))}

@@ -25,11 +25,11 @@ export const AppLayout = () => {
 
   return (
     <TrackingProvider value={tracking}>
-      <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
+      <div className="flex min-h-screen bg-theme dark:bg-slate-950">
         <Sidebar />
         <div className="flex flex-1 flex-col md:pl-[var(--sidebar-width)]">
           <TopBar />
-          <main className="flex-1 px-4 pb-32 pt-6 md:px-8 md:pb-10">
+          <main className="flex-1 px-4 pb-32 pt-6 md:px-8 md:pb-10 transition-colors duration-300">
             <div className="w-full">
               <Outlet />
             </div>
