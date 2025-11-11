@@ -189,10 +189,16 @@ export function ProfilePage() {
         .from('profile-photos')
         .getPublicUrl(filePath)
 
+      console.log('📸 Foto subida exitosamente')
+      console.log('📁 FilePath:', filePath)
+      console.log('🔗 Public URL:', publicUrl)
+
       // Actualizar perfil con la nueva URL
       await updateProfileMutation.mutateAsync({
         foto_perfil: publicUrl,
       })
+
+      console.log('✅ Perfil actualizado en BD con URL:', publicUrl)
 
       // Actualizar el store de auth
       queryClient.invalidateQueries({ queryKey: ['perfil', user.rut] })
@@ -249,6 +255,15 @@ export function ProfilePage() {
                     src={perfil.foto_perfil}
                     alt="Foto de perfil"
                     className="h-full w-full object-cover"
+                    onError={(e) => {
+                      console.error('❌ Error cargando imagen:', perfil.foto_perfil)
+                      console.error('Error event:', e)
+                      // Mostrar icono por defecto si hay error
+                      e.currentTarget.style.display = 'none'
+                    }}
+                    onLoad={() => {
+                      console.log('✅ Imagen cargada correctamente:', perfil.foto_perfil)
+                    }}
                   />
                 ) : (
                   <User className="h-12 w-12 text-brand-600" />
