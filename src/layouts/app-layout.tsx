@@ -7,11 +7,13 @@ import { TopBar } from '@/components/layout/top-bar'
 import { RealtimeNotifications } from '@/components/realtime-notifications'
 import { useRealtimeSubscriptions } from '@/hooks/use-realtime'
 import { useRealtimeLocation } from '@/hooks/use-realtime-location'
+import { useTheme } from '@/hooks/use-theme'
 import { useAuthStore } from '@/store/auth-store'
 import { TrackingProvider } from '@/context/tracking-context'
 
 export const AppLayout = () => {
   useRealtimeSubscriptions()
+  useTheme() // Cargar y aplicar tema del usuario
   // Activar tracking GPS automático en toda la app
   const tracking = useRealtimeLocation({ enabled: true, intervalMs: 10000 })
   const location = useLocation()

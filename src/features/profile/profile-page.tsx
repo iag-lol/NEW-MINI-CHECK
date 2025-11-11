@@ -8,22 +8,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useNotificationStore } from '@/store/notification-store'
+import { useTheme, TEMAS, type TemaId } from '@/hooks/use-theme'
 import type { Tables } from '@/types/database'
 
 type Usuario = Tables<'usuarios'>
-
-const TEMAS = [
-  { id: 'rosado', nombre: 'Rosado Pastel', colores: { primary: '#FFB3D9', secondary: '#FFE5F1' } },
-  { id: 'fucsia', nombre: 'Fucsia Pastel', colores: { primary: '#FF9ECD', secondary: '#FFD6ED' } },
-  { id: 'azul', nombre: 'Azul (Predeterminado)', colores: { primary: '#6366F1', secondary: '#A5B4FC' } },
-  { id: 'negro', nombre: 'Negro Elegante', colores: { primary: '#1F2937', secondary: '#374151' } },
-  { id: 'rojo-azul', nombre: 'Rojo y Azul', colores: { primary: '#EF4444', secondary: '#3B82F6' } },
-]
 
 export function ProfilePage() {
   const { user } = useAuthStore()
   const { push } = useNotificationStore()
   const queryClient = useQueryClient()
+  const { temaActual, aplicarTema } = useTheme()
 
   const [nombre, setNombre] = useState(user?.nombre || '')
   const [passwordActual, setPasswordActual] = useState('')
@@ -117,15 +111,12 @@ export function ProfilePage() {
     })
   }
 
-  const handleCambiarTema = (temaId: string) => {
-    updateProfileMutation.mutate({ tema_color: temaId })
-
+  const handleCambiarTema = (temaId: TemaId) => {
     // Aplicar tema inmediatamente a la UI
-    const tema = TEMAS.find(t => t.id === temaId)
-    if (tema) {
-      document.documentElement.style.setProperty('--color-primary', tema.colores.primary)
-      document.documentElement.style.setProperty('--color-secondary', tema.colores.secondary)
-    }
+    aplicarTema(temaId)
+
+    // Guardar en la base de datos
+    updateProfileMutation.mutate({ tema_color: temaId })
   }
 
   const handleCambiarPassword = () => {
@@ -293,12 +284,12 @@ export function ProfilePage() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {TEMAS.map((tema) => (
+            {Object.entries(TEMAS).map(([id, tema]) => (
               <button
-                key={tema.id}
-                onClick={() => handleCambiarTema(tema.id)}
+                key={id}
+                onClick={() => handleCambiarTema(id as TemaId)}
                 className={`rounded-xl border-2 p-4 text-left transition ${
-                  perfil.tema_color === tema.id
+                  temaActual === id
                     ? 'border-brand-500 bg-brand-50 dark:bg-brand-950'
                     : 'border-slate-200 hover:border-brand-300 dark:border-slate-800'
                 }`}
@@ -306,15 +297,15 @@ export function ProfilePage() {
                 <div className="mb-3 flex gap-2">
                   <div
                     className="h-10 w-10 rounded-lg"
-                    style={{ backgroundColor: tema.colores.primary }}
+                    style={{ backgroundColor: tema.colors.primary }}
                   />
                   <div
                     className="h-10 w-10 rounded-lg"
-                    style={{ backgroundColor: tema.colores.secondary }}
+                    style={{ backgroundColor: tema.colors.primaryLight }}
                   />
                 </div>
                 <p className="font-semibold">{tema.nombre}</p>
-                {perfil.tema_color === tema.id && (
+                {temaActual === id && (
                   <p className="text-sm text-brand-600">✓ Tema activo</p>
                 )}
               </button>

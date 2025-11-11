@@ -9,16 +9,17 @@ export default {
     extend: {
       colors: {
         brand: {
-          50: '#f3f7ff',
-          100: '#e4edff',
-          200: '#c3d6ff',
-          300: '#99b5ff',
-          400: '#6287ff',
-          500: '#3b5bff',
-          600: '#2f46db',
-          700: '#2536b0',
-          800: '#1f2f8c',
-          900: '#1d2b72',
+          50: 'var(--color-brand-50)',
+          100: 'var(--color-brand-100)',
+          200: 'var(--color-brand-200)',
+          300: 'var(--color-brand-300)',
+          400: 'var(--color-brand-400)',
+          500: 'var(--color-brand-500)',
+          600: 'var(--color-brand-600)',
+          700: 'var(--color-brand-700)',
+          800: 'var(--color-brand-800)',
+          900: 'var(--color-brand-900)',
+          950: 'var(--color-brand-950)',
         },
         slate: {
           950: '#0f1729',
