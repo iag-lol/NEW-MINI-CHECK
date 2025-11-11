@@ -1,0 +1,26 @@
+[[services]]
+type = "web"
+name = "new-mini-check"
+env = "static"
+buildCommand = "npm install && npm run build"
+staticPublishPath = "./dist"
+
+[[headers]]
+for = "/*"
+  [headers.values]
+  Cache-Control = "public, max-age=0, must-revalidate"
+
+[[redirects]]
+from = "/app/*"
+to = "/index.html"
+status = 200
+
+[[redirects]]
+from = "/login"
+to = "/index.html"
+status = 200
+
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200

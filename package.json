@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run postbuild",
+    "postbuild": "cp public/_redirects dist/_redirects 2>/dev/null || true",
     "lint": "eslint .",
     "preview": "vite preview"
   },
