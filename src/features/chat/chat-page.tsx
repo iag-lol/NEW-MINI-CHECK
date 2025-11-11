@@ -246,11 +246,19 @@ export function ChatPage() {
         imagenUrl = publicUrl
       }
 
-      // Extraer menciones del mensaje
-      const mencionesMatch = mensaje.match(/@(\d{7,9})/g)
-      const menciones = mencionesMatch
-        ? mencionesMatch.map(m => m.substring(1))
+      // Extraer menciones del mensaje (buscar @Nombre)
+      const mencionesMatch = mensaje.match(/@([A-Za-zÁ-ú\s]+)/g)
+      const nombresmencionados = mencionesMatch
+        ? mencionesMatch.map(m => m.substring(1).trim())
         : []
+
+      // Convertir nombres a RUTs para guardar en BD
+      const menciones = nombresmencionados
+        .map(nombre => {
+          const usuario = usuarios.find(u => u.nombre === nombre)
+          return usuario?.rut
+        })
+        .filter((rut): rut is string => rut !== undefined)
 
       // Obtener foto del usuario
       const { data: userData } = await supabase
@@ -324,7 +332,7 @@ export function ChatPage() {
 
     const nuevoMensaje =
       mensaje.substring(0, ultimoArroba) +
-      `@${usuario.rut} ` +
+      `@${usuario.nombre} ` +
       mensaje.substring(cursorPosition)
 
     setMensaje(nuevoMensaje)
@@ -334,7 +342,7 @@ export function ChatPage() {
     // Enfocar textarea
     setTimeout(() => {
       textareaRef.current?.focus()
-      const newPosition = ultimoArroba + usuario.rut.length + 2
+      const newPosition = ultimoArroba + usuario.nombre.length + 2
       textareaRef.current?.setSelectionRange(newPosition, newPosition)
     }, 0)
   }
@@ -401,8 +409,10 @@ export function ChatPage() {
     menciones.forEach(rut => {
       const usuario = usuarios.find(u => u.rut === rut)
       if (usuario) {
+        // Escapar caracteres especiales en el nombre para regex
+        const nombreEscapado = usuario.nombre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
         resultado = resultado.replace(
-          new RegExp(`@${rut}`, 'g'),
+          new RegExp(`@${nombreEscapado}`, 'g'),
           `<span class="font-semibold text-brand-600 dark:text-brand-400">@${usuario.nombre}</span>`
         )
       }
