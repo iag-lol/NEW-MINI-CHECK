@@ -188,7 +188,10 @@ export type Database = {
           terminal: string
           password: string
           foto_url: string | null
+          foto_perfil: string | null
+          tema_color: string
           created_at: string
+          updated_at: string
         },
         {
           rut: string

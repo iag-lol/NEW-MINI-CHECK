@@ -744,8 +744,6 @@ export const InspectionFormPage = () => {
           if (!ext.presion) missing.push('Extintor · Presión')
           if (!ext.cilindro) missing.push('Extintor · Cilindro')
           if (!ext.porta) missing.push('Extintor · Porta')
-        } else if (!ext.observacion?.trim()) {
-          missing.push('Explica por qué no hay extintor')
         }
         break
       }

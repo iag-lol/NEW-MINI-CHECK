@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom'
 import { Sidebar } from '@/components/layout/sidebar'
 import { MobileNav } from '@/components/layout/mobile-nav'
 import { TopBar } from '@/components/layout/top-bar'
+import { RealtimeNotifications } from '@/components/realtime-notifications'
 import { useRealtimeSubscriptions } from '@/hooks/use-realtime'
 import { useRealtimeLocation } from '@/hooks/use-realtime-location'
 import { useAuthStore } from '@/store/auth-store'
@@ -33,6 +34,7 @@ export const AppLayout = () => {
           </main>
         </div>
         <MobileNav />
+        <RealtimeNotifications />
       </div>
     </TrackingProvider>
   )

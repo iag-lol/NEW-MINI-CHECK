@@ -1,7 +1,10 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Search, Users, FileText, MapPin, TrendingUp, Calendar } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { supabase } from '@/lib/supabase'
+import dayjs from '@/lib/dayjs'
 import { PPUSearchReport } from './components/ppu-search-report'
 import { WorkerReports } from './components/worker-reports'
 import { IPAnalytics } from './components/ip-analytics'
@@ -9,6 +12,50 @@ import { TimelineReport } from './components/timeline-report'
 
 export function ReportsPage() {
   const [activeTab, setActiveTab] = useState('ppu')
+
+  // Query para obtener estadísticas reales
+  const { data: stats } = useQuery({
+    queryKey: ['reports-stats'],
+    queryFn: async () => {
+      // Total de inspecciones
+      const { count: totalInspections } = await supabase
+        .from('revisiones')
+        .select('*', { count: 'exact', head: true })
+
+      // Inspectores activos (últimos 30 días)
+      const thirtyDaysAgo = dayjs().subtract(30, 'days').toISOString()
+      const { data: activeInspectors } = await supabase
+        .from('revisiones')
+        .select('inspector_rut')
+        .gte('created_at', thirtyDaysAgo)
+
+      const uniqueInspectors = new Set(activeInspectors?.map(r => r.inspector_rut))
+
+      // Terminales cubiertos
+      const { data: terminals } = await supabase
+        .from('revisiones')
+        .select('terminal_reportado')
+
+      const uniqueTerminals = new Set(terminals?.map(r => r.terminal_reportado))
+
+      // Promedio diario (últimos 7 días)
+      const sevenDaysAgo = dayjs().subtract(7, 'days').toISOString()
+      const { count: lastWeekCount } = await supabase
+        .from('revisiones')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', sevenDaysAgo)
+
+      const dailyAverage = Math.round((lastWeekCount || 0) / 7)
+
+      return {
+        totalInspections: totalInspections || 0,
+        activeInspectors: uniqueInspectors.size,
+        terminalsCovered: uniqueTerminals.size,
+        dailyAverage,
+      }
+    },
+    refetchInterval: 30000, // Actualizar cada 30 segundos
+  })
 
   return (
     <div className="space-y-6 p-6">
@@ -27,29 +74,29 @@ export function ReportsPage() {
         <StatsCard
           icon={FileText}
           title="Inspecciones Totales"
-          value="1,234"
-          trend="+12% vs mes anterior"
+          value={stats?.totalInspections.toLocaleString() || '0'}
+          trend="Total acumulado"
           trendUp
         />
         <StatsCard
           icon={Users}
           title="Inspectores Activos"
-          value="24"
-          trend="3 nuevos esta semana"
+          value={stats?.activeInspectors.toString() || '0'}
+          trend="Últimos 30 días"
           trendUp
         />
         <StatsCard
           icon={MapPin}
           title="Terminales Cubiertos"
-          value="8"
-          trend="100% cobertura"
+          value={stats?.terminalsCovered.toString() || '0'}
+          trend="Total de terminales"
           trendUp
         />
         <StatsCard
           icon={TrendingUp}
           title="Promedio Diario"
-          value="42"
-          trend="+8% vs semana anterior"
+          value={stats?.dailyAverage.toString() || '0'}
+          trend="Últimos 7 días"
           trendUp
         />
       </div>

@@ -18,7 +18,7 @@ import { PersonalPage } from '@/features/personal/personal-page'
 import { ConfiguracionPage } from '@/features/configuracion/configuracion-page'
 import { PendientesPage } from '@/features/pendientes/pendientes-page'
 import { TicketsPage } from '@/features/tickets/tickets-page'
-import { PerfilPage } from '@/features/perfil/perfil-page'
+import { ProfilePage } from '@/features/profile/profile-page'
 import { ProtectedRoute } from '@/routes/protected-route'
 import { RootRedirect } from '@/routes/root-redirect'
 import { NotFoundPage } from '@/routes/not-found'
@@ -49,7 +49,7 @@ export const router = createBrowserRouter([
       { path: 'configuracion', element: <ConfiguracionPage /> },
       { path: 'pendientes', element: <PendientesPage /> },
       { path: 'tickets', element: <TicketsPage /> },
-      { path: 'perfil', element: <PerfilPage /> },
+      { path: 'perfil', element: <ProfilePage /> },
     ],
   },
   { path: '*', element: <NotFoundPage /> },
