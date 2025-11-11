@@ -50,10 +50,10 @@ export const ExtintoresModulePage = () => {
       searchFields={['bus_ppu', 'terminal']}
       getStats={(data: ExtintoresRow[]) => {
         const total = data.length
-        const vigentes = data.filter(r => r.certificacion === 'VIGENTE').length
-        const vencidos = data.filter(r => r.certificacion === 'VENCIDA').length
+        const buenas = data.filter(r => r.certificacion === 'BUENA').length
+        const danadas = data.filter(r => r.certificacion === 'DAÑADA').length
         const presionOptima = data.filter(r => r.presion === 'OPTIMO').length
-        const tasaVigencia = total > 0 ? Math.round((vigentes / total) * 100) : 0
+        const tasaBuenas = total > 0 ? Math.round((buenas / total) * 100) : 0
 
         return [
           {
@@ -64,18 +64,18 @@ export const ExtintoresModulePage = () => {
             variant: 'default' as const,
           },
           {
-            title: 'Vigentes',
-            value: vigentes,
-            description: `${tasaVigencia}% del total`,
+            title: 'Buenas',
+            value: buenas,
+            description: `${tasaBuenas}% del total`,
             icon: CheckCircle2,
             variant: 'success' as const,
           },
           {
-            title: 'Vencidos',
-            value: vencidos,
-            description: 'Requieren renovación',
+            title: 'Dañadas',
+            value: danadas,
+            description: 'Requieren atención',
             icon: AlertTriangle,
-            variant: vencidos > 0 ? 'danger' as const : 'success' as const,
+            variant: danadas > 0 ? 'danger' as const : 'success' as const,
           },
           {
             title: 'Presión Óptima',
@@ -120,8 +120,8 @@ export const ExtintoresModulePage = () => {
       ]}
       getCharts={(rows) => {
         const certificacionData = [
-          { estado: 'Vigente', cantidad: rows.filter((r) => r.certificacion === 'VIGENTE').length },
-          { estado: 'Vencida', cantidad: rows.filter((r) => r.certificacion === 'VENCIDA').length },
+          { estado: 'Buena', cantidad: rows.filter((r) => r.certificacion === 'BUENA').length },
+          { estado: 'Dañada', cantidad: rows.filter((r) => r.certificacion === 'DAÑADA').length },
           { estado: 'Sin dato', cantidad: rows.filter((r) => !r.certificacion).length },
         ]
         const presionDataRaw = [

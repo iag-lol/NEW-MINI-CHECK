@@ -57,9 +57,9 @@ const inspectionSchema = z
     tiene: z.boolean(),
     vencimientoMes: z.coerce.number().min(1).max(12).optional(),
     vencimientoAnio: z.coerce.number().min(2023).max(2035).optional(),
-    certificacion: z.enum(['VIGENTE', 'VENCIDA']).nullable(),
-    sonda: z.enum(['OK', 'SIN_LECTURA', 'FUERA_DE_RANGO']).nullable(),
-    manometro: z.enum(['OK', 'SIN_LECTURA', 'FUERA_DE_RANGO']).nullable(),
+    certificacion: z.enum(['BUENA', 'DAÑADA']).nullable(),
+    sonda: z.enum(['BUENA', 'DAÑADA']).nullable(),
+    manometro: z.enum(['BUENO', 'DAÑADO']).nullable(),
     presion: z.enum(['SOBRECARGA', 'OPTIMO', 'BAJA_CARGA']).nullable(),
     cilindro: z.enum(['OK', 'ABOLLADO', 'OXIDADO']).nullable(),
     porta: z.enum(['TIENE', 'NO_TIENE', 'DANADO']).nullable(),
@@ -142,28 +142,26 @@ const extinguisherFieldConfig = [
     label: 'Certificación',
     placeholder: 'Selecciona estado',
     options: [
-      { value: 'VIGENTE', label: 'Vigente' },
-      { value: 'VENCIDA', label: 'Vencida' },
+      { value: 'BUENA', label: 'Buena' },
+      { value: 'DAÑADA', label: 'Dañada' },
     ],
   },
   {
     key: 'sonda' as const,
-    label: 'Lectura de la sonda',
-    placeholder: 'Selecciona la lectura',
+    label: 'Sonda',
+    placeholder: 'Estado de la sonda',
     options: [
-      { value: 'OK', label: 'Lectura correcta (OK)' },
-      { value: 'SIN_LECTURA', label: 'Sin lectura' },
-      { value: 'FUERA_DE_RANGO', label: 'Fuera de rango' },
+      { value: 'BUENA', label: 'Buena' },
+      { value: 'DAÑADA', label: 'Dañada' },
     ],
   },
   {
     key: 'manometro' as const,
     label: 'Manómetro',
-    placeholder: 'Lectura del manómetro',
+    placeholder: 'Estado del manómetro',
     options: [
-      { value: 'OK', label: 'OK' },
-      { value: 'SIN_LECTURA', label: 'Sin lectura' },
-      { value: 'FUERA_DE_RANGO', label: 'Fuera de rango' },
+      { value: 'BUENO', label: 'Bueno' },
+      { value: 'DAÑADO', label: 'Dañado' },
     ],
   },
   {
@@ -613,11 +611,11 @@ export const InspectionFormPage = () => {
 
       const extintorCritico =
         !values.extintores.tiene ||
-        values.extintores.certificacion === 'VENCIDA' ||
+        values.extintores.certificacion === 'DAÑADA' ||
         (values.extintores.presion && values.extintores.presion !== 'OPTIMO') ||
         (values.extintores.cilindro && values.extintores.cilindro !== 'OK') ||
-        (values.extintores.sonda && values.extintores.sonda !== 'OK') ||
-        (values.extintores.manometro && values.extintores.manometro !== 'OK') ||
+        values.extintores.sonda === 'DAÑADA' ||
+        values.extintores.manometro === 'DAÑADO' ||
         (values.extintores.porta && values.extintores.porta !== 'TIENE')
 
       const tickets: Array<{ modulo: string; descripcion: string }> = []
