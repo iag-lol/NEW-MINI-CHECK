@@ -502,7 +502,7 @@ export const InspectionFormPage = () => {
         estado_bus: values.estadoBus,
         lat: trackingLocation?.lat ?? -33.45,
         lon: trackingLocation?.lon ?? -70.66,
-        observaciones: values.observacionGeneral,
+        observaciones: values.observacionGeneral ?? null,
         semana_iso: `${getIsoWeekYear()}-W${String(dayjs().isoWeek()).padStart(2, '0')}`,
         operativo: values.estadoBus === 'OPERATIVO',
         ip_address: userIP,
