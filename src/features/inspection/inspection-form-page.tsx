@@ -27,12 +27,12 @@ const publicidadAreaSchema = z.object({
   observacion: z.string().optional(),
 })
 
-const inspectionSchema = z.object({
-  estadoBus: z.enum(['OPERATIVO', 'EN_PANNE']),
-  observacionGeneral: z
-    .string()
-    .min(10, 'Describe brevemente el estado del bus')
-    .max(600, 'Máximo 600 caracteres'),
+const inspectionSchema = z
+  .object({
+    estadoBus: z.enum(['OPERATIVO', 'EN_PANNE']),
+    observacionGeneral: z
+      .string()
+      .max(600, 'Máximo 600 caracteres'),
   terminalReportado: z.string().min(2, 'Selecciona el terminal'),
   tag: z.object({
     tiene: z.boolean(),
@@ -82,12 +82,24 @@ const inspectionSchema = z.object({
     estado: z.enum(['OK', 'INCONSISTENTE', 'NO_FUNCIONA']),
     observacion: z.string().optional(),
   }),
-  publicidad: z.object({
-    izquierda: publicidadAreaSchema,
-    derecha: publicidadAreaSchema,
-    luneta: publicidadAreaSchema,
-  }),
-})
+    publicidad: z.object({
+      izquierda: publicidadAreaSchema,
+      derecha: publicidadAreaSchema,
+      luneta: publicidadAreaSchema,
+    }),
+  })
+  .superRefine((values, ctx) => {
+    if (
+      values.estadoBus === 'EN_PANNE' &&
+      values.observacionGeneral.trim().length < 10
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Describe brevemente el estado del bus (mínimo 10 caracteres)',
+        path: ['observacionGeneral'],
+      })
+    }
+  })
 
 const steps = [
   { key: 'estado', label: 'Estado general' },
@@ -147,10 +159,10 @@ const extinguisherFieldConfig = [
   },
   {
     key: 'sonda' as const,
-    label: 'Sonda',
-    placeholder: 'Estado de la sonda',
+    label: 'Lectura de la sonda',
+    placeholder: 'Selecciona la lectura',
     options: [
-      { value: 'OK', label: 'OK' },
+      { value: 'OK', label: 'Lectura correcta (OK)' },
       { value: 'SIN_LECTURA', label: 'Sin lectura' },
       { value: 'FUERA_DE_RANGO', label: 'Fuera de rango' },
     ],

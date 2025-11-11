@@ -55,6 +55,7 @@ interface ModuleLayoutProps<T extends TableName> {
   getCharts?: (data: TableRow<T>[]) => ChartConfig[]
   searchFields?: (keyof TableRow<T>)[]
   queryLimit?: number | null
+  tableScrollClassName?: string
 }
 
 export const ModuleLayout = <T extends TableName>({
@@ -69,6 +70,7 @@ export const ModuleLayout = <T extends TableName>({
   getCharts,
   searchFields = [],
   queryLimit = 200,
+  tableScrollClassName,
 }: ModuleLayoutProps<T>) => {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterValues, setFilterValues] = useState<Record<string, string>>({})
@@ -282,7 +284,7 @@ export const ModuleLayout = <T extends TableName>({
 
       {/* Data Table */}
       <Card className="p-0">
-        <ScrollArea className="max-h-[60vh]">
+        <ScrollArea className={cn(tableScrollClassName ?? 'max-h-[60vh]', 'pr-4')}>
           <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
             <thead className="sticky top-0 z-10 bg-slate-50/95 text-left uppercase tracking-wide text-slate-500 backdrop-blur-sm dark:bg-slate-900/95">
               <tr>

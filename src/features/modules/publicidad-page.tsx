@@ -22,6 +22,7 @@ export const PublicidadModulePage = () => {
       icon={Megaphone}
       queryLimit={null}
       searchFields={['bus_ppu', 'terminal', 'nombre_publicidad']}
+      tableScrollClassName="max-h-[75vh]"
       getStats={(data: PublicidadRow[]) => {
         const total = data.length
         const conPublicidad = data.filter(r => r.tiene).length

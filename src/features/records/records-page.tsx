@@ -489,6 +489,22 @@ const RevisionDetailSheet = ({ revisionId, onSaved }: RevisionDetailSheetProps) 
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
+  const formatBool = (value: boolean | null | undefined, labels = ['Sí', 'No']): string => {
+    if (value === null || value === undefined) return '—'
+    return value ? labels[0] : labels[1]
+  }
+
+  const formatDetailList = (items: Array<{ label: string; value: string }>) => (
+    <div className="grid gap-2 md:grid-cols-2">
+      {items.map((item) => (
+        <div key={item.label} className="text-sm text-slate-600 dark:text-slate-300">
+          <p className="text-xs uppercase tracking-wide text-slate-400">{item.label}</p>
+          <p className="font-medium text-slate-900 dark:text-white">{item.value}</p>
+        </div>
+      ))}
+    </div>
+  )
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-slate-500">
@@ -678,6 +694,104 @@ const RevisionDetailSheet = ({ revisionId, onSaved }: RevisionDetailSheetProps) 
           </div>
         )}
       </div>
+
+      {details.tag && (
+        <div className="space-y-3 rounded-2xl border border-slate-100/80 p-4 text-sm dark:border-slate-800">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">TAG</h3>
+          {formatDetailList([
+            { label: 'Instalado', value: formatBool(details.tag.tiene) },
+            { label: 'Serie', value: details.tag.serie ?? '—' },
+            { label: 'Observación', value: details.tag.observacion ?? '—' },
+          ])}
+        </div>
+      )}
+
+      {details.camaras && (
+        <div className="space-y-3 rounded-2xl border border-slate-100/80 p-4 text-sm dark:border-slate-800">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Cámaras</h3>
+          {formatDetailList([
+            { label: 'Estado de monitor', value: details.camaras.monitor_estado },
+            {
+              label: 'Detalle',
+              value:
+                details.camaras.observacion ??
+                (details.camaras.detalle ? JSON.stringify(details.camaras.detalle) : '—'),
+            },
+          ])}
+        </div>
+      )}
+
+      {details.extintores && (
+        <div className="space-y-3 rounded-2xl border border-slate-100/80 p-4 text-sm dark:border-slate-800">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Extintores</h3>
+          {formatDetailList([
+            { label: 'Tiene', value: formatBool(details.extintores.tiene) },
+            {
+              label: 'Vencimiento',
+              value:
+                details.extintores.vencimiento_mes && details.extintores.vencimiento_anio
+                  ? `${details.extintores.vencimiento_mes}/${details.extintores.vencimiento_anio}`
+                  : '—',
+            },
+            { label: 'Certificación', value: details.extintores.certificacion ?? '—' },
+            { label: 'Sonda', value: details.extintores.sonda ?? '—' },
+            { label: 'Manómetro', value: details.extintores.manometro ?? '—' },
+            { label: 'Presión', value: details.extintores.presion ?? '—' },
+            { label: 'Cilindro', value: details.extintores.cilindro ?? '—' },
+            { label: 'Porta', value: details.extintores.porta ?? '—' },
+          ])}
+        </div>
+      )}
+
+      {details.mobileye && (
+        <div className="space-y-3 rounded-2xl border border-slate-100/80 p-4 text-sm dark:border-slate-800">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Mobileye</h3>
+          {formatDetailList([
+            { label: 'Marca bus', value: details.mobileye.bus_marca ?? '—' },
+            { label: 'Alerta izquierda', value: formatBool(details.mobileye.alerta_izq) },
+            { label: 'Alerta derecha', value: formatBool(details.mobileye.alerta_der) },
+            { label: 'Consola', value: formatBool(details.mobileye.consola) },
+            { label: 'Sensor frontal', value: formatBool(details.mobileye.sensor_frontal) },
+            { label: 'Sensor izquierdo', value: formatBool(details.mobileye.sensor_izq) },
+            { label: 'Sensor derecho', value: formatBool(details.mobileye.sensor_der) },
+          ])}
+        </div>
+      )}
+
+      {details.publicidad && (() => {
+        const publicity = details.publicidad
+        const detalleLados = publicity.detalle_lados as Record<string, any> | null
+        return (
+          <div className="space-y-3 rounded-2xl border border-slate-100/80 p-4 text-sm dark:border-slate-800">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Publicidad</h3>
+            {['izquierda', 'derecha', 'luneta'].map((lado) => {
+              const info = detalleLados?.[lado]
+              return (
+                <div key={lado} className="rounded-xl border border-slate-100/70 p-3 dark:border-slate-800">
+                  <p className="text-xs uppercase tracking-wide text-slate-400">{lado}</p>
+                  <p className="text-sm text-slate-700 dark:text-slate-200">
+                    {info?.tiene ? 'Con publicidad' : 'Sin publicidad'}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Daño: {formatBool(info?.danio)} · Residuos: {formatBool(info?.residuos)}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
+
+      {details.odometro && (
+        <div className="space-y-3 rounded-2xl border border-slate-100/80 p-4 text-sm dark:border-slate-800">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Odómetro</h3>
+          {formatDetailList([
+            { label: 'Lectura', value: details.odometro.lectura?.toString() ?? '—' },
+            { label: 'Estado', value: details.odometro.estado },
+            { label: 'Observación', value: details.odometro.observacion ?? '—' },
+          ])}
+        </div>
+      )}
 
       <div className="flex items-center justify-end gap-3">
         <Button variant="ghost" onClick={loadDetails}>

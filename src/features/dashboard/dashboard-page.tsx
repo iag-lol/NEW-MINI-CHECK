@@ -420,6 +420,7 @@ export const DashboardPage = () => {
         </Card>
       </div>
 
+      {user?.cargo === 'SUPERVISOR' ? (
       <Card className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -606,6 +607,16 @@ export const DashboardPage = () => {
           </div>
         </div>
       </Card>
+      ) : (
+        <Card className="space-y-3">
+          <div>
+            <CardTitle>Centro geoespacial</CardTitle>
+            <p className="text-sm text-slate-500">
+              Esta vista solo está disponible para supervisores. Contacta a tu supervisor si necesitas acceso.
+            </p>
+          </div>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
