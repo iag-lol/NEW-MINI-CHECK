@@ -20,12 +20,47 @@ import type { Tables, Database } from '@/types/database'
 import { useNotificationStore } from '@/store/notification-store'
 import { useTracking } from '@/context/tracking-context'
 
-const publicidadAreaSchema = z.object({
-  tiene: z.boolean(),
-  danio: z.boolean().nullable(),
-  residuos: z.boolean().nullable(),
-  observacion: z.string().optional(),
-})
+const publicidadAreaSchema = z
+  .object({
+    tiene: z.boolean(),
+    danio: z.boolean().nullable(),
+    residuos: z.boolean().nullable(),
+    observacion: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    // Si TIENE publicidad: OBLIGATORIO nombre de campaña en observaciones
+    if (data.tiene === true) {
+      if (!data.observacion || data.observacion.trim() === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Debes especificar el nombre de la campaña publicitaria',
+          path: ['observacion'],
+        })
+      }
+    }
+
+    // Si NO TIENE publicidad: OBLIGATORIO daño O residuos + observaciones
+    if (data.tiene === false) {
+      const tieneDanio = data.danio === true
+      const tieneResiduos = data.residuos === true
+
+      if (!tieneDanio && !tieneResiduos) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Debes marcar "Con daño" o "Con residuos"',
+          path: ['danio'],
+        })
+      }
+
+      if (!data.observacion || data.observacion.trim() === '') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Debes especificar el motivo',
+          path: ['observacion'],
+        })
+      }
+    }
+  })
 
 const inspectionSchema = z
   .object({
@@ -359,6 +394,36 @@ export const InspectionFormPage = () => {
       )
       .slice(0, 5)
   }, [busQuery, flotaCatalog])
+
+  // Auto-relleno de publicidad según reglas del usuario
+  useEffect(() => {
+    publicityAreas.forEach((area) => {
+      const tiene = publicityState[area.key].tiene
+      const currentDanio = publicityState[area.key].danio
+      const currentResiduos = publicityState[area.key].residuos
+
+      // Si TIENE publicidad → auto-rellenar Sin daño + Limpio
+      if (tiene === true) {
+        if (currentDanio !== false || currentResiduos !== false) {
+          methods.setValue(`publicidad.${area.key}.danio`, false, { shouldDirty: true })
+          methods.setValue(`publicidad.${area.key}.residuos`, false, { shouldDirty: true })
+        }
+      }
+
+      // Si NO TIENE publicidad → resetear auto-relleno (dejar en null para forzar selección)
+      if (tiene === false) {
+        if (currentDanio === false && currentResiduos === false) {
+          methods.setValue(`publicidad.${area.key}.danio`, null, { shouldDirty: true })
+          methods.setValue(`publicidad.${area.key}.residuos`, null, { shouldDirty: true })
+        }
+      }
+    })
+  }, [
+    publicityState.izquierda.tiene,
+    publicityState.derecha.tiene,
+    publicityState.luneta.tiene,
+    methods,
+  ])
 
   const searchBus = async (override?: string) => {
     const source = override ?? busQuery
