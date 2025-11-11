@@ -56,6 +56,12 @@ ALTER TABLE public.mensajes ENABLE ROW LEVEL SECURITY;
 -- PASO 4: POLÍTICAS RLS
 -- ============================================
 
+-- Limpiar políticas existentes primero
+DROP POLICY IF EXISTS "Todos pueden leer mensajes" ON public.mensajes;
+DROP POLICY IF EXISTS "Usuarios autenticados pueden enviar mensajes" ON public.mensajes;
+DROP POLICY IF EXISTS "Solo el autor puede editar su mensaje" ON public.mensajes;
+DROP POLICY IF EXISTS "Solo el autor puede eliminar su mensaje" ON public.mensajes;
+
 -- Política: Todos pueden leer mensajes
 CREATE POLICY "Todos pueden leer mensajes"
 ON public.mensajes
