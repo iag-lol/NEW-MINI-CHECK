@@ -90,6 +90,7 @@ export const SIDEBAR_GROUPS: NavGroup[] = [
     label: 'Sistema',
     icon: Sliders,
     items: [
+      { label: 'Chat', path: '/app/chat', icon: MessageSquare },
       { label: 'Comunicación', path: '/app/comunicacion', icon: MessageSquare },
       { label: 'Configuración', path: '/app/configuracion', icon: Settings, roles: ['SUPERVISOR', 'JEFE DE TERMINAL'] },
     ],

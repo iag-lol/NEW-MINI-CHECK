@@ -435,7 +435,7 @@ export function ChatPage() {
       <ChatToastContainer toasts={toasts} onDismiss={removeToast} />
 
       {/* Contenedor principal del chat - ajustado al layout */}
-      <div className="flex flex-col rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-900" style={{ height: 'calc(100vh - 10rem)' }}>
+      <div className="flex h-[calc(100vh-16rem)] flex-col rounded-2xl border border-slate-200 bg-white shadow-xl md:h-[calc(100vh-10rem)] dark:border-slate-800 dark:bg-slate-900">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-brand-500 to-brand-600 px-6 py-4 dark:border-slate-800">
           <div className="flex items-center gap-3">

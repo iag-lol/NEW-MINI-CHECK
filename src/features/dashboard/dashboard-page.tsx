@@ -508,7 +508,9 @@ export const DashboardPage = () => {
                 ))}
               </LayerGroup>
               <LayerGroup>
-                {liveInspectors.map((inspector) => {
+                {liveInspectors
+                  .filter(inspector => !['15.839.906-7', '18.866.264-1'].includes(inspector.usuario_rut))
+                  .map((inspector) => {
                   const isSelf = user?.rut === inspector.usuario_rut
                   const icon = createInspectorIcon(
                     getInitials(inspector.nombre),
@@ -565,13 +567,15 @@ export const DashboardPage = () => {
           <div className="space-y-4">
             <div className="rounded-2xl border border-slate-100/80 p-4 dark:border-slate-900">
               <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                Inspectores activos en vivo ({liveInspectors.length})
+                Inspectores activos en vivo ({liveInspectors.filter(inspector => !['15.839.906-7', '18.866.264-1'].includes(inspector.usuario_rut)).length})
               </p>
               <ScrollArea className="mt-3 h-40 pr-3">
-                {liveInspectors.length === 0 && (
+                {liveInspectors.filter(inspector => !['15.839.906-7', '18.866.264-1'].includes(inspector.usuario_rut)).length === 0 && (
                   <p className="text-xs text-slate-400">Sin inspectores conectados en las últimas horas.</p>
                 )}
-                {liveInspectors.map((inspector) => (
+                {liveInspectors
+                  .filter(inspector => !['15.839.906-7', '18.866.264-1'].includes(inspector.usuario_rut))
+                  .map((inspector) => (
                   <div key={inspector.usuario_rut} className="mb-3 text-xs last:mb-0">
                     <p className="font-semibold text-slate-800 dark:text-white">
                       {inspector.nombre}
