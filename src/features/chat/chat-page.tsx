@@ -235,9 +235,16 @@ export function ChatPage() {
         const fileName = `${Date.now()}-${imagenFile.name}`
         const { error: uploadError } = await supabase.storage
           .from('chat-images')
-          .upload(fileName, imagenFile)
+          .upload(fileName, imagenFile, {
+            contentType: imagenFile.type,
+            cacheControl: '3600',
+            upsert: false
+          })
 
-        if (uploadError) throw uploadError
+        if (uploadError) {
+          console.error('Error subiendo imagen:', uploadError)
+          throw new Error(`Error al subir imagen: ${uploadError.message}`)
+        }
 
         const { data: { publicUrl } } = supabase.storage
           .from('chat-images')

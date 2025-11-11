@@ -185,11 +185,15 @@ export function ProfilePage() {
       const { error: uploadError } = await supabase.storage
         .from('profile-photos')
         .upload(filePath, file, {
+          contentType: file.type,
           cacheControl: '3600',
           upsert: true,
         })
 
-      if (uploadError) throw uploadError
+      if (uploadError) {
+        console.error('Error subiendo foto de perfil:', uploadError)
+        throw uploadError
+      }
 
       // Obtener URL pública de la foto
       const { data: { publicUrl } } = supabase.storage
