@@ -219,6 +219,10 @@ export function useTheme() {
       return data.tema_color as TemaId
     },
     enabled: !!user,
+    staleTime: 0, // Siempre considera los datos como stale para refrescar
+    gcTime: 1000 * 60 * 5, // Mantener en caché por 5 minutos
+    refetchOnMount: true, // Refrescar al montar el componente
+    refetchOnWindowFocus: false, // No refrescar al enfocar la ventana (evita flickering)
   })
 
   // Aplicar tema cuando cambia

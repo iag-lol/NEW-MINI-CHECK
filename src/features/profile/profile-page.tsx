@@ -117,8 +117,26 @@ export function ProfilePage() {
     // Aplicar tema inmediatamente a la UI
     aplicarTema(temaId)
 
+    // Actualizar inmediatamente el cache de React Query para que se refleje sin esperar
+    queryClient.setQueryData(['user-theme', user?.rut], temaId)
+
     // Guardar en la base de datos
-    updateProfileMutation.mutate({ tema_color: temaId })
+    updateProfileMutation.mutate(
+      { tema_color: temaId },
+      {
+        onSuccess: () => {
+          // Invalidar las queries relacionadas con el tema
+          queryClient.invalidateQueries({ queryKey: ['user-theme', user?.rut] })
+          queryClient.invalidateQueries({ queryKey: ['perfil', user?.rut] })
+
+          push({
+            id: Date.now().toString(),
+            title: 'Tema actualizado',
+            body: `Tema "${TEMAS[temaId].nombre}" aplicado correctamente`,
+          })
+        },
+      }
+    )
   }
 
   const handleLogout = () => {
