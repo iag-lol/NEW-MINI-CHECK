@@ -7,7 +7,6 @@ import type { Database } from '@/types/database'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { StatCard } from '@/components/ui/stat-card'
 import { SkeletonCard } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
@@ -284,9 +283,8 @@ export const ModuleLayout = <T extends TableName>({
 
       {/* Data Table */}
       <Card className="p-0">
-        <ScrollArea className={cn(tableScrollClassName ?? 'max-h-[60vh]', 'pr-4')}>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
+        <div className={cn(tableScrollClassName ?? 'max-h-[60vh]', 'overflow-auto')}>
+          <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
               <thead className="sticky top-0 z-10 bg-slate-50/95 text-left uppercase tracking-wide text-slate-500 backdrop-blur-sm dark:bg-slate-900/95">
                 <tr>
                   {columns.map((column) => (
@@ -329,8 +327,7 @@ export const ModuleLayout = <T extends TableName>({
                 )}
               </tbody>
             </table>
-          </div>
-        </ScrollArea>
+        </div>
       </Card>
     </div>
   )

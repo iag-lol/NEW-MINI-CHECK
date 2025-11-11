@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -189,9 +188,8 @@ export const RecordsPage = () => {
       </Card>
 
       <Card className="p-0">
-        <ScrollArea className="max-h-[70vh]">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
+        <div className="max-h-[70vh] overflow-auto">
+          <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
               <thead className="bg-slate-50/80 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/20">
                 <tr>
                   <th className="px-6 py-3 whitespace-nowrap">Bus</th>
@@ -269,8 +267,7 @@ export const RecordsPage = () => {
               )}
             </tbody>
           </table>
-          </div>
-        </ScrollArea>
+        </div>
       </Card>
 
       <Sheet

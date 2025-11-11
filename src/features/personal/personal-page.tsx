@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { TERMINAL_GEOFENCES, type TerminalSlug } from '@/constants/geofences'
 import { formatRut, validateRut } from '@/lib/rut'
 import dayjs from '@/lib/dayjs'
@@ -191,9 +190,8 @@ export const PersonalPage = () => {
             Actualizar
           </Button>
         </div>
-        <ScrollArea className="mt-4 max-h-[360px] pr-4">
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+        <div className="mt-4 max-h-[360px] overflow-auto">
+          <table className="min-w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
                 <tr>
                   <th className="pb-2 whitespace-nowrap">Nombre</th>
@@ -246,8 +244,7 @@ export const PersonalPage = () => {
                 ))}
               </tbody>
             </table>
-          </div>
-        </ScrollArea>
+        </div>
       </Card>
 
       <Card className="p-6">

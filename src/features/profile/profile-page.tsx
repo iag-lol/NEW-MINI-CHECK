@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { User, Camera, Lock, Palette, Save } from 'lucide-react'
+import { User, Camera, Lock, Palette, Save, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth-store'
 import { Card } from '@/components/ui/card'
@@ -23,7 +23,8 @@ export function ProfilePage() {
   const [passwordActual, setPasswordActual] = useState('')
   const [passwordNueva, setPasswordNueva] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
-  const [fotoPerfil, setFotoPerfil] = useState('')
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Query para obtener perfil completo
   const { data: perfil } = useQuery({
@@ -107,7 +108,6 @@ export function ProfilePage() {
   const handleGuardarPerfil = () => {
     updateProfileMutation.mutate({
       nombre,
-      foto_perfil: fotoPerfil || null,
     })
   }
 
@@ -143,6 +143,81 @@ export function ProfilePage() {
     })
   }
 
+  const handleUploadPhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file || !user) return
+
+    // Validar tipo de archivo
+    if (!file.type.startsWith('image/')) {
+      push({
+        id: Date.now().toString(),
+        title: 'Error',
+        body: 'Por favor selecciona un archivo de imagen válido',
+      })
+      return
+    }
+
+    // Validar tamaño (máximo 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      push({
+        id: Date.now().toString(),
+        title: 'Error',
+        body: 'La imagen debe ser menor a 5MB',
+      })
+      return
+    }
+
+    setUploadingPhoto(true)
+    try {
+      // Crear nombre único para el archivo
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${user.rut}-${Date.now()}.${fileExt}`
+      const filePath = `avatars/${fileName}`
+
+      // Subir archivo a Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('profile-photos')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true,
+        })
+
+      if (uploadError) throw uploadError
+
+      // Obtener URL pública de la foto
+      const { data: { publicUrl } } = supabase.storage
+        .from('profile-photos')
+        .getPublicUrl(filePath)
+
+      // Actualizar perfil con la nueva URL
+      await updateProfileMutation.mutateAsync({
+        foto_perfil: publicUrl,
+      })
+
+      // Actualizar el store de auth
+      queryClient.invalidateQueries({ queryKey: ['perfil', user.rut] })
+
+      push({
+        id: Date.now().toString(),
+        title: 'Foto actualizada',
+        body: 'Tu foto de perfil se ha actualizado correctamente',
+      })
+    } catch (error) {
+      console.error('Error uploading photo:', error)
+      push({
+        id: Date.now().toString(),
+        title: 'Error',
+        body: 'No se pudo subir la foto. Intenta nuevamente.',
+      })
+    } finally {
+      setUploadingPhoto(false)
+      // Limpiar el input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
   if (!user || !perfil) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -167,7 +242,9 @@ export function ProfilePage() {
           <div className="flex items-center gap-6">
             <div className="relative">
               <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-brand-100 dark:bg-brand-900">
-                {perfil.foto_perfil ? (
+                {uploadingPhoto ? (
+                  <Loader2 className="h-8 w-8 animate-spin text-brand-600" />
+                ) : perfil.foto_perfil ? (
                   <img
                     src={perfil.foto_perfil}
                     alt="Foto de perfil"
@@ -177,7 +254,20 @@ export function ProfilePage() {
                   <User className="h-12 w-12 text-brand-600" />
                 )}
               </div>
-              <button className="absolute bottom-0 right-0 rounded-full bg-brand-500 p-2 text-white shadow-lg hover:bg-brand-600">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleUploadPhoto}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingPhoto}
+                className="absolute bottom-0 right-0 rounded-full bg-brand-500 p-2 text-white shadow-lg hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Cambiar foto de perfil"
+              >
                 <Camera className="h-4 w-4" />
               </button>
             </div>
@@ -201,24 +291,13 @@ export function ProfilePage() {
               />
             </div>
 
-            <div>
-              <Label htmlFor="foto">URL de Foto de Perfil</Label>
-              <Input
-                id="foto"
-                value={fotoPerfil}
-                onChange={(e) => setFotoPerfil(e.target.value)}
-                placeholder="https://ejemplo.com/foto.jpg"
-                className="mt-2"
-              />
-            </div>
-
             <Button
               onClick={handleGuardarPerfil}
               disabled={updateProfileMutation.isPending}
               className="gap-2"
             >
               <Save className="h-4 w-4" />
-              {updateProfileMutation.isPending ? 'Guardando...' : 'Guardar Cambios'}
+              {updateProfileMutation.isPending ? 'Guardando...' : 'Guardar Nombre'}
             </Button>
           </div>
         </Card>

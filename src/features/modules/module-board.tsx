@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase'
 import type { Database } from '@/types/database'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 
 type TableName = keyof Database['public']['Tables']
@@ -65,9 +64,8 @@ export const ModuleBoard = <T extends TableName>({
           Actualizar
         </Button>
       </div>
-      <ScrollArea className="max-h-[70vh]">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
+      <div className="max-h-[70vh] overflow-auto">
+        <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
             <thead className="bg-slate-50/80 text-left uppercase tracking-wide text-slate-500 dark:bg-slate-900/30">
               <tr>
                 {columns.map((column) => (
@@ -101,8 +99,7 @@ export const ModuleBoard = <T extends TableName>({
               )}
             </tbody>
           </table>
-        </div>
-      </ScrollArea>
+      </div>
     </Card>
   )
 }
