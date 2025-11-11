@@ -106,8 +106,8 @@ const steps = [
   { key: 'tag', label: 'TAG' },
   { key: 'camaras', label: 'Cámaras' },
   { key: 'extintores', label: 'Extintores' },
-  { key: 'mobileye', label: 'Mobileye' },
   { key: 'odometro', label: 'Odómetro' },
+  { key: 'mobileye', label: 'Mobileye' },
   { key: 'publicidad', label: 'Publicidad' },
   { key: 'cierre', label: 'Cierre' },
 ] as const
@@ -725,16 +725,20 @@ export const InspectionFormPage = () => {
         }
         break
       case 'camaras': {
-        cameraHardwareQuestions.forEach((item) =>
-          requireBoolean(snapshot.camaras[item.field], `Cámaras · ${item.label}`)
-        )
-        requireBoolean(snapshot.camaras.visiblesMonitor, 'Cámaras · Visibilidad total')
-        requireBoolean(snapshot.camaras.activaReversa, 'Cámaras · Activación con reversa')
-        requireBoolean(snapshot.camaras.activaPuertas, 'Cámaras · Activación de puertas')
-        requireBoolean(
-          snapshot.camaras.visiblesPuertasCerradas,
-          'Cámaras · Visibles con puertas cerradas'
-        )
+        if (snapshot.camaras.monitorEstado === 'FUNCIONA') {
+          cameraHardwareQuestions.forEach((item) =>
+            requireBoolean(snapshot.camaras[item.field], `Cámaras · ${item.label}`)
+          )
+          requireBoolean(snapshot.camaras.visiblesMonitor, 'Cámaras · Visibilidad total')
+          requireBoolean(snapshot.camaras.activaReversa, 'Cámaras · Activación con reversa')
+          requireBoolean(snapshot.camaras.activaPuertas, 'Cámaras · Activación de puertas')
+          requireBoolean(
+            snapshot.camaras.visiblesPuertasCerradas,
+            'Cámaras · Visibles con puertas cerradas'
+          )
+        } else if (!snapshot.camaras.observacion?.trim()) {
+          missing.push('Describe la falla del monitor para generar ticket')
+        }
         break
       }
       case 'extintores': {
@@ -940,6 +944,8 @@ export const InspectionFormPage = () => {
 
   const renderCamaras = () => {
     const camaras = methods.watch('camaras')
+    const monitorEstado = camaras.monitorEstado
+    const monitorActivo = monitorEstado === 'FUNCIONA'
     return (
       <SectionCard title="Cámaras" description="Preguntas específicas por componente">
         <div className="grid gap-4 md:grid-cols-2">
@@ -966,46 +972,55 @@ export const InspectionFormPage = () => {
             />
           </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {cameraHardwareQuestions.map((item) => (
-            <BinaryQuestion
-              key={item.field}
-              label={`${item.label} (estado físico)`}
-              positiveLabel="Operativa"
-              negativeLabel="Con daño"
-              value={camaras[item.field]}
-              onChange={(value) =>
-                methods.setValue(`camaras.${item.field}` as CameraPath, value, {
-                  shouldDirty: true,
-                })
-              }
-            />
-          ))}
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <BinaryQuestion
-            label="¿Todas las cámaras son visibles?"
-            value={camaras.visiblesMonitor}
-            onChange={(value) => methods.setValue('camaras.visiblesMonitor', value)}
-          />
-          <BinaryQuestion
-            label="¿La cámara trasera se activa con reversa?"
-            value={camaras.activaReversa}
-            onChange={(value) => methods.setValue('camaras.activaReversa', value)}
-          />
-          <BinaryQuestion
-            label="¿Las cámaras de puertas se activan al abrirse?"
-            value={camaras.activaPuertas}
-            onChange={(value) => methods.setValue('camaras.activaPuertas', value)}
-          />
-          <BinaryQuestion
-            label="¿Se muestran con puertas cerradas?"
-            value={camaras.visiblesPuertasCerradas}
-            onChange={(value) => methods.setValue('camaras.visiblesPuertasCerradas', value)}
-          />
-        </div>
+        {monitorActivo ? (
+          <>
+            <div className="grid gap-4 md:grid-cols-2">
+              {cameraHardwareQuestions.map((item) => (
+                <BinaryQuestion
+                  key={item.field}
+                  label={`${item.label} (estado físico)`}
+                  positiveLabel="Operativa"
+                  negativeLabel="Con daño"
+                  value={camaras[item.field]}
+                  onChange={(value) =>
+                    methods.setValue(`camaras.${item.field}` as CameraPath, value, {
+                      shouldDirty: true,
+                    })
+                  }
+                />
+              ))}
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <BinaryQuestion
+                label="¿Todas las cámaras son visibles?"
+                value={camaras.visiblesMonitor}
+                onChange={(value) => methods.setValue('camaras.visiblesMonitor', value)}
+              />
+              <BinaryQuestion
+                label="¿La cámara trasera se activa con reversa?"
+                value={camaras.activaReversa}
+                onChange={(value) => methods.setValue('camaras.activaReversa', value)}
+              />
+              <BinaryQuestion
+                label="¿Las cámaras de puertas se activan al abrirse?"
+                value={camaras.activaPuertas}
+                onChange={(value) => methods.setValue('camaras.activaPuertas', value)}
+              />
+              <BinaryQuestion
+                label="¿Se muestran con puertas cerradas?"
+                value={camaras.visiblesPuertasCerradas}
+                onChange={(value) => methods.setValue('camaras.visiblesPuertasCerradas', value)}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+            El monitor no está operativo, por lo que no se continuó con la revisión de cámaras.
+            Describe la falla para generar el ticket correspondiente.
+          </div>
+        )}
         <div>
-          <Label>Observaciones</Label>
+          <Label>Observaciones {monitorActivo ? '' : '(obligatorio)'}</Label>
           <Textarea
             className="mt-2"
             value={camaras.observacion ?? ''}
