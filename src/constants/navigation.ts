@@ -51,12 +51,13 @@ export const SIDEBAR_GROUPS: NavGroup[] = [
       { label: 'Dashboard', path: '/app/dashboard', icon: LayoutDashboard },
       { label: 'Nueva Inspección', path: '/app/formulario', icon: ClipboardList },
       { label: 'Pendientes', path: '/app/pendientes', icon: ClipboardCheck },
-      { label: 'Tickets', path: '/app/tickets', icon: Ticket },
+      { label: 'Tickets', path: '/app/tickets', icon: Ticket, roles: ['SUPERVISOR', 'JEFE DE TERMINAL'] },
     ],
   },
   {
     label: 'Módulos de Inspección',
     icon: Layers,
+    roles: ['SUPERVISOR', 'JEFE DE TERMINAL'],
     items: [
       { label: 'Cámaras', path: '/app/camaras', icon: Camera },
       { label: 'TAG', path: '/app/tag', icon: ShieldCheck },
@@ -70,8 +71,8 @@ export const SIDEBAR_GROUPS: NavGroup[] = [
     label: 'Gestión',
     icon: FolderKanban,
     items: [
-      { label: 'Flota', path: '/app/flota', icon: Bus },
-      { label: 'Personal', path: '/app/personal', icon: Users2 },
+      { label: 'Flota', path: '/app/flota', icon: Bus, roles: ['SUPERVISOR', 'JEFE DE TERMINAL'] },
+      { label: 'Personal', path: '/app/personal', icon: Users2, roles: ['SUPERVISOR', 'JEFE DE TERMINAL'] },
       { label: 'Registros', path: '/app/registros', icon: Activity },
     ],
   },
@@ -81,17 +82,16 @@ export const SIDEBAR_GROUPS: NavGroup[] = [
     roles: ['SUPERVISOR', 'JEFE DE TERMINAL'],
     items: [
       { label: 'Reportes', path: '/app/reportes', icon: PieChart },
-      { label: 'Reportes Avanzados', path: '/app/analytics', icon: LineChart, roles: ['SUPERVISOR', 'JEFE DE TERMINAL'] },
-      { label: 'Informes', path: '/app/informes', icon: FileBarChart, roles: ['SUPERVISOR', 'JEFE DE TERMINAL'] },
+      { label: 'Reportes Avanzados', path: '/app/analytics', icon: LineChart },
+      { label: 'Informes', path: '/app/informes', icon: FileBarChart },
     ],
   },
   {
     label: 'Sistema',
     icon: Sliders,
-    roles: ['SUPERVISOR'],
     items: [
-      { label: 'Comunicación', path: '/app/comunicacion', icon: MessageSquare, roles: ['SUPERVISOR'] },
-      { label: 'Configuración', path: '/app/configuracion', icon: Settings, roles: ['SUPERVISOR'] },
+      { label: 'Comunicación', path: '/app/comunicacion', icon: MessageSquare },
+      { label: 'Configuración', path: '/app/configuracion', icon: Settings, roles: ['SUPERVISOR', 'JEFE DE TERMINAL'] },
     ],
   },
 ]
