@@ -14,7 +14,7 @@ import { formatRut, validateRut } from '@/lib/rut'
 import dayjs from '@/lib/dayjs'
 import type { Role, Tables } from '@/types/database'
 
-const cargoOptions: Role[] = ['INSPECTOR', 'SUPERVISOR']
+const cargoOptions: Role[] = ['INSPECTOR', 'SUPERVISOR', 'JEFE DE TERMINAL']
 const terminalOptions: TerminalSlug[] = TERMINAL_GEOFENCES.map((terminal) => terminal.name)
 
 export const PersonalPage = () => {
@@ -71,9 +71,10 @@ export const PersonalPage = () => {
   const stats = useMemo(() => {
     const total = usuarios?.length ?? 0
     const supervisores = usuarios?.filter((user) => user.cargo === 'SUPERVISOR').length ?? 0
-    const inspectores = total - supervisores
+    const jefes = usuarios?.filter((user) => user.cargo === 'JEFE DE TERMINAL').length ?? 0
+    const inspectores = usuarios?.filter((user) => user.cargo === 'INSPECTOR').length ?? 0
     const terminales = new Set(usuarios?.map((user) => user.terminal))
-    return { total, supervisores, inspectores, terminales: terminales.size }
+    return { total, supervisores, jefes, inspectores, terminales: terminales.size }
   }, [usuarios])
 
   const resetFeedback = () => setFeedback(null)
@@ -151,7 +152,7 @@ export const PersonalPage = () => {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <StatCard
           title="Personal habilitado"
           value={stats.total}
@@ -167,6 +168,13 @@ export const PersonalPage = () => {
           variant="warning"
         />
         <StatCard
+          title="Jefes de Terminal"
+          value={stats.jefes}
+          description="Gestión de terminales"
+          icon={ShieldCheck}
+          variant="success"
+        />
+        <StatCard
           title="Inspectores"
           value={stats.inspectores}
           description="Operativos en terreno"
@@ -178,7 +186,7 @@ export const PersonalPage = () => {
           value={stats.terminales}
           description="Distribución actual"
           icon={MapPin}
-          variant="info"
+          variant="default"
         />
       </div>
 
@@ -224,7 +232,15 @@ export const PersonalPage = () => {
                     </td>
                     <td className="py-3 whitespace-nowrap">{usuario.rut}</td>
                     <td className="py-3 whitespace-nowrap">
-                      <Badge variant={usuario.cargo === 'SUPERVISOR' ? 'warning' : 'outline'}>
+                      <Badge
+                        variant={
+                          usuario.cargo === 'SUPERVISOR'
+                            ? 'warning'
+                            : usuario.cargo === 'JEFE DE TERMINAL'
+                              ? 'success'
+                              : 'outline'
+                        }
+                      >
                         {usuario.cargo}
                       </Badge>
                     </td>

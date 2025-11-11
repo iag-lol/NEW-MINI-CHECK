@@ -20,8 +20,8 @@ export function RealtimeNotifications() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
-    // Solo supervisores reciben notificaciones
-    if (!user || user.cargo !== 'SUPERVISOR') return
+    // Solo supervisores y jefes de terminal reciben notificaciones
+    if (!user || (user.cargo !== 'SUPERVISOR' && user.cargo !== 'JEFE DE TERMINAL')) return
 
     // Crear elemento de audio para notificaciones
     audioRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZTA0PVKno8a1aGAg+lt7yuHEiBSl+zPLaizsIGGS57OihUBELTqPl8LNfGg4=')

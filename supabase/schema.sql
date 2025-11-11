@@ -21,7 +21,7 @@ create table if not exists public.flota (
 create table if not exists public.usuarios (
   rut text primary key,
   nombre text not null,
-  cargo text not null check (cargo in ('INSPECTOR','SUPERVISOR')),
+  cargo text not null check (cargo in ('INSPECTOR','SUPERVISOR','JEFE DE TERMINAL')),
   terminal text not null,
   password text not null,
   foto_url text,

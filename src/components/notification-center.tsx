@@ -25,9 +25,9 @@ export const NotificationCenter = () => {
   const { notifications, unread, markAll, requestPermission, permissionGranted } = useNotificationStore()
   const { user } = useAuthStore()
 
-  // Request notification permission for supervisors
+  // Request notification permission for supervisors and jefes de terminal
   useEffect(() => {
-    if (user?.cargo === 'SUPERVISOR' && !permissionGranted) {
+    if ((user?.cargo === 'SUPERVISOR' || user?.cargo === 'JEFE DE TERMINAL') && !permissionGranted) {
       requestPermission()
     }
   }, [user, permissionGranted, requestPermission])

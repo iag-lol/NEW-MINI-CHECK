@@ -29,7 +29,7 @@ export interface NavItem {
   label: string
   path: string
   icon: ComponentType<{ className?: string }>
-  roles?: Array<'INSPECTOR' | 'SUPERVISOR'>
+  roles?: Array<'INSPECTOR' | 'SUPERVISOR' | 'JEFE DE TERMINAL'>
   badge?: string
 }
 
@@ -38,7 +38,7 @@ export interface NavGroup {
   icon: ComponentType<{ className?: string }>
   items: NavItem[]
   defaultOpen?: boolean
-  roles?: Array<'INSPECTOR' | 'SUPERVISOR'>
+  roles?: Array<'INSPECTOR' | 'SUPERVISOR' | 'JEFE DE TERMINAL'>
 }
 
 // Navegación agrupada y organizada
@@ -78,11 +78,11 @@ export const SIDEBAR_GROUPS: NavGroup[] = [
   {
     label: 'Análisis',
     icon: BarChart3,
-    roles: ['SUPERVISOR'],
+    roles: ['SUPERVISOR', 'JEFE DE TERMINAL'],
     items: [
       { label: 'Reportes', path: '/app/reportes', icon: PieChart },
-      { label: 'Reportes Avanzados', path: '/app/analytics', icon: LineChart, roles: ['SUPERVISOR'] },
-      { label: 'Informes', path: '/app/informes', icon: FileBarChart, roles: ['SUPERVISOR'] },
+      { label: 'Reportes Avanzados', path: '/app/analytics', icon: LineChart, roles: ['SUPERVISOR', 'JEFE DE TERMINAL'] },
+      { label: 'Informes', path: '/app/informes', icon: FileBarChart, roles: ['SUPERVISOR', 'JEFE DE TERMINAL'] },
     ],
   },
   {

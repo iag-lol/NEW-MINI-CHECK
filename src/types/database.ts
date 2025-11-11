@@ -1,4 +1,4 @@
-export type Role = 'INSPECTOR' | 'SUPERVISOR'
+export type Role = 'INSPECTOR' | 'SUPERVISOR' | 'JEFE DE TERMINAL'
 
 type TableRecord<Row, Insert = Row, Update = Partial<Row>> = {
   Row: Row

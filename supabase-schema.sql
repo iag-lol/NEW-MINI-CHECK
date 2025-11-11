@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS usuarios (
   rut TEXT PRIMARY KEY,
   nombre TEXT NOT NULL,
-  cargo TEXT NOT NULL CHECK (cargo IN ('INSPECTOR', 'SUPERVISOR')),
+  cargo TEXT NOT NULL CHECK (cargo IN ('INSPECTOR', 'SUPERVISOR', 'JEFE DE TERMINAL')),
   terminal TEXT NOT NULL,
   password TEXT NOT NULL, -- Hash bcrypt
   foto_url TEXT,
