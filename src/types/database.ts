@@ -177,6 +177,22 @@ type UsuarioActivoRow = {
   updated_at: string
 }
 
+type MensajeRow = {
+  id: string
+  created_at: string
+  usuario_rut: string
+  usuario_nombre: string
+  usuario_cargo: Role
+  usuario_foto: string | null
+  mensaje: string
+  imagen_url: string | null
+  menciones: string[]
+  leido_por: string[]
+  editado: boolean
+  editado_en: string | null
+  deleted: boolean
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -213,6 +229,7 @@ export type Database = {
       personal: TableRecord<PersonalRow, Omit<PersonalRow, 'id' | 'created_at'>>
       flota: TableRecord<FlotaRow, Omit<FlotaRow, 'id' | 'created_at'>>
       usuarios_activos: TableRecord<UsuarioActivoRow, Omit<UsuarioActivoRow, 'created_at' | 'updated_at'>>
+      mensajes: TableRecord<MensajeRow, Omit<MensajeRow, 'id' | 'created_at' | 'editado' | 'editado_en' | 'deleted' | 'leido_por'>>
     }
     Views: Record<string, never>
     Functions: Record<string, never>

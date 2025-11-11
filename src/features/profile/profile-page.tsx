@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { User, Camera, Lock, Palette, Save, Loader2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { User, Camera, Lock, Palette, Save, Loader2, LogOut } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth-store'
 import { Card } from '@/components/ui/card'
@@ -14,9 +15,10 @@ import type { Tables } from '@/types/database'
 type Usuario = Tables<'usuarios'>
 
 export function ProfilePage() {
-  const { user } = useAuthStore()
+  const { user, logout } = useAuthStore()
   const { push } = useNotificationStore()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { temaActual, aplicarTema } = useTheme()
 
   const [nombre, setNombre] = useState(user?.nombre || '')
@@ -117,6 +119,11 @@ export function ProfilePage() {
 
     // Guardar en la base de datos
     updateProfileMutation.mutate({ tema_color: temaId })
+  }
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
   }
 
   const handleCambiarPassword = () => {
@@ -414,6 +421,18 @@ export function ProfilePage() {
             ))}
           </div>
         </Card>
+
+        {/* Botón de cerrar sesión (solo visible en móvil) */}
+        <div className="block md:hidden">
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            className="w-full gap-2 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+          >
+            <LogOut className="h-5 w-5" />
+            Cerrar Sesión
+          </Button>
+        </div>
       </div>
     </div>
   )

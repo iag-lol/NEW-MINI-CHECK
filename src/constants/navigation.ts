@@ -102,13 +102,14 @@ export const SIDEBAR_ITEMS: NavItem[] = SIDEBAR_GROUPS.flatMap(group => group.it
 export interface MobileNavItem {
   label: string
   path: string
-  key: 'formulario' | 'dashboard' | 'pendientes' | 'perfil'
+  key: 'formulario' | 'dashboard' | 'comunicacion' | 'pendientes' | 'perfil'
   icon: ComponentType<{ className?: string }>
 }
 
 export const MOBILE_ITEMS: MobileNavItem[] = [
   { label: 'Inicio', path: '/app/formulario', key: 'formulario', icon: ClipboardList },
   { label: 'Dashboard', path: '/app/dashboard', key: 'dashboard', icon: LayoutDashboard },
+  { label: 'Chat', path: '/app/comunicacion', key: 'comunicacion', icon: MessageSquare },
   { label: 'Pendientes', path: '/app/pendientes', key: 'pendientes', icon: Map },
   { label: 'Perfil', path: '/app/perfil', key: 'perfil', icon: Users2 },
 ]
