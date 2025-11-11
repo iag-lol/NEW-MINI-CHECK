@@ -14,6 +14,7 @@ import { ReportesPage } from '@/features/reportes/reportes-page'
 import { ReportsPage } from '@/features/reports/reports-page'
 import { InformesPage } from '@/features/informes/informes-page'
 import { ComunicacionPage } from '@/features/comunicacion/comunicacion-page'
+import { ChatPage } from '@/features/chat/chat-page'
 import { PersonalPage } from '@/features/personal/personal-page'
 import { ConfiguracionPage } from '@/features/configuracion/configuracion-page'
 import { PendientesPage } from '@/features/pendientes/pendientes-page'
@@ -45,6 +46,7 @@ export const router = createBrowserRouter([
       { path: 'analytics', element: <ReportsPage /> },
       { path: 'informes', element: <InformesPage /> },
       { path: 'comunicacion', element: <ComunicacionPage /> },
+      { path: 'chat', element: <ChatPage /> },
       { path: 'personal', element: <PersonalPage /> },
       { path: 'configuracion', element: <ConfiguracionPage /> },
       { path: 'pendientes', element: <PendientesPage /> },
