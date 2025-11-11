@@ -192,59 +192,61 @@ export const PersonalPage = () => {
           </Button>
         </div>
         <ScrollArea className="mt-4 max-h-[360px] pr-4">
-          <table className="min-w-full text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
-              <tr>
-                <th className="pb-2">Nombre</th>
-                <th className="pb-2">RUT</th>
-                <th className="pb-2">Cargo</th>
-                <th className="pb-2">Terminal</th>
-                <th className="pb-2">Alta</th>
-                <th className="pb-2 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-900/60">
-              {loadingUsuarios && (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-slate-400">
-                    Cargando personal...
-                  </td>
+                  <th className="pb-2 whitespace-nowrap">Nombre</th>
+                  <th className="pb-2 whitespace-nowrap">RUT</th>
+                  <th className="pb-2 whitespace-nowrap">Cargo</th>
+                  <th className="pb-2 whitespace-nowrap">Terminal</th>
+                  <th className="pb-2 whitespace-nowrap">Alta</th>
+                  <th className="pb-2 text-right whitespace-nowrap">Acciones</th>
                 </tr>
-              )}
-              {!loadingUsuarios && usuarios?.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-6 text-center text-slate-400">
-                    Aún no hay usuarios registrados.
-                  </td>
-                </tr>
-              )}
-              {usuarios?.map((usuario) => (
-                <tr key={usuario.rut} className="text-slate-600 dark:text-slate-300">
-                  <td className="py-3 font-semibold text-slate-900 dark:text-white">
-                    {usuario.nombre}
-                  </td>
-                  <td className="py-3">{usuario.rut}</td>
-                  <td className="py-3">
-                    <Badge variant={usuario.cargo === 'SUPERVISOR' ? 'warning' : 'outline'}>
-                      {usuario.cargo}
-                    </Badge>
-                  </td>
-                  <td className="py-3">{usuario.terminal}</td>
-                  <td className="py-3">{dayjs(usuario.created_at).format('DD MMM HH:mm')}</td>
-                  <td className="py-3 text-right">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="rounded-2xl text-xs"
-                      onClick={() => resetPassword(usuario.rut)}
-                    >
-                      Resetear contraseña
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-900/60">
+                {loadingUsuarios && (
+                  <tr>
+                    <td colSpan={6} className="py-6 text-center text-slate-400">
+                      Cargando personal...
+                    </td>
+                  </tr>
+                )}
+                {!loadingUsuarios && usuarios?.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-6 text-center text-slate-400">
+                      Aún no hay usuarios registrados.
+                    </td>
+                  </tr>
+                )}
+                {usuarios?.map((usuario) => (
+                  <tr key={usuario.rut} className="text-slate-600 dark:text-slate-300">
+                    <td className="py-3 font-semibold text-slate-900 dark:text-white whitespace-nowrap">
+                      {usuario.nombre}
+                    </td>
+                    <td className="py-3 whitespace-nowrap">{usuario.rut}</td>
+                    <td className="py-3 whitespace-nowrap">
+                      <Badge variant={usuario.cargo === 'SUPERVISOR' ? 'warning' : 'outline'}>
+                        {usuario.cargo}
+                      </Badge>
+                    </td>
+                    <td className="py-3 whitespace-nowrap">{usuario.terminal}</td>
+                    <td className="py-3 whitespace-nowrap">{dayjs(usuario.created_at).format('DD MMM HH:mm')}</td>
+                    <td className="py-3 text-right whitespace-nowrap">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-2xl text-xs"
+                        onClick={() => resetPassword(usuario.rut)}
+                      >
+                        Resetear contraseña
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </ScrollArea>
       </Card>
 

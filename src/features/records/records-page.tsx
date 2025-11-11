@@ -190,18 +190,19 @@ export const RecordsPage = () => {
 
       <Card className="p-0">
         <ScrollArea className="max-h-[70vh]">
-          <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
-            <thead className="bg-slate-50/80 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/20">
-              <tr>
-                <th className="px-6 py-3">Bus</th>
-                <th className="px-6 py-3">Inspector</th>
-                <th className="px-6 py-3">Terminal</th>
-                <th className="px-6 py-3">Estado</th>
-                <th className="px-6 py-3">Fecha</th>
-                <th className="px-6 py-3">Observación</th>
-                <th className="px-6 py-3 text-right">Acciones</th>
-              </tr>
-            </thead>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
+              <thead className="bg-slate-50/80 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/20">
+                <tr>
+                  <th className="px-6 py-3 whitespace-nowrap">Bus</th>
+                  <th className="px-6 py-3 whitespace-nowrap">Inspector</th>
+                  <th className="px-6 py-3 whitespace-nowrap">Terminal</th>
+                  <th className="px-6 py-3 whitespace-nowrap">Estado</th>
+                  <th className="px-6 py-3 whitespace-nowrap">Fecha</th>
+                  <th className="px-6 py-3 whitespace-nowrap">Observación</th>
+                  <th className="px-6 py-3 text-right whitespace-nowrap">Acciones</th>
+                </tr>
+              </thead>
             <tbody className="divide-y divide-slate-100/70 dark:divide-slate-900/60">
               {isLoading && (
                 <tr>
@@ -213,21 +214,25 @@ export const RecordsPage = () => {
               {!isLoading &&
                 revisiones?.map((revision) => (
                   <tr key={revision.id} className="text-slate-600">
-                    <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white">
+                    <td className="px-6 py-4 font-semibold text-slate-900 dark:text-white whitespace-nowrap">
                       {revision.bus_ppu} · #{revision.bus_interno}
                     </td>
-                    <td className="px-6 py-4">{revision.inspector_nombre}</td>
-                    <td className="px-6 py-4">{revision.terminal_detectado}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">{revision.inspector_nombre}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">{revision.terminal_detectado}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <Badge variant={revision.estado_bus === 'EN_PANNE' ? 'danger' : 'success'}>
                         {revision.estado_bus}
                       </Badge>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {dayjs(revision.created_at).format('DD MMM · HH:mm')}
                     </td>
-                    <td className="px-6 py-4 text-slate-500">{revision.observaciones}</td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-slate-500 max-w-xs">
+                      <div className="truncate" title={revision.observaciones || ''}>
+                        {revision.observaciones}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right whitespace-nowrap">
                       <div className="flex justify-end gap-2">
                         <Button
                           variant="ghost"
@@ -264,6 +269,7 @@ export const RecordsPage = () => {
               )}
             </tbody>
           </table>
+          </div>
         </ScrollArea>
       </Card>
 

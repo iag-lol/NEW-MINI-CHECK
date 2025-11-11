@@ -66,40 +66,42 @@ export const ModuleBoard = <T extends TableName>({
         </Button>
       </div>
       <ScrollArea className="max-h-[70vh]">
-        <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
-          <thead className="bg-slate-50/80 text-left uppercase tracking-wide text-slate-500 dark:bg-slate-900/30">
-            <tr>
-              {columns.map((column) => (
-                <th key={column.label} className={cn('px-8 py-3 font-semibold', column.className)}>
-                  {column.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100/70 dark:divide-slate-900/70">
-            {data?.map((row) => {
-              const rowKey =
-                'id' in row && row.id ? (row.id as string) : JSON.stringify(row)
-              return (
-                <tr key={rowKey}>
-                  {columns.map((column) => (
-                    <td key={column.label} className={cn('px-8 py-4', column.className)}>
-                      {column.render(row)}
-                    </td>
-                  ))}
-                </tr>
-              )
-            })}
-            {data?.length === 0 && (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
+            <thead className="bg-slate-50/80 text-left uppercase tracking-wide text-slate-500 dark:bg-slate-900/30">
               <tr>
-                <td className="px-8 py-8 text-center text-slate-400" colSpan={columns.length}>
-                  No hay registros para mostrar todavía. Las revisiones completadas serán
-                  visibles al instante gracias a Supabase Realtime.
-                </td>
+                {columns.map((column) => (
+                  <th key={column.label} className={cn('px-8 py-3 font-semibold whitespace-nowrap', column.className)}>
+                    {column.label}
+                  </th>
+                ))}
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100/70 dark:divide-slate-900/70">
+              {data?.map((row) => {
+                const rowKey =
+                  'id' in row && row.id ? (row.id as string) : JSON.stringify(row)
+                return (
+                  <tr key={rowKey}>
+                    {columns.map((column) => (
+                      <td key={column.label} className={cn('px-8 py-4', column.className)}>
+                        {column.render(row)}
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })}
+              {data?.length === 0 && (
+                <tr>
+                  <td className="px-8 py-8 text-center text-slate-400" colSpan={columns.length}>
+                    No hay registros para mostrar todavía. Las revisiones completadas serán
+                    visibles al instante gracias a Supabase Realtime.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </ScrollArea>
     </Card>
   )

@@ -285,49 +285,51 @@ export const ModuleLayout = <T extends TableName>({
       {/* Data Table */}
       <Card className="p-0">
         <ScrollArea className={cn(tableScrollClassName ?? 'max-h-[60vh]', 'pr-4')}>
-          <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
-            <thead className="sticky top-0 z-10 bg-slate-50/95 text-left uppercase tracking-wide text-slate-500 backdrop-blur-sm dark:bg-slate-900/95">
-              <tr>
-                {columns.map((column) => (
-                  <th
-                    key={column.label}
-                    className={cn('px-6 py-4 font-semibold', column.className)}
-                  >
-                    {column.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100/70 bg-white dark:divide-slate-900/70 dark:bg-slate-950">
-              {filteredData?.map((row) => {
-                const rowKey = 'id' in row && row.id ? (row.id as string) : JSON.stringify(row)
-                return (
-                  <tr
-                    key={rowKey}
-                    className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-900/50"
-                  >
-                    {columns.map((column) => (
-                      <td key={column.label} className={cn('px-6 py-4', column.className)}>
-                        {column.render(row)}
-                      </td>
-                    ))}
-                  </tr>
-                )
-              })}
-              {filteredData?.length === 0 && (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
+              <thead className="sticky top-0 z-10 bg-slate-50/95 text-left uppercase tracking-wide text-slate-500 backdrop-blur-sm dark:bg-slate-900/95">
                 <tr>
-                  <td
-                    className="px-6 py-12 text-center text-slate-400"
-                    colSpan={columns.length}
-                  >
-                    {data?.length === 0
-                      ? 'No hay registros para mostrar todavía. Las revisiones completadas serán visibles al instante gracias a Supabase Realtime.'
-                      : 'No se encontraron resultados con los filtros aplicados.'}
-                  </td>
+                  {columns.map((column) => (
+                    <th
+                      key={column.label}
+                      className={cn('px-6 py-4 font-semibold whitespace-nowrap', column.className)}
+                    >
+                      {column.label}
+                    </th>
+                  ))}
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100/70 bg-white dark:divide-slate-900/70 dark:bg-slate-950">
+                {filteredData?.map((row) => {
+                  const rowKey = 'id' in row && row.id ? (row.id as string) : JSON.stringify(row)
+                  return (
+                    <tr
+                      key={rowKey}
+                      className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-900/50"
+                    >
+                      {columns.map((column) => (
+                        <td key={column.label} className={cn('px-6 py-4', column.className)}>
+                          {column.render(row)}
+                        </td>
+                      ))}
+                    </tr>
+                  )
+                })}
+                {filteredData?.length === 0 && (
+                  <tr>
+                    <td
+                      className="px-6 py-12 text-center text-slate-400"
+                      colSpan={columns.length}
+                    >
+                      {data?.length === 0
+                        ? 'No hay registros para mostrar todavía. Las revisiones completadas serán visibles al instante gracias a Supabase Realtime.'
+                        : 'No se encontraron resultados con los filtros aplicados.'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </ScrollArea>
       </Card>
     </div>
