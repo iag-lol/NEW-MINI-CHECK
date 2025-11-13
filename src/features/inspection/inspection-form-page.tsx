@@ -426,72 +426,97 @@ export const InspectionFormPage = () => {
   ])
 
   const searchBus = async (override?: string) => {
+    // VALIDACIÓN GPS: Bloquear búsqueda si no hay GPS activo
+    if (!gpsActive || !trackingLocation) {
+      setBusAlert('⚠️ Debes autorizar el GPS antes de buscar buses. Los registros sin ubicación GPS no son válidos.')
+      return
+    }
+
     const source = override ?? busQuery
     if (!source.trim()) return
     const query = source.trim().toUpperCase()
-    const { data, error } = await supabase
-      .from('flota')
-      .select('*')
-      .or(`ppu.eq.${query},numero_interno.eq.${query}`)
-      .maybeSingle()
-    if (error) {
-      setBus(null)
-      setBusAlert('No pudimos buscar la PPU, intenta nuevamente.')
-      return
-    }
-    if (!data) {
-      setBus(null)
-      setBusAlert('PPU no registrada en la flota.')
-      return
-    }
-    const busRecord = data as Tables<'flota'>
-    setBus(busRecord)
-    setBusAlert(null)
-    const currentWeek = dayjs().isoWeek()
-    const { data: revisiones } = await supabase
-      .from('revisiones')
-      .select('id, created_at, inspector_nombre')
-      .eq('bus_ppu', busRecord.ppu)
-      .order('created_at', { ascending: false })
-      .limit(1)
-    if (revisiones?.length) {
-      const lastRevision = revisiones[0]
-      const lastDate = dayjs(lastRevision.created_at)
-      const currentWeekYear = getIsoWeekYear()
-      const lastWeekYear = getIsoWeekYear(lastDate)
-      if (lastDate.isoWeek() === currentWeek && lastWeekYear === currentWeekYear) {
-        setBusAlert(
-          `Este bus ya tiene revisión registrada esta semana (${lastDate.format(
-            'dddd D MMM · HH:mm'
-          )} hrs por ${lastRevision.inspector_nombre ?? 'otro inspector'}).`
-        )
-      } else {
-        setBusAlert(null)
+
+    try {
+      const { data, error } = await supabase
+        .from('flota')
+        .select('*')
+        .or(`ppu.eq.${query},numero_interno.eq.${query}`)
+        .maybeSingle()
+
+      if (error) {
+        setBus(null)
+        setBusAlert('No pudimos buscar la PPU, intenta nuevamente.')
+        return
       }
+      if (!data) {
+        setBus(null)
+        setBusAlert('PPU no registrada en la flota.')
+        return
+      }
+      const busRecord = data as Tables<'flota'>
+      setBus(busRecord)
+      setBusAlert(null)
+
+      const currentWeek = dayjs().isoWeek()
+      const { data: revisiones } = await supabase
+        .from('revisiones')
+        .select('id, created_at, inspector_nombre')
+        .eq('bus_ppu', busRecord.ppu)
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (revisiones?.length) {
+        const lastRevision = revisiones[0]
+        const lastDate = dayjs(lastRevision.created_at)
+        const currentWeekYear = getIsoWeekYear()
+        const lastWeekYear = getIsoWeekYear(lastDate)
+        if (lastDate.isoWeek() === currentWeek && lastWeekYear === currentWeekYear) {
+          setBusAlert(
+            `Este bus ya tiene revisión registrada esta semana (${lastDate.format(
+              'dddd D MMM · HH:mm'
+            )} hrs por ${lastRevision.inspector_nombre ?? 'otro inspector'}).`
+          )
+        } else {
+          setBusAlert(null)
+        }
+      }
+
+      methods.setValue(
+        'mobileye.aplica',
+        busRecord.marca?.toLowerCase().includes('volvo') ?? false,
+        { shouldDirty: true }
+      )
+    } catch (err) {
+      console.error('Error in searchBus:', err)
+      setBus(null)
+      setBusAlert('Error al buscar el bus. Intenta nuevamente.')
     }
-    methods.setValue(
-      'mobileye.aplica',
-      busRecord.marca?.toLowerCase().includes('volvo') ?? false,
-      { shouldDirty: true }
-    )
   }
 
   useEffect(() => {
+    let isMounted = true
+
     if (!trackingLocation) {
-      setTerminalDetected(null)
+      if (isMounted) setTerminalDetected(null)
       return
     }
 
     const detected = detectTerminal(trackingLocation.lat, trackingLocation.lon)
     if (!detected) {
-      setTerminalDetected(null)
+      if (isMounted) setTerminalDetected(null)
       return
     }
 
-    setTerminalDetected({ name: detected.terminal, distance: detected.distance })
-    const currentTerminal = methods.getValues('terminalReportado')
-    if (!currentTerminal || currentTerminal === user?.terminal) {
-      methods.setValue('terminalReportado', detected.terminal, { shouldDirty: true })
+    if (isMounted) {
+      setTerminalDetected({ name: detected.terminal, distance: detected.distance })
+      const currentTerminal = methods.getValues('terminalReportado')
+      if (!currentTerminal || currentTerminal === user?.terminal) {
+        methods.setValue('terminalReportado', detected.terminal, { shouldDirty: true })
+      }
+    }
+
+    return () => {
+      isMounted = false
     }
   }, [trackingLocation, methods, user?.terminal])
 
@@ -502,8 +527,10 @@ export const InspectionFormPage = () => {
   }, [estadoBus, step])
 
   useEffect(() => {
+    let isMounted = true
     const ppuParam = searchParams.get('ppu')
-    if (ppuParam) {
+
+    if (ppuParam && isMounted) {
       const normalized = ppuParam.toUpperCase()
       setBusQuery(normalized)
       searchBus(normalized)
@@ -511,9 +538,18 @@ export const InspectionFormPage = () => {
       next.delete('ppu')
       setSearchParams(next, { replace: true })
     }
+
+    return () => {
+      isMounted = false
+    }
   }, [searchParams, setSearchParams])
 
   const handleNext = () => {
+    // VALIDACIÓN GPS: Bloquear navegación si no hay GPS
+    if (!gpsActive || !trackingLocation) {
+      setValidationMessage('⚠️ Debes autorizar el GPS para continuar. Haz clic en "Actualizar GPS" arriba.')
+      return
+    }
     attemptNavigateToStep(Math.min(step + 1, steps.length - 1))
   }
   const handlePrev = () => {
@@ -521,6 +557,12 @@ export const InspectionFormPage = () => {
   }
 
   const submitInspection = async (values: InspectionForm) => {
+    // VALIDACIÓN GPS CRÍTICA: No permitir envío sin GPS
+    if (!gpsActive || !trackingLocation) {
+      setValidationMessage('❌ NO PUEDES ENVIAR SIN GPS ACTIVO. Autoriza el permiso de ubicación para continuar.')
+      return
+    }
+
     if (step !== steps.length - 1) {
       attemptNavigateToStep(steps.length - 1)
       return
@@ -1405,7 +1447,13 @@ export const InspectionFormPage = () => {
                 </div>
               )}
             </div>
-            <Button type="button" className="gap-2 rounded-2xl" variant="outline" onClick={() => searchBus()}>
+            <Button
+              type="button"
+              className="gap-2 rounded-2xl"
+              variant="outline"
+              onClick={() => searchBus()}
+              disabled={!gpsActive || !trackingLocation}
+            >
               <Search className="h-4 w-4" /> Buscar bus
             </Button>
           </div>
@@ -1423,6 +1471,62 @@ export const InspectionFormPage = () => {
             </div>
           )}
         </Card>
+
+        {/* BANNER GPS NO AUTORIZADO */}
+        {(!gpsActive || !trackingLocation) && (
+          <Card className="border-2 border-red-500 bg-red-50 p-6 shadow-lg dark:border-red-700 dark:bg-red-950/50">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 rounded-full bg-red-500 p-3 text-white">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div className="flex-1 space-y-2">
+                <h3 className="text-lg font-bold text-red-900 dark:text-red-100">
+                  ⚠️ GPS NO AUTORIZADO - Acción Requerida
+                </h3>
+                <p className="text-sm text-red-800 dark:text-red-200">
+                  <strong>No puedes realizar inspecciones sin autorizar el GPS.</strong>
+                  <br />
+                  Los registros sin ubicación GPS quedan como "SIN_TERMINAL" y no son válidos.
+                </p>
+                <div className="mt-4 rounded-xl border-2 border-red-300 bg-white/90 p-4 dark:border-red-800 dark:bg-slate-900/80">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">
+                    Pasos para autorizar GPS:
+                  </p>
+                  <ol className="list-inside list-decimal space-y-1 text-sm text-red-900 dark:text-red-100">
+                    <li>Haz clic en el botón "Actualizar GPS" abajo</li>
+                    <li>Acepta el permiso de ubicación en tu navegador</li>
+                    <li>Espera a que aparezcan las coordenadas GPS</li>
+                    <li>Una vez activo, podrás buscar buses y continuar</li>
+                  </ol>
+                </div>
+                <Button
+                  type="button"
+                  size="lg"
+                  className="mt-4 w-full gap-2 rounded-xl bg-red-600 text-white hover:bg-red-700"
+                  onClick={handleRefreshGps}
+                  disabled={refreshingGPS}
+                >
+                  {refreshingGPS ? (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      Solicitando permiso GPS...
+                    </>
+                  ) : (
+                    <>
+                      <MapPin className="h-5 w-5" />
+                      Autorizar GPS Ahora
+                    </>
+                  )}
+                </Button>
+                {trackingError && (
+                  <div className="mt-3 rounded-lg bg-red-100 p-3 text-xs text-red-900 dark:bg-red-900/30 dark:text-red-100">
+                    <strong>Error:</strong> {trackingError}
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+        )}
 
         <Card className="p-4">
           <div className="flex flex-wrap gap-2">
@@ -1449,13 +1553,13 @@ export const InspectionFormPage = () => {
           </div>
         )}
 
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={stepKey}
+            key={`step-${step}-${stepKey}`}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.25 }}
+            transition={{ duration: 0.2 }}
           >
             {renderStep()}
           </motion.div>
