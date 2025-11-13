@@ -1488,17 +1488,47 @@ export const InspectionFormPage = () => {
                   <br />
                   Los registros sin ubicación GPS quedan como "SIN_TERMINAL" y no son válidos.
                 </p>
-                <div className="mt-4 rounded-xl border-2 border-red-300 bg-white/90 p-4 dark:border-red-800 dark:bg-slate-900/80">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">
-                    Pasos para autorizar GPS:
-                  </p>
-                  <ol className="list-inside list-decimal space-y-1 text-sm text-red-900 dark:text-red-100">
-                    <li>Haz clic en el botón "Actualizar GPS" abajo</li>
-                    <li>Acepta el permiso de ubicación en tu navegador</li>
-                    <li>Espera a que aparezcan las coordenadas GPS</li>
-                    <li>Una vez activo, podrás buscar buses y continuar</li>
-                  </ol>
-                </div>
+
+                {trackingError && trackingError.includes('DENEGADO') ? (
+                  <div className="mt-4 rounded-xl border-2 border-orange-400 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-950/50">
+                    <p className="mb-3 text-sm font-bold text-orange-900 dark:text-orange-100">
+                      🔒 PERMISO BLOQUEADO - Debes habilitarlo manualmente:
+                    </p>
+                    <ol className="list-inside list-decimal space-y-2 text-sm text-orange-900 dark:text-orange-100">
+                      <li>
+                        <strong>Haz clic en el ícono de candado 🔒</strong> (o ícono de información ⓘ) en la barra de direcciones del navegador
+                      </li>
+                      <li>
+                        <strong>Busca "Ubicación" o "Location"</strong> en el menú desplegable
+                      </li>
+                      <li>
+                        <strong>Cambia de "Bloqueado" a "Permitir"</strong>
+                      </li>
+                      <li>
+                        <strong>Recarga la página</strong> (F5 o Ctrl+R)
+                      </li>
+                      <li>
+                        Haz clic de nuevo en el botón "Autorizar GPS" abajo
+                      </li>
+                    </ol>
+                    <div className="mt-3 rounded-lg bg-orange-200 p-2 text-xs font-semibold text-orange-900">
+                      💡 Si no ves el candado, copia y pega esta URL en otra pestaña y vuelve a intentar
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-xl border-2 border-red-300 bg-white/90 p-4 dark:border-red-800 dark:bg-slate-900/80">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">
+                      Pasos para autorizar GPS:
+                    </p>
+                    <ol className="list-inside list-decimal space-y-1 text-sm text-red-900 dark:text-red-100">
+                      <li>Haz clic en el botón "Autorizar GPS" abajo</li>
+                      <li>En el popup del navegador, presiona "Permitir" o "Allow"</li>
+                      <li>Espera a que aparezcan las coordenadas GPS</li>
+                      <li>Una vez activo, podrás buscar buses y continuar</li>
+                    </ol>
+                  </div>
+                )}
+
                 <Button
                   type="button"
                   size="lg"

@@ -70,7 +70,26 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
           })
         },
         (error) => {
-          reject(error)
+          // Mejorar mensajes de error según el código
+          let errorMessage = 'Error al obtener ubicación'
+
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage = 'PERMISO GPS DENEGADO. Debes habilitar la ubicación en la configuración de tu navegador (ícono de candado en la barra de direcciones).'
+              break
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = 'Ubicación no disponible. Verifica que tu dispositivo tenga GPS activo.'
+              break
+            case error.TIMEOUT:
+              errorMessage = 'Tiempo de espera agotado. Intenta nuevamente.'
+              break
+            default:
+              errorMessage = error.message || 'Error desconocido al obtener ubicación'
+          }
+
+          const enhancedError = new Error(errorMessage)
+          ;(enhancedError as any).code = error.code
+          reject(enhancedError)
         },
         {
           enableHighAccuracy: highAccuracy,
