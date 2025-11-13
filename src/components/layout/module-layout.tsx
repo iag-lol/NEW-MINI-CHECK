@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input'
 import { StatCard } from '@/components/ui/stat-card'
 import { SkeletonCard } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import { WeekSelector } from '@/components/week-selector'
+import { useWeekFilter } from '@/hooks/use-week-filter'
 
 type TableName = keyof Database['public']['Tables']
 type TableRow<T extends TableName> = Database['public']['Tables'][T]['Row']
@@ -71,15 +73,21 @@ export const ModuleLayout = <T extends TableName>({
   queryLimit = 200,
   tableScrollClassName,
 }: ModuleLayoutProps<T>) => {
+  const { weekInfo } = useWeekFilter()
   const [searchQuery, setSearchQuery] = useState('')
   const [filterValues, setFilterValues] = useState<Record<string, string>>({})
   const [showFilters, setShowFilters] = useState(false)
 
   const { data, refetch, isFetching } = useQuery({
-    queryKey: ['module', table, queryLimit ?? 'all'],
+    queryKey: ['module', table, queryLimit ?? 'all', weekInfo.startISO, weekInfo.endISO],
     queryFn: async () => {
-      const baseQuery = supabase.from(table).select('*').order('created_at', { ascending: false })
-      const { data, error } = queryLimit ? await baseQuery.limit(queryLimit) : await baseQuery
+      const baseQuery = supabase
+        .from(table)
+        .select('*')
+        .gte('created_at', weekInfo.startISO)
+        .lte('created_at', weekInfo.endISO)
+        .order('created_at', { ascending: false })
+      const { data, error} = queryLimit ? await baseQuery.limit(queryLimit) : await baseQuery
       if (error) throw error
       return (data ?? []) as unknown as TableRow<T>[]
     },
@@ -147,16 +155,19 @@ export const ModuleLayout = <T extends TableName>({
               <p className="text-sm text-slate-600 dark:text-slate-400">{description}</p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => refetch()}
-            className="gap-2"
-            disabled={isFetching}
-          >
-            <RefreshCcw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
-            Actualizar
-          </Button>
+          <div className="flex items-center gap-3">
+            <WeekSelector />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => refetch()}
+              className="gap-2"
+              disabled={isFetching}
+            >
+              <RefreshCcw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+              Actualizar
+            </Button>
+          </div>
         </div>
       </div>
 
