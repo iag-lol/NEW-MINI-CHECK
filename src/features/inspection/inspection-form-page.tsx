@@ -1474,86 +1474,71 @@ export const InspectionFormPage = () => {
 
         {/* BANNER GPS NO AUTORIZADO */}
         {(!gpsActive || !trackingLocation) && (
-          <Card className="border-2 border-red-500 bg-red-50 p-6 shadow-lg dark:border-red-700 dark:bg-red-950/50">
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 rounded-full bg-red-500 p-3 text-white">
-                <AlertTriangle className="h-6 w-6" />
-              </div>
-              <div className="flex-1 space-y-2">
-                <h3 className="text-lg font-bold text-red-900 dark:text-red-100">
-                  ⚠️ GPS NO AUTORIZADO - Acción Requerida
+          <Card className="border-2 border-red-500 bg-red-50 p-4 dark:border-red-700 dark:bg-red-950/50">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 rounded-full bg-red-500 p-2 text-white">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <h3 className="text-base font-bold text-red-900 dark:text-red-100">
+                  GPS Requerido
                 </h3>
-                <p className="text-sm text-red-800 dark:text-red-200">
-                  <strong>No puedes realizar inspecciones sin autorizar el GPS.</strong>
-                  <br />
-                  Los registros sin ubicación GPS quedan como "SIN_TERMINAL" y no son válidos.
-                </p>
+              </div>
 
-                {trackingError && trackingError.includes('DENEGADO') ? (
-                  <div className="mt-4 rounded-xl border-2 border-orange-400 bg-orange-50 p-4 dark:border-orange-800 dark:bg-orange-950/50">
-                    <p className="mb-3 text-sm font-bold text-orange-900 dark:text-orange-100">
-                      🔒 PERMISO BLOQUEADO - Debes habilitarlo manualmente:
-                    </p>
-                    <ol className="list-inside list-decimal space-y-2 text-sm text-orange-900 dark:text-orange-100">
-                      <li>
-                        <strong>Haz clic en el ícono de candado 🔒</strong> (o ícono de información ⓘ) en la barra de direcciones del navegador
-                      </li>
-                      <li>
-                        <strong>Busca "Ubicación" o "Location"</strong> en el menú desplegable
-                      </li>
-                      <li>
-                        <strong>Cambia de "Bloqueado" a "Permitir"</strong>
-                      </li>
-                      <li>
-                        <strong>Recarga la página</strong> (F5 o Ctrl+R)
-                      </li>
-                      <li>
-                        Haz clic de nuevo en el botón "Autorizar GPS" abajo
-                      </li>
-                    </ol>
-                    <div className="mt-3 rounded-lg bg-orange-200 p-2 text-xs font-semibold text-orange-900">
-                      💡 Si no ves el candado, copia y pega esta URL en otra pestaña y vuelve a intentar
+              <p className="text-sm text-red-800 dark:text-red-200">
+                No puedes hacer inspecciones sin GPS. Los registros quedan sin terminal.
+              </p>
+
+              {trackingError && trackingError.includes('BLOQUEADO') ? (
+                <div className="rounded-lg border border-orange-400 bg-orange-50 p-3 dark:border-orange-700 dark:bg-orange-950/40">
+                  <p className="mb-2 text-sm font-bold text-orange-900 dark:text-orange-100">
+                    🔒 GPS Bloqueado
+                  </p>
+                  <p className="mb-3 text-xs text-orange-800 dark:text-orange-200">
+                    Debes habilitarlo manualmente en tu navegador:
+                  </p>
+                  <div className="space-y-2 text-xs text-orange-900 dark:text-orange-100">
+                    <div className="rounded bg-orange-100 p-2 dark:bg-orange-900/30">
+                      <strong>📱 En móvil:</strong> Configuración → Sitios web → Ubicación → Permitir
+                    </div>
+                    <div className="rounded bg-orange-100 p-2 dark:bg-orange-900/30">
+                      <strong>💻 En PC:</strong> Clic en candado 🔒 → Ubicación → Permitir → Recargar (F5)
                     </div>
                   </div>
-                ) : (
-                  <div className="mt-4 rounded-xl border-2 border-red-300 bg-white/90 p-4 dark:border-red-800 dark:bg-slate-900/80">
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">
-                      Pasos para autorizar GPS:
-                    </p>
-                    <ol className="list-inside list-decimal space-y-1 text-sm text-red-900 dark:text-red-100">
-                      <li>Haz clic en el botón "Autorizar GPS" abajo</li>
-                      <li>En el popup del navegador, presiona "Permitir" o "Allow"</li>
-                      <li>Espera a que aparezcan las coordenadas GPS</li>
-                      <li>Una vez activo, podrás buscar buses y continuar</li>
-                    </ol>
-                  </div>
-                )}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-blue-300 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-950/40">
+                  <p className="text-xs text-blue-900 dark:text-blue-100">
+                    👇 Haz clic abajo y acepta el permiso de ubicación en el popup del navegador
+                  </p>
+                </div>
+              )}
 
-                <Button
-                  type="button"
-                  size="lg"
-                  className="mt-4 w-full gap-2 rounded-xl bg-red-600 text-white hover:bg-red-700"
-                  onClick={handleRefreshGps}
-                  disabled={refreshingGPS}
-                >
-                  {refreshingGPS ? (
-                    <>
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      Solicitando permiso GPS...
-                    </>
-                  ) : (
-                    <>
-                      <MapPin className="h-5 w-5" />
-                      Autorizar GPS Ahora
-                    </>
-                  )}
-                </Button>
-                {trackingError && (
-                  <div className="mt-3 rounded-lg bg-red-100 p-3 text-xs text-red-900 dark:bg-red-900/30 dark:text-red-100">
-                    <strong>Error:</strong> {trackingError}
-                  </div>
+              <Button
+                type="button"
+                size="lg"
+                className="w-full gap-2 rounded-xl bg-red-600 text-white hover:bg-red-700"
+                onClick={handleRefreshGps}
+                disabled={refreshingGPS}
+              >
+                {refreshingGPS ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Pidiendo permiso...
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="h-4 w-4" />
+                    Activar GPS
+                  </>
                 )}
-              </div>
+              </Button>
+
+              {trackingError && (
+                <div className="rounded-lg bg-red-100 p-2 text-xs font-semibold text-red-900 dark:bg-red-900/30 dark:text-red-100">
+                  {trackingError}
+                </div>
+              )}
             </div>
           </Card>
         )}

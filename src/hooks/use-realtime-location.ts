@@ -75,16 +75,16 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
 
           switch (error.code) {
             case error.PERMISSION_DENIED:
-              errorMessage = 'PERMISO GPS DENEGADO. Debes habilitar la ubicación en la configuración de tu navegador (ícono de candado en la barra de direcciones).'
+              errorMessage = 'GPS BLOQUEADO por tu navegador.'
               break
             case error.POSITION_UNAVAILABLE:
-              errorMessage = 'Ubicación no disponible. Verifica que tu dispositivo tenga GPS activo.'
+              errorMessage = 'GPS no disponible. Activa la ubicación en tu dispositivo.'
               break
             case error.TIMEOUT:
-              errorMessage = 'Tiempo de espera agotado. Intenta nuevamente.'
+              errorMessage = 'GPS tardó mucho. Intenta de nuevo.'
               break
             default:
-              errorMessage = error.message || 'Error desconocido al obtener ubicación'
+              errorMessage = error.message || 'Error de GPS'
           }
 
           const enhancedError = new Error(errorMessage)
