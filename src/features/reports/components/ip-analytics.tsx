@@ -13,13 +13,18 @@ type IPStats = {
   isp: string | null
 }
 
-export function IPAnalytics() {
+interface IPAnalyticsProps {
+  startDate: string
+  endDate: string
+}
+
+export function IPAnalytics({ startDate, endDate }: IPAnalyticsProps) {
   const [ipStats, setIpStats] = useState<IPStats[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadIPStats()
-  }, [])
+  }, [startDate, endDate])
 
   const loadIPStats = async () => {
     try {
@@ -27,6 +32,8 @@ export function IPAnalytics() {
         .from('revisiones')
         .select('*')
         .not('ip_address', 'is', null)
+        .gte('created_at', startDate)
+        .lte('created_at', endDate)
         .order('created_at', { ascending: false })
 
       if (!revisionesData) return

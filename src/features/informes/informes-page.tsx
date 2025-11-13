@@ -1,56 +1,61 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FileText } from 'lucide-react'
-import dayjs, { getIsoWeekYear } from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { WeekSelector } from '@/components/week-selector'
+import { useWeekFilter } from '@/hooks/use-week-filter'
 import type { Tables } from '@/types/database'
 
 export const InformesPage = () => {
+  const { weekInfo } = useWeekFilter()
+
   const { data } = useQuery({
-    queryKey: ['informes'],
+    queryKey: ['informes', weekInfo.startISO, weekInfo.endISO],
     queryFn: async () => {
-      const since = dayjs().subtract(21, 'day').toISOString()
       const { data, error } = await supabase
         .from('revisiones')
         .select('*')
-        .gte('created_at', since)
+        .gte('created_at', weekInfo.startISO)
+        .lte('created_at', weekInfo.endISO)
       if (error) throw error
       return data as Tables<'revisiones'>[]
     },
   })
 
-  const reports = useMemo(() => {
-    if (!data) return []
-      const byWeek = data.reduce<Record<string, Tables<'revisiones'>[]>>((acc, revision) => {
-        const date = dayjs(revision.created_at)
-        const week = date.isoWeek()
-        const key = `${getIsoWeekYear(date)}-W${week}`
-      acc[key] = acc[key] ? [...acc[key], revision] : [revision]
-      return acc
-    }, {})
-    return Object.entries(byWeek)
-      .map(([week, revisions]) => ({
-        week,
-        total: revisions.length,
-        panne: revisions.filter((rev) => rev.estado_bus === 'EN_PANNE').length,
-        terminales: Array.from(new Set(revisions.map((rev) => rev.terminal_detectado))).length,
-      }))
-      .sort((a, b) => (a.week > b.week ? -1 : 1))
-  }, [data])
+  const report = useMemo(() => {
+    if (!data) return null
+    return {
+      week: `${weekInfo.year}-W${weekInfo.weekNumber}`,
+      total: data.length,
+      panne: data.filter((rev) => rev.estado_bus === 'EN_PANNE').length,
+      operativo: data.filter((rev) => rev.operativo).length,
+      terminales: Array.from(new Set(data.map((rev) => rev.terminal_detectado))).length,
+    }
+  }, [data, weekInfo])
 
   return (
     <div className="space-y-4">
-      {reports.map((report) => (
-        <Card key={report.week} className="flex flex-wrap items-center justify-between gap-4 p-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Informes Semanales</h1>
+          <p className="text-muted-foreground">
+            Resumen de actividad de la semana seleccionada
+          </p>
+        </div>
+        <WeekSelector />
+      </div>
+
+      {report ? (
+        <Card className="flex flex-wrap items-center justify-between gap-4 p-6">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-brand-500">Semana {report.week}</p>
             <h3 className="text-2xl font-black text-slate-900 dark:text-white">
               {report.total} revisiones
             </h3>
             <p className="text-sm text-slate-500">
-              {report.panne} buses en panne · {report.terminales} terminales
+              {report.panne} buses en panne · {report.operativo} operativos · {report.terminales} terminales
             </p>
           </div>
           <Button variant="outline" className="gap-2 rounded-2xl">
@@ -58,10 +63,9 @@ export const InformesPage = () => {
             Descargar informe
           </Button>
         </Card>
-      ))}
-      {!reports.length && (
+      ) : (
         <Card className="p-6 text-center text-sm text-slate-500">
-          Aún no hay información suficiente para generar informes semanales.
+          No hay información para la semana seleccionada.
         </Card>
       )}
     </div>

@@ -15,13 +15,18 @@ type WorkerStats = {
   terminals: string[]
 }
 
-export function WorkerReports() {
+interface WorkerReportsProps {
+  startDate: string
+  endDate: string
+}
+
+export function WorkerReports({ startDate, endDate }: WorkerReportsProps) {
   const [workers, setWorkers] = useState<WorkerStats[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     loadWorkerStats()
-  }, [])
+  }, [startDate, endDate])
 
   const loadWorkerStats = async () => {
     try {
@@ -42,6 +47,8 @@ export function WorkerReports() {
             .from('revisiones')
             .select('*')
             .eq('inspector_rut', worker.rut)
+            .gte('created_at', startDate)
+            .lte('created_at', endDate)
             .order('created_at', { ascending: false })
 
           const revisiones = (revisionesData || []) as Tables<'revisiones'>[]
@@ -50,11 +57,8 @@ export function WorkerReports() {
           const operativeCount = revisiones?.filter((r) => r.operativo).length || 0
           const operativeRate = totalInspections > 0 ? (operativeCount / totalInspections) * 100 : 0
 
-          // Calcular inspecciones por día (últimos 30 días)
-          const thirtyDaysAgo = dayjs().subtract(30, 'days').toISOString()
-          const recentInspections =
-            revisiones?.filter((r) => r.created_at >= thirtyDaysAgo).length || 0
-          const avgInspectionsPerDay = recentInspections / 30
+          // Calcular inspecciones por día (de la semana seleccionada)
+          const avgInspectionsPerDay = totalInspections / 7
 
           const lastInspection = revisiones?.[0]?.created_at || null
           const terminals = [...new Set(revisiones?.map((r) => r.terminal_reportado) || [])]

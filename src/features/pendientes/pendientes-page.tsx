@@ -25,22 +25,18 @@ import {
   SelectItem,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
+import { WeekSelector } from '@/components/week-selector'
+import { useWeekFilter } from '@/hooks/use-week-filter'
 
 type FlotaRow = Tables<'flota'>
 type RevisionRow = Tables<'revisiones'>
 
-const getWeekRange = () => {
-  const start = dayjs().isoWeekday(1).startOf('day')
-  const end = start.add(6, 'day').endOf('day')
-  return { start: start.toISOString(), end: end.toISOString() }
-}
-
 export const PendientesPage = () => {
   const navigate = useNavigate()
   const { user } = useAuthStore()
+  const { weekInfo } = useWeekFilter()
   const [terminalFilter, setTerminalFilter] = useState(user?.terminal ?? 'TODOS')
   const [searchQuery, setSearchQuery] = useState('')
-  const { start, end } = getWeekRange()
 
   const { data: flota, isLoading: flotaLoading } = useQuery({
     queryKey: ['flota-pendientes'],
@@ -55,13 +51,13 @@ export const PendientesPage = () => {
   })
 
   const { data: revisiones, isLoading: revisionesLoading } = useQuery({
-    queryKey: ['pendientes-revisiones', start, end],
+    queryKey: ['pendientes-revisiones', weekInfo.startISO, weekInfo.endISO],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('revisiones')
         .select('id, bus_ppu, bus_interno, inspector_nombre, terminal_detectado, estado_bus, created_at')
-        .gte('created_at', start)
-        .lte('created_at', end)
+        .gte('created_at', weekInfo.startISO)
+        .lte('created_at', weekInfo.endISO)
         .order('created_at', { ascending: false })
       if (error) throw error
       return (data ?? []) as RevisionRow[]
@@ -124,16 +120,19 @@ export const PendientesPage = () => {
   return (
     <div className="space-y-6">
       <Card className="p-6 space-y-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.35em] text-brand-500">
-            Control diario
-          </p>
-          <h1 className="text-3xl font-black text-slate-900 dark:text-white">
-            Buses pendientes
-          </h1>
-          <p className="text-sm text-slate-500">
-            Revisa cuáles buses aún no tienen inspección registrada esta semana.
-          </p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.35em] text-brand-500">
+              Control diario
+            </p>
+            <h1 className="text-3xl font-black text-slate-900 dark:text-white">
+              Buses pendientes
+            </h1>
+            <p className="text-sm text-slate-500">
+              Revisa cuáles buses aún no tienen inspección registrada esta semana.
+            </p>
+          </div>
+          <WeekSelector />
         </div>
         <div className="grid gap-3 md:grid-cols-[240px,1fr]">
           <div>

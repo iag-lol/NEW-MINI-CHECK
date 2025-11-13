@@ -24,9 +24,6 @@ import {
   Bus,
   AlertCircle,
   Clock,
-  ChevronLeft,
-  ChevronRight,
-  Calendar,
 } from 'lucide-react'
 import dayjs from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
@@ -42,6 +39,7 @@ import { TERMINAL_GEOFENCES, type TerminalSlug } from '@/constants/geofences'
 import { useActiveInspectors } from '@/hooks/use-active-inspectors'
 import { useAuthStore } from '@/store/auth-store'
 import { useWeekFilter } from '@/hooks/use-week-filter'
+import { WeekSelector } from '@/components/week-selector'
 
 type BaseLayerKey = 'street' | 'satellite'
 
@@ -111,7 +109,7 @@ const useTickets = (start: string, end: string) =>
 export const DashboardPage = () => {
   const [exporting, setExporting] = useState(false)
   const { user } = useAuthStore()
-  const { weekInfo, goToPreviousWeek, goToNextWeek, goToCurrentWeek, canGoNext } = useWeekFilter()
+  const { weekInfo } = useWeekFilter()
   const { data: revisions, isLoading: revisionsLoading } = useWeeklyRevisions(
     weekInfo.startISO,
     weekInfo.endISO
@@ -271,44 +269,8 @@ export const DashboardPage = () => {
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            {/* Selector de Semana */}
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={goToPreviousWeek}
-                className="h-8 w-8 rounded-lg p-0"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-
-              <div className="flex min-w-[200px] flex-col items-center px-2">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-brand-500" />
-                  <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                    {weekInfo.label}
-                  </span>
-                </div>
-                {!weekInfo.isCurrent && (
-                  <button
-                    onClick={goToCurrentWeek}
-                    className="text-xs text-brand-600 hover:underline dark:text-brand-400"
-                  >
-                    Ir a semana actual
-                  </button>
-                )}
-              </div>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={goToNextWeek}
-                disabled={!canGoNext}
-                className="h-8 w-8 rounded-lg p-0"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+            {/* Selector de Semana Global */}
+            <WeekSelector />
 
             {/* Última actualización */}
             <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">

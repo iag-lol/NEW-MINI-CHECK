@@ -7,36 +7,29 @@ import type { Tables } from '@/types/database'
 
 type Revision = Tables<'revisiones'>
 
-export function TimelineReport() {
+interface TimelineReportProps {
+  startDate: string
+  endDate: string
+}
+
+export function TimelineReport({ startDate, endDate }: TimelineReportProps) {
   const [revisiones, setRevisiones] = useState<Revision[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'today' | 'week' | 'month'>('today')
 
   useEffect(() => {
     loadTimeline()
-  }, [filter])
+  }, [startDate, endDate])
 
   const loadTimeline = async () => {
     setLoading(true)
     try {
-      let query = supabase
+      const { data } = await supabase
         .from('revisiones')
         .select('*')
+        .gte('created_at', startDate)
+        .lte('created_at', endDate)
         .order('created_at', { ascending: false })
 
-      // Aplicar filtros de fecha
-      if (filter === 'today') {
-        const todayStart = dayjs().startOf('day').toISOString()
-        query = query.gte('created_at', todayStart)
-      } else if (filter === 'week') {
-        const weekStart = dayjs().subtract(7, 'days').toISOString()
-        query = query.gte('created_at', weekStart)
-      } else if (filter === 'month') {
-        const monthStart = dayjs().subtract(30, 'days').toISOString()
-        query = query.gte('created_at', monthStart)
-      }
-
-      const { data } = await query.limit(100)
       setRevisiones((data as Revision[]) || [])
     } catch (error) {
       console.error('Error loading timeline:', error)
@@ -73,34 +66,6 @@ export function TimelineReport() {
 
   return (
     <div className="space-y-6">
-      {/* Filter Buttons */}
-      <Card className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex gap-2">
-            <FilterButton
-              active={filter === 'all'}
-              onClick={() => setFilter('all')}
-              label="Todas"
-            />
-            <FilterButton
-              active={filter === 'today'}
-              onClick={() => setFilter('today')}
-              label="Hoy"
-            />
-            <FilterButton
-              active={filter === 'week'}
-              onClick={() => setFilter('week')}
-              label="7 días"
-            />
-            <FilterButton
-              active={filter === 'month'}
-              onClick={() => setFilter('month')}
-              label="30 días"
-            />
-          </div>
-        </div>
-      </Card>
-
       {/* Stats Summary */}
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Total" value={stats.total} icon={Calendar} color="blue" />
@@ -126,27 +91,6 @@ export function TimelineReport() {
         </Card>
       )}
     </div>
-  )
-}
-
-interface FilterButtonProps {
-  active: boolean
-  onClick: () => void
-  label: string
-}
-
-function FilterButton({ active, onClick, label }: FilterButtonProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-        active
-          ? 'bg-blue-500 text-white'
-          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-      }`}
-    >
-      {label}
-    </button>
   )
 }
 

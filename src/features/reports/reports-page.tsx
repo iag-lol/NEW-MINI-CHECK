@@ -4,48 +4,48 @@ import { Search, Users, FileText, MapPin, TrendingUp, Calendar } from 'lucide-re
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { supabase } from '@/lib/supabase'
-import dayjs from '@/lib/dayjs'
 import { PPUSearchReport } from './components/ppu-search-report'
 import { WorkerReports } from './components/worker-reports'
 import { IPAnalytics } from './components/ip-analytics'
 import { TimelineReport } from './components/timeline-report'
+import { WeekSelector } from '@/components/week-selector'
+import { useWeekFilter } from '@/hooks/use-week-filter'
 
 export function ReportsPage() {
   const [activeTab, setActiveTab] = useState('ppu')
+  const { weekInfo } = useWeekFilter()
 
   // Query para obtener estadísticas reales
   const { data: stats } = useQuery({
-    queryKey: ['reports-stats'],
+    queryKey: ['reports-stats', weekInfo.startISO, weekInfo.endISO],
     queryFn: async () => {
-      // Total de inspecciones
+      // Total de inspecciones de la semana seleccionada
       const { count: totalInspections } = await supabase
         .from('revisiones')
         .select('*', { count: 'exact', head: true })
+        .gte('created_at', weekInfo.startISO)
+        .lte('created_at', weekInfo.endISO)
 
-      // Inspectores activos (últimos 30 días)
-      const thirtyDaysAgo = dayjs().subtract(30, 'days').toISOString()
+      // Inspectores activos de la semana seleccionada
       const { data: activeInspectors } = await supabase
         .from('revisiones')
         .select('inspector_rut')
-        .gte('created_at', thirtyDaysAgo)
+        .gte('created_at', weekInfo.startISO)
+        .lte('created_at', weekInfo.endISO)
 
       const uniqueInspectors = new Set(activeInspectors?.map(r => r.inspector_rut))
 
-      // Terminales cubiertos
+      // Terminales cubiertos de la semana seleccionada
       const { data: terminals } = await supabase
         .from('revisiones')
         .select('terminal_reportado')
+        .gte('created_at', weekInfo.startISO)
+        .lte('created_at', weekInfo.endISO)
 
       const uniqueTerminals = new Set(terminals?.map(r => r.terminal_reportado))
 
-      // Promedio diario (últimos 7 días)
-      const sevenDaysAgo = dayjs().subtract(7, 'days').toISOString()
-      const { count: lastWeekCount } = await supabase
-        .from('revisiones')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', sevenDaysAgo)
-
-      const dailyAverage = Math.round((lastWeekCount || 0) / 7)
+      // Promedio diario de la semana seleccionada
+      const dailyAverage = Math.round((totalInspections || 0) / 7)
 
       return {
         totalInspections: totalInspections || 0,
@@ -67,6 +67,7 @@ export function ReportsPage() {
             Análisis detallado de inspecciones, trabajadores y rendimiento
           </p>
         </div>
+        <WeekSelector />
       </div>
 
       {/* Stats Cards */}
@@ -127,15 +128,15 @@ export function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="workers" className="space-y-4">
-          <WorkerReports />
+          <WorkerReports startDate={weekInfo.startISO} endDate={weekInfo.endISO} />
         </TabsContent>
 
         <TabsContent value="ip" className="space-y-4">
-          <IPAnalytics />
+          <IPAnalytics startDate={weekInfo.startISO} endDate={weekInfo.endISO} />
         </TabsContent>
 
         <TabsContent value="timeline" className="space-y-4">
-          <TimelineReport />
+          <TimelineReport startDate={weekInfo.startISO} endDate={weekInfo.endISO} />
         </TabsContent>
       </Tabs>
     </div>

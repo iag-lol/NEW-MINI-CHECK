@@ -22,6 +22,8 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { StatCard } from '@/components/ui/stat-card'
 import { SkeletonTable } from '@/components/ui/skeleton'
+import { WeekSelector } from '@/components/week-selector'
+import { useWeekFilter } from '@/hooks/use-week-filter'
 import type { Tables } from '@/types/database'
 
 type TicketEstado = Tables<'tickets'>['estado']
@@ -52,19 +54,22 @@ interface BusTicketGroup {
 }
 
 export const TicketsPage = () => {
+  const { weekInfo } = useWeekFilter()
   const [searchQuery, setSearchQuery] = useState('')
   const [estadoFilter, setEstadoFilter] = useState<TicketEstado | 'TODOS'>('TODOS')
   const [prioridadFilter, setPrioridadFilter] = useState<TicketPrioridad | 'TODOS'>('TODOS')
   const [moduloFilter, setModuloFilter] = useState<string>('TODOS')
 
   const { data: tickets, refetch, isLoading } = useQuery({
-    queryKey: ['tickets', 'detallados'],
+    queryKey: ['tickets', 'detallados', weekInfo.startISO, weekInfo.endISO],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tickets')
         .select(
           '*, revision:revision_id(bus_ppu, bus_interno, estado_bus, terminal_detectado, created_at, observaciones)'
         )
+        .gte('created_at', weekInfo.startISO)
+        .lte('created_at', weekInfo.endISO)
         .order('created_at', { ascending: false })
       if (error) throw error
 
@@ -273,6 +278,17 @@ export const TicketsPage = () => {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Tickets</h1>
+          <p className="text-muted-foreground">
+            Gestión de incidencias y problemas reportados
+          </p>
+        </div>
+        <WeekSelector />
+      </div>
+
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <StatCard
