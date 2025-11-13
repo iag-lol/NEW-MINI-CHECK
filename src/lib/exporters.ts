@@ -17,7 +17,7 @@ type TicketRow = Tables<'tickets'>
 // XLSX MEJORADO CON DATOS REALES Y TODA LA FLOTA
 // ============================================
 
-export const exportAllModulesToXlsx = async () => {
+export const exportAllModulesToXlsx = async (startDate?: string, endDate?: string) => {
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet('INSPECCIONES SEMANALES')
 
@@ -27,11 +27,15 @@ export const exportAllModulesToXlsx = async () => {
     .select('*')
     .order('numero_interno')
 
-  // Obtener todas las revisiones de la semana actual
+  // Obtener todas las revisiones de la semana (actual o especificada)
+  const start = startDate ?? dayjs().isoWeekday(1).startOf('day').toISOString()
+  const end = endDate ?? dayjs().isoWeekday(1).add(6, 'day').endOf('day').toISOString()
+
   const { data: revisiones } = await supabase
     .from('revisiones')
     .select('*')
-    .gte('created_at', dayjs().startOf('week').toISOString())
+    .gte('created_at', start)
+    .lte('created_at', end)
 
   // Obtener datos complementarios de módulos
   const { data: tags } = await supabase.from('tags').select('*')
@@ -226,18 +230,25 @@ export const exportAllModulesToXlsx = async () => {
 // PDF EJECUTIVO CON GRÁFICOS E INFORMACIÓN ÚTIL
 // ============================================
 
-export const exportExecutivePdf = async () => {
+export const exportExecutivePdf = async (startDate?: string, endDate?: string) => {
   const doc = new jsPDF()
+
+  // Calcular rango de fechas (actual o especificado)
+  const start = startDate ?? dayjs().isoWeekday(1).startOf('day').toISOString()
+  const end = endDate ?? dayjs().isoWeekday(1).add(6, 'day').endOf('day').toISOString()
 
   // Obtener datos estadísticos
   const { data: flota } = await supabase.from('flota').select('*')
   const { data: revisiones } = await supabase
     .from('revisiones')
     .select('*')
-    .gte('created_at', dayjs().startOf('week').toISOString())
+    .gte('created_at', start)
+    .lte('created_at', end)
   const { data: tickets } = await supabase
     .from('tickets')
     .select('*')
+    .gte('created_at', start)
+    .lte('created_at', end)
     .eq('estado', 'PENDIENTE')
 
   const totalFlota = flota?.length || 0

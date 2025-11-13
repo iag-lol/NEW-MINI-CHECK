@@ -23,7 +23,10 @@ import {
   Activity,
   Bus,
   AlertCircle,
-  Clock
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
 } from 'lucide-react'
 import dayjs from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
@@ -38,11 +41,7 @@ import type { Tables } from '@/types/database'
 import { TERMINAL_GEOFENCES, type TerminalSlug } from '@/constants/geofences'
 import { useActiveInspectors } from '@/hooks/use-active-inspectors'
 import { useAuthStore } from '@/store/auth-store'
-
-interface WeekPayload {
-  start: string
-  end: string
-}
+import { useWeekFilter } from '@/hooks/use-week-filter'
 
 type BaseLayerKey = 'street' | 'satellite'
 
@@ -76,14 +75,7 @@ const getInitials = (name: string) =>
     .slice(0, 2)
     .toUpperCase()
 
-const getWeekRange = (): WeekPayload => {
-  const start = dayjs().isoWeekday(1).startOf('day')
-  const end = start.add(6, 'day').endOf('day')
-  return { start: start.toISOString(), end: end.toISOString() }
-}
-
-const useWeeklyRevisions = () => {
-  const { start, end } = getWeekRange()
+const useWeeklyRevisions = (start: string, end: string) => {
   return useQuery({
     queryKey: ['revisiones', { start, end }],
     queryFn: async () => {
@@ -100,13 +92,15 @@ const useWeeklyRevisions = () => {
   })
 }
 
-const useTickets = () =>
+const useTickets = (start: string, end: string) =>
   useQuery({
-    queryKey: ['tickets'],
+    queryKey: ['tickets', { start, end }],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tickets')
         .select('*')
+        .gte('created_at', start)
+        .lte('created_at', end)
         .order('created_at', { ascending: false })
       if (error) throw error
       return data as Tables<'tickets'>[]
@@ -117,8 +111,12 @@ const useTickets = () =>
 export const DashboardPage = () => {
   const [exporting, setExporting] = useState(false)
   const { user } = useAuthStore()
-  const { data: revisions, isLoading: revisionsLoading } = useWeeklyRevisions()
-  const { data: tickets } = useTickets()
+  const { weekInfo, goToPreviousWeek, goToNextWeek, goToCurrentWeek, canGoNext } = useWeekFilter()
+  const { data: revisions, isLoading: revisionsLoading } = useWeeklyRevisions(
+    weekInfo.startISO,
+    weekInfo.endISO
+  )
+  const { data: tickets } = useTickets(weekInfo.startISO, weekInfo.endISO)
   const { inspectors: liveInspectors } = useActiveInspectors()
   const mapToken = import.meta.env.VITE_MAPBOX_TOKEN
   const mapRef = useRef<LeafletMap | null>(null)
@@ -162,7 +160,7 @@ export const DashboardPage = () => {
     const panne = revisions.filter((rev) => rev.estado_bus === 'EN_PANNE').length
     const operativo = total - panne
     const byDay = Array.from({ length: 7 }, (_, index) => {
-      const day = dayjs(getWeekRange().start).add(index, 'day')
+      const day = weekInfo.start.add(index, 'day')
       const daily = revisions.filter((rev) => dayjs(rev.created_at).isSame(day, 'day'))
       return {
         day: day.format('ddd'),
@@ -190,7 +188,7 @@ export const DashboardPage = () => {
       status: byStatus,
       terminals: orderedTerminal,
     }
-  }, [revisions])
+  }, [revisions, weekInfo.start])
 
   const revisionById = useMemo(() => {
     const map = new Map<string, Tables<'revisiones'>>()
@@ -262,20 +260,63 @@ export const DashboardPage = () => {
         animate={{ opacity: 1, y: 0 }}
         className="rounded-2xl border border-slate-200/60 bg-gradient-to-br from-brand-50 to-white p-6 dark:border-slate-800 dark:from-brand-950/20 dark:to-slate-950"
       >
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
               Dashboard de Supervisión
             </h1>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              Vista consolidada en tiempo real · Semana {dayjs().isoWeek()} de {dayjs().year()}
+              Vista consolidada · Semana {weekInfo.weekNumber} de {weekInfo.year}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Clock className="h-5 w-5 text-slate-400" />
-            <span className="text-sm text-slate-600 dark:text-slate-400">
-              Última actualización: {dayjs().format('HH:mm')}
-            </span>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {/* Selector de Semana */}
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={goToPreviousWeek}
+                className="h-8 w-8 rounded-lg p-0"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+
+              <div className="flex min-w-[200px] flex-col items-center px-2">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-brand-500" />
+                  <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                    {weekInfo.label}
+                  </span>
+                </div>
+                {!weekInfo.isCurrent && (
+                  <button
+                    onClick={goToCurrentWeek}
+                    className="text-xs text-brand-600 hover:underline dark:text-brand-400"
+                  >
+                    Ir a semana actual
+                  </button>
+                )}
+              </div>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={goToNextWeek}
+                disabled={!canGoNext}
+                className="h-8 w-8 rounded-lg p-0"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Última actualización */}
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+              <Clock className="h-4 w-4 text-slate-400" />
+              <span className="text-xs text-slate-600 dark:text-slate-400">
+                {dayjs().format('HH:mm')}
+              </span>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -390,14 +431,14 @@ export const DashboardPage = () => {
             disabled={exporting}
             onClick={async () => {
               setExporting(true)
-              await exportAllModulesToXlsx().catch((error) =>
+              await exportAllModulesToXlsx(weekInfo.startISO, weekInfo.endISO).catch((error) =>
                 console.error('Error exportando XLSX', error)
               )
               setExporting(false)
             }}
           >
             <DownloadCloud className="h-4 w-4" />
-            XLSX semanal
+            XLSX semana {weekInfo.weekNumber}
           </Button>
           <Button
             className="mt-3 w-full gap-2 rounded-2xl"
@@ -405,14 +446,14 @@ export const DashboardPage = () => {
             disabled={exporting}
             onClick={async () => {
               setExporting(true)
-              await exportExecutivePdf().catch((error) =>
+              await exportExecutivePdf(weekInfo.startISO, weekInfo.endISO).catch((error) =>
                 console.error('Error exportando PDF', error)
               )
               setExporting(false)
             }}
           >
             <DownloadCloud className="h-4 w-4" />
-            PDF ejecutivo
+            PDF semana {weekInfo.weekNumber}
           </Button>
           <p className="mt-4 text-xs text-slate-400">
             También puedes descargar reportes granulares desde la sección Reportes.
