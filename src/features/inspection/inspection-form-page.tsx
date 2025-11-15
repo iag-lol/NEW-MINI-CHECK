@@ -573,19 +573,31 @@ export const InspectionFormPage = () => {
     }
 
     const snapshot = methods.getValues()
-    for (let i = 0; i < steps.length; i++) {
-      const issues = getMissingForStep(steps[i].key, snapshot)
-      if (issues.length) {
-        setValidationMessage(`${steps[i].label}: ${issues.join(' · ')}`)
-        setStep(i)
+
+    // Para buses EN_PANNE, solo validar el paso 'estado'
+    if (snapshot.estadoBus === 'EN_PANNE') {
+      const estadoIssues = getMissingForStep('estado', snapshot)
+      if (estadoIssues.length) {
+        setValidationMessage(`Estado del bus: ${estadoIssues.join(' · ')}`)
+        setStep(0)
         return
       }
-    }
+    } else {
+      // Para buses OPERATIVOS, validar todos los pasos
+      for (let i = 0; i < steps.length; i++) {
+        const issues = getMissingForStep(steps[i].key, snapshot)
+        if (issues.length) {
+          setValidationMessage(`${steps[i].label}: ${issues.join(' · ')}`)
+          setStep(i)
+          return
+        }
+      }
 
-    const isValid = await methods.trigger()
-    if (!isValid) {
-      setValidationMessage('Revisa los campos con error antes de enviar.')
-      return
+      const isValid = await methods.trigger()
+      if (!isValid) {
+        setValidationMessage('Revisa los campos con error antes de enviar.')
+        return
+      }
     }
 
     setValidationMessage(null)
@@ -629,19 +641,22 @@ export const InspectionFormPage = () => {
         .single()
       if (error) throw error
 
+      // Insertar registros según estado del bus
+      const isEnPanne = values.estadoBus === 'EN_PANNE'
+
       await supabase.from('tags').insert({
         revision_id: revisionData.id,
-        tiene: values.tag.tiene,
-        serie: values.tag.serie || null,
-        observacion: values.tag.observacion || null,
+        tiene: isEnPanne ? false : values.tag.tiene,
+        serie: isEnPanne ? null : (values.tag.serie || null),
+        observacion: isEnPanne ? 'Bus en panne - no revisado' : (values.tag.observacion || null),
         bus_ppu: bus.ppu,
         terminal: values.terminalReportado,
       })
 
       await supabase.from('camaras').insert({
         revision_id: revisionData.id,
-        monitor_estado: values.camaras.monitorEstado,
-        detalle: {
+        monitor_estado: isEnPanne ? 'SIN_SENAL' : values.camaras.monitorEstado,
+        detalle: isEnPanne ? {} : {
           monitorDetalle: values.camaras.monitorDetalle,
           camDelantera: values.camaras.camDelantera,
           camCabina: values.camaras.camCabina,
@@ -652,28 +667,29 @@ export const InspectionFormPage = () => {
           activaPuertas: values.camaras.activaPuertas,
           visiblesPuertasCerradas: values.camaras.visiblesPuertasCerradas,
         },
-        observacion: values.camaras.observacion || null,
+        observacion: isEnPanne ? 'Bus en panne - no revisado' : (values.camaras.observacion || null),
         bus_ppu: bus.ppu,
         terminal: values.terminalReportado,
       })
 
       await supabase.from('extintores').insert({
         revision_id: revisionData.id,
-        tiene: values.extintores.tiene,
-        vencimiento_mes: values.extintores.vencimientoMes ?? null,
-        vencimiento_anio: values.extintores.vencimientoAnio ?? null,
-        certificacion: values.extintores.certificacion ?? null,
-        sonda: values.extintores.sonda ?? null,
-        manometro: values.extintores.manometro ?? null,
-        presion: values.extintores.presion ?? null,
-        cilindro: values.extintores.cilindro ?? null,
-        porta: values.extintores.porta ?? null,
-        observacion: values.extintores.observacion ?? null,
+        tiene: isEnPanne ? false : values.extintores.tiene,
+        vencimiento_mes: isEnPanne ? null : (values.extintores.vencimientoMes ?? null),
+        vencimiento_anio: isEnPanne ? null : (values.extintores.vencimientoAnio ?? null),
+        certificacion: isEnPanne ? null : (values.extintores.certificacion ?? null),
+        sonda: isEnPanne ? null : (values.extintores.sonda ?? null),
+        manometro: isEnPanne ? null : (values.extintores.manometro ?? null),
+        presion: isEnPanne ? null : (values.extintores.presion ?? null),
+        cilindro: isEnPanne ? null : (values.extintores.cilindro ?? null),
+        porta: isEnPanne ? null : (values.extintores.porta ?? null),
+        observacion: isEnPanne ? 'Bus en panne - no revisado' : (values.extintores.observacion ?? null),
         bus_ppu: bus.ppu,
         terminal: values.terminalReportado,
       })
 
-      if (values.mobileye.aplica) {
+      // Mobileye solo para buses OPERATIVOS con marca Volvo
+      if (!isEnPanne && values.mobileye.aplica) {
         await supabase.from('mobileye').insert({
           revision_id: revisionData.id,
           bus_marca: bus.marca,
@@ -691,76 +707,83 @@ export const InspectionFormPage = () => {
 
       await supabase.from('odometro').insert({
         revision_id: revisionData.id,
-        lectura: values.odometro.lectura,
-        estado: values.odometro.estado,
-        observacion: values.odometro.observacion ?? null,
+        lectura: isEnPanne ? 0 : values.odometro.lectura,
+        estado: isEnPanne ? 'NO_FUNCIONA' : values.odometro.estado,
+        observacion: isEnPanne ? 'Bus en panne - no revisado' : (values.odometro.observacion ?? null),
         bus_ppu: bus.ppu,
         terminal: values.terminalReportado,
       })
 
-      const publicidadTiene = publicityAreas.some((area) => values.publicidad[area.key].tiene)
-      const publicidadDanio = publicityAreas.some((area) => values.publicidad[area.key].danio)
-      const publicidadResiduos = publicityAreas.some((area) => values.publicidad[area.key].residuos)
+      const publicidadTiene = isEnPanne ? false : publicityAreas.some((area) => values.publicidad[area.key].tiene)
+      const publicidadDanio = isEnPanne ? false : publicityAreas.some((area) => values.publicidad[area.key].danio)
+      const publicidadResiduos = isEnPanne ? false : publicityAreas.some((area) => values.publicidad[area.key].residuos)
 
       const publicidadPayload: Database['public']['Tables']['publicidad']['Insert'] = {
         revision_id: revisionData.id,
         tiene: publicidadTiene,
         danio: publicidadDanio,
         residuos: publicidadResiduos,
-        detalle_lados: {
+        detalle_lados: isEnPanne ? {
+          izquierda: { tiene: false, danio: false, residuos: false, observacion: 'Bus en panne - no revisado' },
+          derecha: { tiene: false, danio: false, residuos: false, observacion: 'Bus en panne - no revisado' },
+          luneta: { tiene: false, danio: false, residuos: false, observacion: 'Bus en panne - no revisado' },
+        } : {
           izquierda: values.publicidad.izquierda,
           derecha: values.publicidad.derecha,
           luneta: values.publicidad.luneta,
         },
         nombre_publicidad: null,
-        observacion: null,
+        observacion: isEnPanne ? 'Bus en panne - no revisado' : null,
         bus_ppu: bus.ppu,
         terminal: values.terminalReportado,
       }
 
       await supabase.from('publicidad').insert(publicidadPayload)
 
-      const extintorCritico =
-        !values.extintores.tiene ||
-        values.extintores.certificacion === 'DAÑADA' ||
-        (values.extintores.presion && values.extintores.presion !== 'OPTIMO') ||
-        (values.extintores.cilindro && values.extintores.cilindro !== 'OK') ||
-        values.extintores.sonda === 'DAÑADA' ||
-        values.extintores.manometro === 'DAÑADO' ||
-        (values.extintores.porta && values.extintores.porta !== 'TIENE')
+      // NO generar tickets para buses EN_PANNE
+      if (!isEnPanne) {
+        const extintorCritico =
+          !values.extintores.tiene ||
+          values.extintores.certificacion === 'DAÑADA' ||
+          (values.extintores.presion && values.extintores.presion !== 'OPTIMO') ||
+          (values.extintores.cilindro && values.extintores.cilindro !== 'OK') ||
+          values.extintores.sonda === 'DAÑADA' ||
+          values.extintores.manometro === 'DAÑADO' ||
+          (values.extintores.porta && values.extintores.porta !== 'TIENE')
 
-      const tickets: Array<{ modulo: string; descripcion: string }> = []
-      if (extintorCritico) {
-        tickets.push({ modulo: 'Extintores', descripcion: 'Hallazgos críticos en extintores' })
-      }
-      if (publicidadDanio || publicidadResiduos) {
-        tickets.push({ modulo: 'Publicidad', descripcion: 'Publicidad con daño o residuos' })
-      }
-      if (
-        values.mobileye.aplica &&
-        [
-          values.mobileye.alertaDer,
-          values.mobileye.alertaIzq,
-          values.mobileye.consola,
-          values.mobileye.sensorDer,
-          values.mobileye.sensorIzq,
-          values.mobileye.sensorFrontal,
-        ].some((value) => value === false)
-      ) {
-        tickets.push({ modulo: 'Mobileye', descripcion: 'Sensor Mobileye reportó falla' })
-      }
+        const tickets: Array<{ modulo: string; descripcion: string }> = []
+        if (extintorCritico) {
+          tickets.push({ modulo: 'Extintores', descripcion: 'Hallazgos críticos en extintores' })
+        }
+        if (publicidadDanio || publicidadResiduos) {
+          tickets.push({ modulo: 'Publicidad', descripcion: 'Publicidad con daño o residuos' })
+        }
+        if (
+          values.mobileye.aplica &&
+          [
+            values.mobileye.alertaDer,
+            values.mobileye.alertaIzq,
+            values.mobileye.consola,
+            values.mobileye.sensorDer,
+            values.mobileye.sensorIzq,
+            values.mobileye.sensorFrontal,
+          ].some((value) => value === false)
+        ) {
+          tickets.push({ modulo: 'Mobileye', descripcion: 'Sensor Mobileye reportó falla' })
+        }
 
-      if (tickets.length) {
-        await supabase.from('tickets').insert(
-          tickets.map((ticket) => ({
-            revision_id: revisionData.id,
-            descripcion: ticket.descripcion,
-            modulo: ticket.modulo,
-            estado: 'PENDIENTE' as const,
-            prioridad: 'ALTA' as const,
-            terminal: values.terminalReportado,
-          }))
-        )
+        if (tickets.length) {
+          await supabase.from('tickets').insert(
+            tickets.map((ticket) => ({
+              revision_id: revisionData.id,
+              descripcion: ticket.descripcion,
+              modulo: ticket.modulo,
+              estado: 'PENDIENTE' as const,
+              prioridad: 'ALTA' as const,
+              terminal: values.terminalReportado,
+            }))
+          )
+        }
       }
 
       push({
@@ -888,11 +911,20 @@ export const InspectionFormPage = () => {
         break
       case 'cierre':
         if (!options?.shallow) {
-          for (const stepConfig of steps) {
-            if (stepConfig.key === 'cierre') continue
-            const childMissing = getMissingForStep(stepConfig.key, snapshot, { shallow: true })
-            if (childMissing.length) {
-              missing.push(`${stepConfig.label}: ${childMissing[0]}`)
+          // Para buses EN_PANNE, solo validar el paso 'estado'
+          if (snapshot.estadoBus === 'EN_PANNE') {
+            const estadoMissing = getMissingForStep('estado', snapshot, { shallow: true })
+            if (estadoMissing.length) {
+              missing.push(`Estado del bus: ${estadoMissing[0]}`)
+            }
+          } else {
+            // Para buses OPERATIVOS, validar todos los pasos
+            for (const stepConfig of steps) {
+              if (stepConfig.key === 'cierre') continue
+              const childMissing = getMissingForStep(stepConfig.key, snapshot, { shallow: true })
+              if (childMissing.length) {
+                missing.push(`${stepConfig.label}: ${childMissing[0]}`)
+              }
             }
           }
         }
