@@ -2,6 +2,8 @@
 
 Sistema web profesional para la **revisión integral de flota de buses**, con autenticación segura por RUT, workflow de inspección paso a paso, dashboard en tiempo real, notificaciones instantáneas y exportaciones listas para auditorías.
 
+**Última actualización:** 2025-11-15 - Filtro de semana global persistente implementado
+
 ## ✨ Características Principales
 
 - ✅ **Autenticación segura** por RUT con hash bcrypt
