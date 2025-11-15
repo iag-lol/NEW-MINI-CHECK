@@ -426,12 +426,6 @@ export const InspectionFormPage = () => {
   ])
 
   const searchBus = async (override?: string) => {
-    // VALIDACIÓN GPS: Bloquear búsqueda si no hay GPS activo
-    if (!gpsActive || !trackingLocation) {
-      setBusAlert('⚠️ Debes autorizar el GPS antes de buscar buses. Los registros sin ubicación GPS no son válidos.')
-      return
-    }
-
     const source = override ?? busQuery
     if (!source.trim()) return
     const query = source.trim().toUpperCase()
@@ -545,7 +539,13 @@ export const InspectionFormPage = () => {
   }, [searchParams, setSearchParams])
 
   const handleNext = () => {
-    // VALIDACIÓN GPS: Bloquear navegación si no hay GPS
+    // Si el bus está EN_PANNE, saltar directo al cierre (último paso)
+    if (estadoBus === 'EN_PANNE' && step === 0) {
+      attemptNavigateToStep(steps.length - 1)
+      return
+    }
+
+    // VALIDACIÓN GPS: Bloquear navegación si no hay GPS (solo para buses OPERATIVOS)
     if (!gpsActive || !trackingLocation) {
       setValidationMessage('⚠️ Debes autorizar el GPS para continuar. Haz clic en "Actualizar GPS" arriba.')
       return
@@ -557,10 +557,14 @@ export const InspectionFormPage = () => {
   }
 
   const submitInspection = async (values: InspectionForm) => {
-    // VALIDACIÓN GPS CRÍTICA: No permitir envío sin GPS
+    // VALIDACIÓN GPS: Permitir envío sin GPS solo para buses EN_PANNE
     if (!gpsActive || !trackingLocation) {
-      setValidationMessage('❌ NO PUEDES ENVIAR SIN GPS ACTIVO. Autoriza el permiso de ubicación para continuar.')
-      return
+      if (values.estadoBus === 'OPERATIVO') {
+        setValidationMessage('❌ NO PUEDES ENVIAR SIN GPS ACTIVO. Autoriza el permiso de ubicación para continuar.')
+        return
+      }
+      // Para buses EN_PANNE, continuar con coordenadas por defecto
+      console.warn('Bus EN_PANNE enviado sin GPS - usando coordenadas por defecto')
     }
 
     if (step !== steps.length - 1) {
@@ -1452,7 +1456,6 @@ export const InspectionFormPage = () => {
               className="gap-2 rounded-2xl"
               variant="outline"
               onClick={() => searchBus()}
-              disabled={!gpsActive || !trackingLocation}
             >
               <Search className="h-4 w-4" /> Buscar bus
             </Button>
