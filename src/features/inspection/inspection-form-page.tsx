@@ -938,12 +938,19 @@ export const InspectionFormPage = () => {
     if (targetIndex < 0 || targetIndex >= steps.length) return false
     if (targetIndex > step) {
       const snapshot = methods.getValues()
-      for (let current = step; current < targetIndex; current++) {
-        const issues = getMissingForStep(steps[current].key, snapshot)
-        if (issues.length) {
-          setValidationMessage(`${steps[current].label}: ${issues.join(' · ')}`)
-          setStep(current)
-          return false
+
+      // Para buses EN_PANNE saltando al cierre, NO validar pasos intermedios
+      const isEnPanneToCierre = snapshot.estadoBus === 'EN_PANNE' && targetIndex === steps.length - 1 && step === 0
+
+      if (!isEnPanneToCierre) {
+        // Solo validar pasos intermedios para buses OPERATIVOS
+        for (let current = step; current < targetIndex; current++) {
+          const issues = getMissingForStep(steps[current].key, snapshot)
+          if (issues.length) {
+            setValidationMessage(`${steps[current].label}: ${issues.join(' · ')}`)
+            setStep(current)
+            return false
+          }
         }
       }
     }
