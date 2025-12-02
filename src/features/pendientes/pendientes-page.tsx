@@ -7,8 +7,10 @@ import {
   CheckCircle2,
   Clock,
   Compass,
+  Download,
   Search,
 } from 'lucide-react'
+import { jsPDF } from 'jspdf'
 import dayjs from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
 import type { Tables } from '@/types/database'
@@ -115,6 +117,178 @@ export const PendientesPage = () => {
     navigate(`/app/formulario?ppu=${encodeURIComponent(bus.ppu)}`)
   }
 
+  const handleDownloadPDF = () => {
+    const pendingBuses = filtered.filter((item) => item.pending)
+
+    if (pendingBuses.length === 0) {
+      alert('No hay buses pendientes para exportar')
+      return
+    }
+
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'letter',
+    })
+
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const margin = 15
+
+    // FONDO DEGRADADO PROFESIONAL
+    doc.setFillColor(15, 23, 42) // slate-900
+    doc.rect(0, 0, pageWidth, 45, 'F')
+
+    doc.setFillColor(59, 130, 246) // blue-500 accent
+    doc.rect(0, 0, pageWidth, 8, 'F')
+
+    // LOGO Y TÍTULO
+    doc.setFontSize(28)
+    doc.setTextColor(255, 255, 255)
+    doc.setFont('helvetica', 'bold')
+    doc.text('🚌 BUSES PENDIENTES', margin, 25)
+
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(203, 213, 225) // slate-300
+    const weekText = `Semana ${weekInfo.weekNumber} · ${weekInfo.label}`
+    doc.text(weekText, margin, 32)
+
+    const terminal = terminalFilter === 'TODOS' ? 'Todos los terminales' : `Terminal ${terminalFilter}`
+    doc.text(terminal, margin, 37)
+
+    // ESTADÍSTICAS EN HEADER
+    doc.setFontSize(11)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(255, 255, 255)
+    const statsText = `${pendingBuses.length} pendientes de ${total} buses totales`
+    const statsWidth = doc.getTextWidth(statsText)
+    doc.text(statsText, pageWidth - margin - statsWidth, 30)
+
+    // FECHA DE GENERACIÓN
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(148, 163, 184) // slate-400
+    const dateText = `Generado: ${dayjs().format('DD/MM/YYYY HH:mm')} hrs`
+    const dateWidth = doc.getTextWidth(dateText)
+    doc.text(dateText, pageWidth - margin - dateWidth, 36)
+
+    // LÍNEA SEPARADORA ELEGANTE
+    doc.setDrawColor(59, 130, 246)
+    doc.setLineWidth(0.5)
+    doc.line(margin, 42, pageWidth - margin, 42)
+
+    // TABLA - ENCABEZADOS CON DISEÑO PROFESIONAL
+    let yPos = 55
+
+    doc.setFillColor(241, 245, 249) // slate-100
+    doc.rect(margin, yPos - 7, pageWidth - 2 * margin, 10, 'F')
+
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(51, 65, 85) // slate-700
+
+    const colWidths = {
+      num: 15,
+      ppu: 45,
+      interno: 40,
+      ubicacion: pageWidth - 2 * margin - 100,
+    }
+
+    doc.text('#', margin + 3, yPos)
+    doc.text('PPU', margin + colWidths.num + 3, yPos)
+    doc.text('Nº INTERNO', margin + colWidths.num + colWidths.ppu + 3, yPos)
+    doc.text('UBICACIÓN', margin + colWidths.num + colWidths.ppu + colWidths.interno + 3, yPos)
+
+    yPos += 12
+
+    // FILAS DE DATOS
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+
+    pendingBuses.forEach((item, index) => {
+      // Verificar si necesitamos nueva página
+      if (yPos > pageHeight - 30) {
+        doc.addPage()
+        yPos = 20
+
+        // Repetir encabezados en nueva página
+        doc.setFillColor(241, 245, 249)
+        doc.rect(margin, yPos - 7, pageWidth - 2 * margin, 10, 'F')
+
+        doc.setFontSize(9)
+        doc.setFont('helvetica', 'bold')
+        doc.setTextColor(51, 65, 85)
+
+        doc.text('#', margin + 3, yPos)
+        doc.text('PPU', margin + colWidths.num + 3, yPos)
+        doc.text('Nº INTERNO', margin + colWidths.num + colWidths.ppu + 3, yPos)
+        doc.text('UBICACIÓN', margin + colWidths.num + colWidths.ppu + colWidths.interno + 3, yPos)
+
+        yPos += 12
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10)
+      }
+
+      // Fondo alternado para filas
+      if (index % 2 === 0) {
+        doc.setFillColor(248, 250, 252) // slate-50
+        doc.rect(margin, yPos - 7, pageWidth - 2 * margin, 10, 'F')
+      }
+
+      // BORDE DE FILA
+      doc.setDrawColor(226, 232, 240) // slate-200
+      doc.setLineWidth(0.1)
+      doc.line(margin, yPos + 3, pageWidth - margin, yPos + 3)
+
+      // CONTENIDO
+      doc.setTextColor(30, 41, 59) // slate-800
+
+      // Número
+      doc.setFont('helvetica', 'bold')
+      doc.text(`${index + 1}`, margin + 3, yPos)
+
+      // PPU
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(59, 130, 246) // blue-600
+      doc.text(item.bus.ppu, margin + colWidths.num + 3, yPos)
+
+      // Número interno
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(71, 85, 105) // slate-600
+      doc.text(item.bus.numero_interno, margin + colWidths.num + colWidths.ppu + 3, yPos)
+
+      // Celda de ubicación (vacía con borde)
+      const ubicacionX = margin + colWidths.num + colWidths.ppu + colWidths.interno
+      doc.setDrawColor(203, 213, 225) // slate-300
+      doc.setLineWidth(0.3)
+      doc.rect(ubicacionX, yPos - 6, colWidths.ubicacion, 8)
+
+      yPos += 12
+    })
+
+    // FOOTER PROFESIONAL
+    const footerY = pageHeight - 15
+
+    doc.setFillColor(15, 23, 42) // slate-900
+    doc.rect(0, footerY - 5, pageWidth, 20, 'F')
+
+    doc.setFontSize(8)
+    doc.setTextColor(148, 163, 184) // slate-400
+    doc.setFont('helvetica', 'normal')
+    doc.text('New Mini-Check · Sistema de Revisión de Flota', margin, footerY)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(59, 130, 246) // blue-400
+    const pageNum = `Página 1 de ${doc.getNumberOfPages()}`
+    const pageNumWidth = doc.getTextWidth(pageNum)
+    doc.text(pageNum, pageWidth - margin - pageNumWidth, footerY)
+
+    // GUARDAR PDF
+    const fileName = `Buses_Pendientes_Semana${weekInfo.weekNumber}_${dayjs().format('YYYYMMDD')}.pdf`
+    doc.save(fileName)
+  }
+
   const loading = flotaLoading || revisionesLoading
 
   return (
@@ -132,7 +306,17 @@ export const PendientesPage = () => {
               Revisa cuáles buses aún no tienen inspección registrada esta semana.
             </p>
           </div>
-          <WeekSelector />
+          <div className="flex flex-col gap-3 md:items-end">
+            <WeekSelector />
+            <Button
+              onClick={handleDownloadPDF}
+              disabled={pendingCount === 0}
+              className="gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600"
+            >
+              <Download className="h-4 w-4" />
+              Descargar PDF Pendientes
+            </Button>
+          </div>
         </div>
         <div className="grid gap-3 md:grid-cols-[240px,1fr]">
           <div>
