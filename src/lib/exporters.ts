@@ -20,11 +20,12 @@ type TicketRow = Tables<'tickets'>
 export const exportAllModulesToXlsx = async (startDate?: string, endDate?: string) => {
   const workbook = new ExcelJS.Workbook()
 
-  // 1. Obtener TODA la flota
+  // 1. Obtener TODA la flota y ordenar por Terminal y luego por Número Interno
   const { data: flotaData } = await supabase
     .from('flota')
     .select('*')
-    .order('numero_interno')
+    .order('terminal', { ascending: true })
+    .order('numero_interno', { ascending: true })
 
   const flota = flotaData as FlotaRow[] | null
 
@@ -84,7 +85,7 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   const todasRevisiones = [...(revisionesSemana || []), ...revisionesHistoricas]
   const revisionIds = todasRevisiones.map((r) => r.id)
 
-  // 5. Obtener datos complementarios para TODAS las revisiones relevantes (semana + históricas)
+  // 5. Obtener datos complementarios para TODAS las revisiones relevantes
   // Usamos 'in' con los IDs recolectados
 
   // Función helper para fetch seguro por chunks si son muchos IDs (opcional, aquí simple)
@@ -118,215 +119,258 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
     publicidades = (resPublicidades.data as PublicidadRow[]) || []
   }
 
-  // 6. Agrupar flota por TERMINAL
-  const flotaPorTerminal = flota.reduce((acc: Record<string, FlotaRow[]>, bus: FlotaRow) => {
-    const term = bus.terminal || 'Sin Terminal'
-    if (!acc[term]) acc[term] = []
-    acc[term].push(bus)
-    return acc
-  }, {} as Record<string, FlotaRow[]>)
+  // Helper para buscar datos de una revisión
+  const getRevisionData = (ppu: string) => {
+    // 1. Buscar en semana actual
+    let rev = revisionesSemana?.find(r => r.bus_ppu === ppu)
+    let isHistorical = false
 
-  // 7. Crear hojas por Terminal
-  Object.entries(flotaPorTerminal).forEach(([nombreTerminal, busesDelTerminal]) => {
-    // Normalizar nombre de hoja (max 31 chars, sin caracteres especiales prohibidos excel)
-    const sheetName = nombreTerminal.replace(/[*?:/\[\]\\]/g, '').substring(0, 31)
-    const sheet = workbook.addWorksheet(sheetName.toUpperCase())
+    // 2. Si no, buscar histórico
+    if (!rev) {
+      rev = revisionesHistoricas.find(r => r.bus_ppu === ppu)
+      if (rev) isHistorical = true
+    }
 
-    // Configurar columnas
-    sheet.columns = [
-      { header: 'PPU', key: 'ppu', width: 12 },
-      { header: 'Nº INTERNO', key: 'interno', width: 12 },
-      { header: 'MARCA', key: 'marca', width: 15 },
-      { header: 'MODELO', key: 'modelo', width: 20 },
-      { header: 'AÑO', key: 'anio', width: 8 },
-      // { header: 'TERMINAL', key: 'terminal', width: 20 }, // Ya está en la hoja
-      { header: 'ESTADO REVISIÓN SEMANAL', key: 'estado_revision', width: 30 },
-      { header: 'ESTADO BUS (En Revisión)', key: 'estado_bus', width: 25 },
-      { header: 'INSPECTOR', key: 'inspector', width: 25 },
-      { header: 'FECHA INSPECCIÓN', key: 'fecha', width: 18 },
-      { header: 'TAG', key: 'tag', width: 15 },
-      { header: 'CÁMARAS', key: 'camaras', width: 15 },
-      { header: 'EXTINTOR', key: 'extintor', width: 15 },
-      { header: 'ODÓMETRO', key: 'odometro', width: 15 },
-      { header: 'PUBLICIDAD', key: 'publicidad', width: 15 },
-      { header: 'OBSERVACIONES', key: 'observaciones', width: 40 },
-    ]
+    return { rev, isHistorical }
+  }
 
-    // Estilo encabezado
+  const applyCommonRowStyles = (row: ExcelJS.Row, rev?: RevisionRow, isHistorical?: boolean) => {
+    // Bordes
+    row.eachCell((cell) => {
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        right: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+      }
+    })
+
+    // Colores de fondo
+    if (!rev) {
+      // Nunca revisado
+      row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } } // Rojo
+    } else if (isHistorical) {
+      // Histórico
+      row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } } // Naranja
+    } else {
+      // Actual
+      if (rev.estado_bus === 'EN_PANNE') {
+        row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF3CD' } } // Amarillo
+      } else {
+        row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCFCE7' } } // Verde
+      }
+    }
+  }
+
+  const setupHeader = (sheet: ExcelJS.Worksheet) => {
     const headerRow = sheet.getRow(1)
     headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 }
-    headerRow.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      // Color diferente por terminal si se desea, o standard corporativo
-      fgColor: { argb: 'FF1E40AF' }, // Azul oscuro corporativo
-    }
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }
     headerRow.alignment = { vertical: 'middle', horizontal: 'center' }
     headerRow.height = 30
+  }
 
-    // Poblar datos
-    busesDelTerminal.forEach((bus: FlotaRow) => {
-      // Buscar revisión de ESTA semana
-      const revisionSemana = revisionesSemana?.find((r) => r.bus_ppu === bus.ppu)
+  // ==========================================
+  // HOJA 1: RESUMEN GENERAL
+  // ==========================================
+  const sheetResumen = workbook.addWorksheet('RESUMEN')
+  sheetResumen.columns = [
+    { header: 'PPU', key: 'ppu', width: 12 },
+    { header: 'Nº INTERNO', key: 'interno', width: 12 },
+    { header: 'TERMINAL', key: 'terminal', width: 20 },
+    { header: 'ESTADO REVISIÓN', key: 'estado_revision', width: 30 },
+    { header: 'ESTADO BUS', key: 'estado_bus', width: 20 },
+    { header: 'INSPECTOR', key: 'inspector', width: 25 },
+    { header: 'FECHA INSPECCIÓN', key: 'fecha', width: 20 },
+    { header: 'OBSERVACIONES GENERALES', key: 'observaciones', width: 50 },
+  ]
+  setupHeader(sheetResumen)
 
-      let revisionData: RevisionRow | undefined = revisionSemana
-      let esHistorica = false
+  flota.forEach((bus) => {
+    const { rev, isHistorical } = getRevisionData(bus.ppu)
 
-      // Si no hay de esta semana, buscar la histórica
-      if (!revisionSemana) {
-        revisionData = revisionesHistoricas.find((r) => r.bus_ppu === bus.ppu)
-        if (revisionData) esHistorica = true
-      }
+    const row = sheetResumen.addRow({
+      ppu: bus.ppu,
+      interno: bus.numero_interno,
+      terminal: bus.terminal,
+      estado_revision: rev ? (isHistorical ? `⚠️ HISTÓRICO (${dayjs(rev.created_at).format('DD/MM/YYYY')})` : '✅ ACTUAL') : '❌ SIN INFO',
+      estado_bus: rev ? rev.estado_bus : '-',
+      inspector: rev ? rev.inspector_nombre : '-',
+      fecha: rev ? dayjs(rev.created_at).format('DD/MM/YYYY HH:mm') : '-',
+      observaciones: rev ? rev.observaciones : '-'
+    })
+    applyCommonRowStyles(row, rev, isHistorical)
+  })
 
-      const rowValues: any = {
-        ppu: bus.ppu,
-        interno: bus.numero_interno,
-        marca: bus.marca,
-        modelo: bus.modelo,
-        anio: bus.anio,
-      }
+  // ==========================================
+  // HOJA 2: EXTINTORES
+  // ==========================================
+  const sheetExtintores = workbook.addWorksheet('EXTINTORES')
+  sheetExtintores.columns = [
+    { header: 'PPU', key: 'ppu', width: 12 },
+    { header: 'Nº INTERNO', key: 'interno', width: 12 },
+    { header: 'TERMINAL', key: 'terminal', width: 20 },
+    { header: 'TIENE', key: 'tiene', width: 10 },
+    { header: 'VENCIMIENTO', key: 'vencimiento', width: 15 },
+    { header: 'CERTIFICACIÓN', key: 'certificacion', width: 20 },
+    { header: 'MANÓMETRO', key: 'manometro', width: 15 },
+    { header: 'PRESIÓN', key: 'presion', width: 15 },
+    { header: 'CILINDRO', key: 'cilindro', width: 15 },
+    { header: 'PORTA EXTINTOR', key: 'porta', width: 20 },
+    { header: 'OBSERVACIONES', key: 'observacion', width: 30 },
+    { header: 'FECHA REV.', key: 'fecha', width: 15 },
+  ]
+  setupHeader(sheetExtintores)
 
-      if (revisionData) {
-        // Datos asociados a la revisión encontrada (sea actual o histórica)
-        const tag = tags.find((t) => t.revision_id === revisionData?.id)
-        const camara = camaras.find((c) => c.revision_id === revisionData?.id)
-        const extintor = extintores.find((e) => e.revision_id === revisionData?.id)
-        const odometro = odometros.find((o) => o.revision_id === revisionData?.id)
-        const publicidad = publicidades.find((p) => p.revision_id === revisionData?.id)
+  flota.forEach((bus) => {
+    const { rev, isHistorical } = getRevisionData(bus.ppu)
+    const ext = rev ? extintores.find(e => e.revision_id === rev.id) : null
 
-        // Lógica de estado
-        if (esHistorica) {
-          rowValues.estado_revision = `⚠️ NO REVISADO (Última: ${dayjs(revisionData.created_at).format('DD/MM/YYYY')})`
-        } else {
-          rowValues.estado_revision = '✅ REVISADO SEMANA ACTUAL'
-        }
+    const row = sheetExtintores.addRow({
+      ppu: bus.ppu,
+      interno: bus.numero_interno,
+      terminal: bus.terminal,
+      tiene: ext ? (ext.tiene ? 'SI' : 'NO') : '-',
+      vencimiento: ext && ext.tiene ? `${ext.vencimiento_mes}/${ext.vencimiento_anio}` : '-',
+      // CORRECCIÓN ORTOGRÁFICA: Comparar con 'VIGENTE' (según schema)
+      certificacion: ext && ext.tiene ? ext.certificacion : '-',
+      manometro: ext && ext.tiene ? ext.manometro : '-',
+      presion: ext && ext.tiene ? ext.presion : '-',
+      cilindro: ext && ext.tiene ? ext.cilindro : '-',
+      porta: ext && ext.tiene ? ext.porta : '-',
+      observacion: ext ? ext.observacion : '-',
+      fecha: rev ? dayjs(rev.created_at).format('DD/MM/YYYY') : '-',
+    })
+    applyCommonRowStyles(row, rev, isHistorical)
+  })
 
-        rowValues.estado_bus =
-          revisionData.estado_bus === 'OPERATIVO' ? '✅ OPERATIVO' : '⚠️ EN PANNE'
-        rowValues.inspector = revisionData.inspector_nombre
-        rowValues.fecha = dayjs(revisionData.created_at).format('DD/MM/YYYY HH:mm')
+  // ==========================================
+  // HOJA 3: TAGS
+  // ==========================================
+  const sheetTags = workbook.addWorksheet('TAGS')
+  sheetTags.columns = [
+    { header: 'PPU', key: 'ppu', width: 12 },
+    { header: 'Nº INTERNO', key: 'interno', width: 12 },
+    { header: 'TERMINAL', key: 'terminal', width: 20 },
+    { header: 'TIENE TAG', key: 'tiene', width: 12 },
+    { header: 'Nº SERIE', key: 'serie', width: 20 },
+    { header: 'OBSERVACIONES', key: 'observacion', width: 30 },
+    { header: 'FECHA REV.', key: 'fecha', width: 15 },
+  ]
+  setupHeader(sheetTags)
 
-        // Lógica detallada (copiada del original y mejorada)
-        rowValues.tag = tag?.tiene ? '✅ Tiene' : '❌ No tiene'
-        rowValues.camaras = camara
-          ? camara.monitor_estado === 'FUNCIONA'
-            ? '✅ Funciona'
-            : `⚠️ ${camara.monitor_estado.replace(/_/g, ' ')}`
-          : 'N/A'
-        rowValues.extintor = extintor
-          ? extintor.tiene
-            ? extintor.certificacion === 'BUENA' // Nota: Ajustar si el campo en DB es distinto, sigo lógica original
-              ? '✅ OK'
-              : '⚠️ Dañada/Vencida'
-            : '❌ No tiene'
-          : 'N/A'
-        rowValues.odometro = odometro
-          ? odometro.estado === 'OK'
-            ? `✅ ${odometro.lectura} km`
-            : `⚠️ ${odometro.estado}`
-          : 'N/A'
-        rowValues.publicidad = publicidad
-          ? publicidad.tiene
-            ? publicidad.danio
-              ? '⚠️ Con daño'
-              : '✅ OK'
-            : 'Sin publicidad'
-          : 'N/A'
-        rowValues.observaciones = revisionData.observaciones || ''
-      } else {
-        // NUNCA REVISADO
-        rowValues.estado_revision = '❌ NUNCA REVISADO'
-        rowValues.estado_bus = '-'
-        rowValues.inspector = '-'
-        rowValues.fecha = '-'
-        rowValues.tag = '-'
-        rowValues.camaras = '-'
-        rowValues.extintor = '-'
-        rowValues.odometro = '-'
-        rowValues.publicidad = '-'
-        rowValues.observaciones = 'Sin historial en sistema'
-      }
+  flota.forEach((bus) => {
+    const { rev, isHistorical } = getRevisionData(bus.ppu)
+    const tag = rev ? tags.find(t => t.revision_id === rev.id) : null
 
-      const row = sheet.addRow(rowValues)
+    const row = sheetTags.addRow({
+      ppu: bus.ppu,
+      interno: bus.numero_interno,
+      terminal: bus.terminal,
+      tiene: tag ? (tag.tiene ? 'SI' : 'NO') : '-',
+      serie: tag && tag.tiene ? tag.serie : '-',
+      observacion: tag ? tag.observacion : '-',
+      fecha: rev ? dayjs(rev.created_at).format('DD/MM/YYYY') : '-',
+    })
+    applyCommonRowStyles(row, rev, isHistorical)
+  })
 
-      // Estilos Condicionales
-      if (!revisionData) {
-        // Nunca revisado: Rojo claro
-        row.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFFEE2E2' },
-        }
-      } else if (esHistorica) {
-        // Revisión antigua: Amarillo claro / Naranja suave
-        row.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFFFEDD5' },
-        }
-      } else {
-        // Revisado esta semana
-        if (revisionData.estado_bus === 'EN_PANNE') {
-          row.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFFFF3CD' }, // Amarillo alerta
-          }
-        } else {
-          row.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFDCFCE7' }, // Verde éxito
-          }
-        }
-      }
+  // ==========================================
+  // HOJA 4: CÁMARAS
+  // ==========================================
+  const sheetCamaras = workbook.addWorksheet('CAMARAS')
+  sheetCamaras.columns = [
+    { header: 'PPU', key: 'ppu', width: 12 },
+    { header: 'Nº INTERNO', key: 'interno', width: 12 },
+    { header: 'TERMINAL', key: 'terminal', width: 20 },
+    { header: 'ESTADO MONITOR', key: 'estado', width: 20 },
+    { header: 'DETALLE CÁMARAS', key: 'detalle', width: 50 },
+    { header: 'OBSERVACIONES', key: 'observacion', width: 30 },
+    { header: 'FECHA REV.', key: 'fecha', width: 15 },
+  ]
+  setupHeader(sheetCamaras)
 
-      // Bordes
-      row.eachCell((cell) => {
-        cell.border = {
-          top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-          left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-          bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-          right: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-        }
-      })
-    }) // Fin busesDelTerminal loop
+  flota.forEach((bus) => {
+    const { rev, isHistorical } = getRevisionData(bus.ppu)
+    const cam = rev ? camaras.find(c => c.revision_id === rev.id) : null
 
-    // Resumen al final de la hoja del terminal
-    sheet.addRow([])
-    const total = busesDelTerminal.length
-    const revisados = busesDelTerminal.filter((b: FlotaRow) =>
-      revisionesSemana?.find((r) => r.bus_ppu === b.ppu)
-    ).length
-    const faltantes = total - revisados
+    const row = sheetCamaras.addRow({
+      ppu: bus.ppu,
+      interno: bus.numero_interno,
+      terminal: bus.terminal,
+      estado: cam ? cam.monitor_estado : '-',
+      detalle: cam && cam.detalle ? JSON.stringify(cam.detalle) : '-',
+      observacion: cam ? cam.observacion : '-',
+      fecha: rev ? dayjs(rev.created_at).format('DD/MM/YYYY') : '-',
+    })
+    applyCommonRowStyles(row, rev, isHistorical)
+  })
 
-    // De los revisados (esta semana), cuántos operativos
-    const operativosSemana = busesDelTerminal.filter((b: FlotaRow) => {
-      const r = revisionesSemana?.find((r) => r.bus_ppu === b.ppu)
-      return r && r.estado_bus === 'OPERATIVO'
-    }).length
 
-    // De los revisados (esta semana), cuántos panne
-    const panneSemana = busesDelTerminal.filter((b: FlotaRow) => {
-      const r = revisionesSemana?.find((r) => r.bus_ppu === b.ppu)
-      return r && r.estado_bus === 'EN_PANNE'
-    }).length
+  // ==========================================
+  // HOJA 5: ODÓMETRO
+  // ==========================================
+  const sheetOdometro = workbook.addWorksheet('ODOMETRO')
+  sheetOdometro.columns = [
+    { header: 'PPU', key: 'ppu', width: 12 },
+    { header: 'Nº INTERNO', key: 'interno', width: 12 },
+    { header: 'TERMINAL', key: 'terminal', width: 20 },
+    { header: 'LECTURA (KM)', key: 'lectura', width: 15 },
+    { header: 'ESTADO', key: 'estado', width: 20 },
+    { header: 'OBSERVACIONES', key: 'observacion', width: 30 },
+    { header: 'FECHA REV.', key: 'fecha', width: 15 },
+  ]
+  setupHeader(sheetOdometro)
 
-    const resumenRow = sheet.addRow([
-      'RESUMEN TERMINAL:',
-      `Total Flota: ${total}`,
-      `Revisados Semana: ${revisados}`,
-      `Faltantes: ${faltantes}`,
-      `Operativos (Semana): ${operativosSemana}`,
-      `En Panne (Semana): ${panneSemana}`,
-    ])
-    resumenRow.font = { bold: true }
-    resumenRow.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFF3F4F6' },
-    }
-  }) // Fin terminal loop
+  flota.forEach((bus) => {
+    const { rev, isHistorical } = getRevisionData(bus.ppu)
+    const odo = rev ? odometros.find(o => o.revision_id === rev.id) : null
+
+    const row = sheetOdometro.addRow({
+      ppu: bus.ppu,
+      interno: bus.numero_interno,
+      terminal: bus.terminal,
+      lectura: odo ? odo.lectura : '-',
+      estado: odo ? odo.estado : '-',
+      observacion: odo ? odo.observacion : '-',
+      fecha: rev ? dayjs(rev.created_at).format('DD/MM/YYYY') : '-',
+    })
+    applyCommonRowStyles(row, rev, isHistorical)
+  })
+
+  // ==========================================
+  // HOJA 6: PUBLICIDAD
+  // ==========================================
+  const sheetPublicidad = workbook.addWorksheet('PUBLICIDAD')
+  sheetPublicidad.columns = [
+    { header: 'PPU', key: 'ppu', width: 12 },
+    { header: 'Nº INTERNO', key: 'interno', width: 12 },
+    { header: 'TERMINAL', key: 'terminal', width: 20 },
+    { header: 'TIENE', key: 'tiene', width: 10 },
+    { header: 'CON DAÑO', key: 'danio', width: 10 },
+    { header: 'NOMBRE PUBLICIDAD', key: 'nombre', width: 30 },
+    { header: 'OBSERVACIONES', key: 'observacion', width: 30 },
+    { header: 'FECHA REV.', key: 'fecha', width: 15 },
+  ]
+  setupHeader(sheetPublicidad)
+
+  flota.forEach((bus) => {
+    const { rev, isHistorical } = getRevisionData(bus.ppu)
+    const pub = rev ? publicidades.find(p => p.revision_id === rev.id) : null
+
+    const row = sheetPublicidad.addRow({
+      ppu: bus.ppu,
+      interno: bus.numero_interno,
+      terminal: bus.terminal,
+      tiene: pub ? (pub.tiene ? 'SI' : 'NO') : '-',
+      danio: pub && pub.tiene ? (pub.danio ? 'SI' : 'NO') : '-',
+      nombre: pub && pub.tiene ? pub.nombre_publicidad : '-',
+      observacion: pub ? pub.observacion : '-',
+      fecha: rev ? dayjs(rev.created_at).format('DD/MM/YYYY') : '-',
+    })
+    applyCommonRowStyles(row, rev, isHistorical)
+  })
+
 
   // Generar archivo
   const buffer = await workbook.xlsx.writeBuffer()
@@ -336,7 +380,7 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   const url = window.URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `Reporte_Flota_Completo_${dayjs().format('YYYYMMDD_HHmm')}.xlsx`
+  link.download = `Reporte_Flota_Detallado_${dayjs().format('YYYYMMDD_HHmm')}.xlsx`
   link.click()
   window.URL.revokeObjectURL(url)
 }
