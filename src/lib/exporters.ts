@@ -19,199 +19,304 @@ type TicketRow = Tables<'tickets'>
 
 export const exportAllModulesToXlsx = async (startDate?: string, endDate?: string) => {
   const workbook = new ExcelJS.Workbook()
-  const sheet = workbook.addWorksheet('INSPECCIONES SEMANALES')
 
-  // Obtener TODA la flota
+  // 1. Obtener TODA la flota
   const { data: flota } = await supabase
     .from('flota')
     .select('*')
     .order('numero_interno')
 
-  // Obtener todas las revisiones de la semana (actual o especificada)
+  if (!flota) {
+    console.error('No se pudo obtener la flota')
+    return
+  }
+
+  // 2. Obtener todas las revisiones de la semana (actual o especificada)
   const start = startDate ?? dayjs().isoWeekday(1).startOf('day').toISOString()
   const end = endDate ?? dayjs().isoWeekday(1).add(6, 'day').endOf('day').toISOString()
 
-  const { data: revisiones } = await supabase
+  const { data: revisionesSemana } = await supabase
     .from('revisiones')
     .select('*')
     .gte('created_at', start)
     .lte('created_at', end)
 
-  // Obtener datos complementarios de módulos
-  const { data: tags } = await supabase.from('tags').select('*')
-  const { data: camaras } = await supabase.from('camaras').select('*')
-  const { data: extintores } = await supabase.from('extintores').select('*')
-  const { data: odometros } = await supabase.from('odometro').select('*')
-  const { data: publicidades } = await supabase.from('publicidad').select('*')
+  // 3. Identificar buses sin revisión esta semana
+  const busesRevisadosIds = new Set(revisionesSemana?.map((r) => r.bus_ppu))
+  const busesSinRevision = flota.filter((bus) => !busesRevisadosIds.has(bus.ppu))
+  const ppusSinRevision = busesSinRevision.map((b) => b.ppu)
 
-  // Configurar columnas con diseño profesional
-  sheet.columns = [
-    { header: 'PPU', key: 'ppu', width: 12 },
-    { header: 'Nº INTERNO', key: 'interno', width: 12 },
-    { header: 'MARCA', key: 'marca', width: 15 },
-    { header: 'MODELO', key: 'modelo', width: 20 },
-    { header: 'AÑO', key: 'anio', width: 8 },
-    { header: 'TERMINAL', key: 'terminal', width: 20 },
-    { header: 'ESTADO REVISIÓN', key: 'estado_revision', width: 18 },
-    { header: 'ESTADO BUS', key: 'estado_bus', width: 15 },
-    { header: 'INSPECTOR', key: 'inspector', width: 25 },
-    { header: 'FECHA INSPECCIÓN', key: 'fecha', width: 18 },
-    { header: 'TAG', key: 'tag', width: 15 },
-    { header: 'CÁMARAS', key: 'camaras', width: 15 },
-    { header: 'EXTINTOR', key: 'extintor', width: 15 },
-    { header: 'ODÓMETRO', key: 'odometro', width: 15 },
-    { header: 'PUBLICIDAD', key: 'publicidad', width: 15 },
-    { header: 'OBSERVACIONES', key: 'observaciones', width: 40 },
-  ]
+  // 4. Obtener última revisión histórica para buses NO revisados esta semana
+  let revisionesHistoricas: RevisionRow[] = []
+  if (ppusSinRevision.length > 0) {
+    // Nota: Supabase no tiene una forma nativa simple de "latest per group" en una sola query
+    // Optimización: Traemos las revisiones más recientes de esos buses (limitado a últimas 3 meses o similar si fuera necesario, 
+    // pero para MVP traemos todo ordenado y filtramos en JS)
 
-  // Estilo de encabezados
-  const headerRow = sheet.getRow(1)
-  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 }
-  headerRow.fill = {
-    type: 'pattern',
-    pattern: 'solid',
-    fgColor: { argb: 'FF3B5BFF' },
+    // Para no saturar, podemos hacer batching si son muchos, o query específica.
+    // Usaremos una query simple filtrando por PPU.
+
+    const { data: historial } = await supabase
+      .from('revisiones')
+      .select('*')
+      .in('bus_ppu', ppusSinRevision)
+      .order('created_at', { ascending: false })
+
+    // Filtrar para dejar solo la más reciente por PPU
+    if (historial) {
+      const latestMap = new Map<string, RevisionRow>()
+      historial.forEach(rev => {
+        if (!latestMap.has(rev.bus_ppu)) {
+          latestMap.set(rev.bus_ppu, rev)
+        }
+      })
+      revisionesHistoricas = Array.from(latestMap.values())
+    }
   }
-  headerRow.alignment = { vertical: 'middle', horizontal: 'center' }
-  headerRow.height = 25
 
-  // Procesar cada bus de la flota
-  ;(flota as FlotaRow[])?.forEach((bus: FlotaRow) => {
-    // Buscar revisión de esta semana para este bus
-    const revision = (revisiones as RevisionRow[])?.find((r) => r.bus_ppu === bus.ppu)
+  // Combinar set de revisiones a consultar detalles
+  const todasRevisiones = [...(revisionesSemana || []), ...revisionesHistoricas]
+  const revisionIds = todasRevisiones.map(r => r.id)
 
-    if (revision) {
-      // Bus revisado - mostrar datos reales
-      const tag = (tags as TagRow[])?.find((t) => t.revision_id === revision.id)
-      const camara = (camaras as CamarasRow[])?.find((c) => c.revision_id === revision.id)
-      const extintor = (extintores as ExtintoresRow[])?.find((e) => e.revision_id === revision.id)
-      const odometro = (odometros as OdometroRow[])?.find((o) => o.revision_id === revision.id)
-      const publicidad = (publicidades as PublicidadRow[])?.find(
-        (p) => p.revision_id === revision.id
-      )
+  // 5. Obtener datos complementarios para TODAS las revisiones relevantes (semana + históricas)
+  // Usamos 'in' con los IDs recolectados
 
-      const row = sheet.addRow({
+  // Función helper para fetch seguro por chunks si son muchos IDs (opcional, aquí simple)
+  // Para mini check asumimos que cabe en una query
+
+  let tags: TagRow[] = []
+  let camaras: CamarasRow[] = []
+  let extintores: ExtintoresRow[] = []
+  let odometros: OdometroRow[] = []
+  let publicidades: PublicidadRow[] = []
+
+  if (revisionIds.length > 0) {
+    const pTags = supabase.from('tags').select('*').in('revision_id', revisionIds)
+    const pCamaras = supabase.from('camaras').select('*').in('revision_id', revisionIds)
+    const pExtintores = supabase.from('extintores').select('*').in('revision_id', revisionIds)
+    const pOdometros = supabase.from('odometro').select('*').in('revision_id', revisionIds)
+    const pPublicidades = supabase.from('publicidad').select('*').in('revision_id', revisionIds)
+
+    const [resTags, resCamaras, resExtintores, resOdometros, resPublicidades] = await Promise.all([
+      pTags, pCamaras, pExtintores, pOdometros, pPublicidades
+    ])
+
+    tags = resTags.data || []
+    camaras = resCamaras.data || []
+    extintores = resExtintores.data || []
+    odometros = resOdometros.data || []
+    publicidades = resPublicidades.data || []
+  }
+
+  // 6. Agrupar flota por TERMINAL
+  const flotaPorTerminal = flota.reduce((acc, bus) => {
+    const term = bus.terminal || 'Sin Terminal'
+    if (!acc[term]) acc[term] = []
+    acc[term].push(bus)
+    return acc
+  }, {} as Record<string, FlotaRow[]>)
+
+  // 7. Crear hojas por Terminal
+  Object.entries(flotaPorTerminal).forEach(([nombreTerminal, busesDelTerminal]) => {
+    // Normalizar nombre de hoja (max 31 chars, sin caracteres especiales prohibidos excel)
+    const sheetName = nombreTerminal.replace(/[*?:/\[\]\\]/g, '').substring(0, 31)
+    const sheet = workbook.addWorksheet(sheetName.toUpperCase())
+
+    // Configurar columnas
+    sheet.columns = [
+      { header: 'PPU', key: 'ppu', width: 12 },
+      { header: 'Nº INTERNO', key: 'interno', width: 12 },
+      { header: 'MARCA', key: 'marca', width: 15 },
+      { header: 'MODELO', key: 'modelo', width: 20 },
+      { header: 'AÑO', key: 'anio', width: 8 },
+      // { header: 'TERMINAL', key: 'terminal', width: 20 }, // Ya está en la hoja
+      { header: 'ESTADO REVISIÓN SEMANAL', key: 'estado_revision', width: 30 },
+      { header: 'ESTADO BUS (En Revisión)', key: 'estado_bus', width: 25 },
+      { header: 'INSPECTOR', key: 'inspector', width: 25 },
+      { header: 'FECHA INSPECCIÓN', key: 'fecha', width: 18 },
+      { header: 'TAG', key: 'tag', width: 15 },
+      { header: 'CÁMARAS', key: 'camaras', width: 15 },
+      { header: 'EXTINTOR', key: 'extintor', width: 15 },
+      { header: 'ODÓMETRO', key: 'odometro', width: 15 },
+      { header: 'PUBLICIDAD', key: 'publicidad', width: 15 },
+      { header: 'OBSERVACIONES', key: 'observaciones', width: 40 },
+    ]
+
+    // Estilo encabezado
+    const headerRow = sheet.getRow(1)
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 }
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      // Color diferente por terminal si se desea, o standard corporativo
+      fgColor: { argb: 'FF1E40AF' }, // Azul oscuro corporativo
+    }
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' }
+    headerRow.height = 30
+
+    // Poblar datos
+    busesDelTerminal.forEach((bus) => {
+      // Buscar revisión de ESTA semana
+      const revisionSemana = (revisionesSemana as RevisionRow[])?.find((r) => r.bus_ppu === bus.ppu)
+
+      let revisionData = revisionSemana
+      let esHistorica = false
+
+      // Si no hay de esta semana, buscar la histórica
+      if (!revisionSemana) {
+        revisionData = revisionesHistoricas.find(r => r.bus_ppu === bus.ppu)
+        if (revisionData) esHistorica = true
+      }
+
+      const rowValues: any = {
         ppu: bus.ppu,
         interno: bus.numero_interno,
         marca: bus.marca,
         modelo: bus.modelo,
         anio: bus.anio,
-        terminal: bus.terminal,
-        estado_revision: '✅ REVISADO',
-        estado_bus: revision.estado_bus === 'OPERATIVO' ? '✅ OPERATIVO' : '⚠️ EN PANNE',
-        inspector: revision.inspector_nombre,
-        fecha: dayjs(revision.created_at).format('DD/MM/YYYY HH:mm'),
-        tag: tag?.tiene ? '✅ Tiene' : '❌ No tiene',
-        camaras: camara
+      }
+
+      if (revisionData) {
+        // Datos asociados a la revisión encontrada (sea actual o histórica)
+        const tag = tags.find((t) => t.revision_id === revisionData?.id)
+        const camara = camaras.find((c) => c.revision_id === revisionData?.id)
+        const extintor = extintores.find((e) => e.revision_id === revisionData?.id)
+        const odometro = odometros.find((o) => o.revision_id === revisionData?.id)
+        const publicidad = publicidades.find((p) => p.revision_id === revisionData?.id)
+
+        // Lógica de estado
+        if (esHistorica) {
+          rowValues.estado_revision = `⚠️ NO REVISADO (Última: ${dayjs(revisionData.created_at).format('DD/MM/YYYY')})`
+        } else {
+          rowValues.estado_revision = '✅ REVISADO SEMANA ACTUAL'
+        }
+
+        rowValues.estado_bus = revisionData.estado_bus === 'OPERATIVO' ? '✅ OPERATIVO' : '⚠️ EN PANNE'
+        rowValues.inspector = revisionData.inspector_nombre
+        rowValues.fecha = dayjs(revisionData.created_at).format('DD/MM/YYYY HH:mm')
+
+        // Lógica detallada (copiada del original y mejorada)
+        rowValues.tag = tag?.tiene ? '✅ Tiene' : '❌ No tiene'
+        rowValues.camaras = camara
           ? camara.monitor_estado === 'FUNCIONA'
             ? '✅ Funciona'
             : `⚠️ ${camara.monitor_estado.replace(/_/g, ' ')}`
-          : 'N/A',
-        extintor: extintor
+          : 'N/A'
+        rowValues.extintor = extintor
           ? extintor.tiene
-            ? extintor.certificacion === 'BUENA'
-              ? '✅ OK - Buena'
-              : '⚠️ Dañada'
+            ? extintor.certificacion === 'BUENA' // Nota: Ajustar si el campo en DB es distinto, sigo lógica original
+              ? '✅ OK'
+              : '⚠️ Dañada/Vencida'
             : '❌ No tiene'
-          : 'N/A',
-        odometro: odometro
+          : 'N/A'
+        rowValues.odometro = odometro
           ? odometro.estado === 'OK'
             ? `✅ ${odometro.lectura} km`
-            : `⚠️ ${odometro.estado.replace(/_/g, ' ')}`
-          : 'N/A',
-        publicidad: publicidad
+            : `⚠️ ${odometro.estado}`
+          : 'N/A'
+        rowValues.publicidad = publicidad
           ? publicidad.tiene
             ? publicidad.danio
               ? '⚠️ Con daño'
               : '✅ OK'
             : 'Sin publicidad'
-          : 'N/A',
-        observaciones: revision.observaciones || 'Sin observaciones',
-      })
+          : 'N/A'
+        rowValues.observaciones = revisionData.observaciones || ''
 
-      // Color según estado
-      if (revision.estado_bus === 'EN_PANNE') {
+      } else {
+        // NUNCA REVISADO
+        rowValues.estado_revision = '❌ NUNCA REVISADO'
+        rowValues.estado_bus = '-'
+        rowValues.inspector = '-'
+        rowValues.fecha = '-'
+        rowValues.tag = '-'
+        rowValues.camaras = '-'
+        rowValues.extintor = '-'
+        rowValues.odometro = '-'
+        rowValues.publicidad = '-'
+        rowValues.observaciones = 'Sin historial en sistema'
+      }
+
+      const row = sheet.addRow(rowValues)
+
+      // Estilos Condicionales
+      if (!revisionData) {
+        // Nunca revisado: Rojo claro
         row.fill = {
           type: 'pattern',
           pattern: 'solid',
-          fgColor: { argb: 'FFFFF3CD' }, // Amarillo claro
+          fgColor: { argb: 'FFFEE2E2' },
+        }
+      } else if (esHistorica) {
+        // Revisión antigua: Amarillo claro / Naranja suave
+        row.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFEDD5' },
         }
       } else {
-        row.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFD4EDDA' }, // Verde claro
+        // Revisado esta semana
+        if (revisionData.estado_bus === 'EN_PANNE') {
+          row.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFF3CD' }, // Amarillo alerta
+          }
+        } else {
+          row.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFDCFCE7' }, // Verde éxito
+          }
         }
       }
-    } else {
-      // Bus NO revisado - marcar como PENDIENTE
-      const row = sheet.addRow({
-        ppu: bus.ppu,
-        interno: bus.numero_interno,
-        marca: bus.marca,
-        modelo: bus.modelo,
-        anio: bus.anio,
-        terminal: bus.terminal,
-        estado_revision: '⏳ PENDIENTE',
-        estado_bus: 'Sin revisar',
-        inspector: '-',
-        fecha: '-',
-        tag: 'Pendiente',
-        camaras: 'Pendiente',
-        extintor: 'Pendiente',
-        odometro: 'Pendiente',
-        publicidad: 'Pendiente',
-        observaciones: 'Bus no inspeccionado esta semana',
+
+      // Bordes
+      row.eachCell((cell) => {
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+          right: { style: 'thin', color: { argb: 'FFD1D5DB' } },
+        }
       })
 
-      // Color gris para pendientes
-      row.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFF8F9FA' }, // Gris muy claro
-      }
+    }) // Fin busesDelTerminal loop
+
+    // Resumen al final de la hoja del terminal
+    sheet.addRow([])
+    const total = busesDelTerminal.length
+    const revisados = busesDelTerminal.filter(b => revisionesSemana?.find(r => r.bus_ppu === b.ppu)).length
+    const faltantes = total - revisados
+
+    // De los revisados (esta semana), cuántos operativos
+    const operativosSemana = busesDelTerminal.filter(b => {
+      const r = revisionesSemana?.find(r => r.bus_ppu === b.ppu)
+      return r && r.estado_bus === 'OPERATIVO'
+    }).length
+
+    // De los revisados (esta semana), cuántos panne
+    const panneSemana = busesDelTerminal.filter(b => {
+      const r = revisionesSemana?.find(r => r.bus_ppu === b.ppu)
+      return r && r.estado_bus === 'EN_PANNE'
+    }).length
+
+    const resumenRow = sheet.addRow([
+      'RESUMEN TERMINAL:',
+      `Total Flota: ${total}`,
+      `Revisados Semana: ${revisados}`,
+      `Faltantes: ${faltantes}`,
+      `Operativos (Semana): ${operativosSemana}`,
+      `En Panne (Semana): ${panneSemana}`
+    ])
+    resumenRow.font = { bold: true }
+    resumenRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFF3F4F6' }
     }
-  })
 
-  // Aplicar bordes a todas las celdas
-  sheet.eachRow((row, rowNumber) => {
-    row.eachCell((cell) => {
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-        left: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-        bottom: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-        right: { style: 'thin', color: { argb: 'FFD1D5DB' } },
-      }
-      if (rowNumber > 1) {
-        cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true }
-      }
-    })
-  })
-
-  // Agregar resumen al final
-  const totalRows = flota?.length || 0
-  const revisadosCount = revisiones?.length || 0
-  const pendientesCount = totalRows - revisadosCount
-  const operativosCount =
-    (revisiones as RevisionRow[])?.filter((r) => r.estado_bus === 'OPERATIVO').length || 0
-  const panneCount =
-    (revisiones as RevisionRow[])?.filter((r) => r.estado_bus === 'EN_PANNE').length || 0
-
-  sheet.addRow([])
-  const resumenRow = sheet.addRow([
-    'RESUMEN:',
-    `Total: ${totalRows}`,
-    `Revisados: ${revisadosCount}`,
-    `Pendientes: ${pendientesCount}`,
-    `Operativos: ${operativosCount}`,
-    `En Panne: ${panneCount}`,
-  ])
-  resumenRow.font = { bold: true, size: 11 }
-  resumenRow.fill = {
-    type: 'pattern',
-    pattern: 'solid',
-    fgColor: { argb: 'FFE5E7EB' },
-  }
+  }) // Fin terminal loop
 
   // Generar archivo
   const buffer = await workbook.xlsx.writeBuffer()
@@ -221,7 +326,7 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   const url = window.URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `Inspecciones_Semanales_${dayjs().format('YYYYMMDD_HHmm')}.xlsx`
+  link.download = `Reporte_Flota_Completo_${dayjs().format('YYYYMMDD_HHmm')}.xlsx`
   link.click()
   window.URL.revokeObjectURL(url)
 }
