@@ -21,10 +21,12 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   const workbook = new ExcelJS.Workbook()
 
   // 1. Obtener TODA la flota
-  const { data: flota } = await supabase
+  const { data: flotaData } = await supabase
     .from('flota')
     .select('*')
     .order('numero_interno')
+
+  const flota = flotaData as FlotaRow[] | null
 
   if (!flota) {
     console.error('No se pudo obtener la flota')
@@ -35,11 +37,13 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   const start = startDate ?? dayjs().isoWeekday(1).startOf('day').toISOString()
   const end = endDate ?? dayjs().isoWeekday(1).add(6, 'day').endOf('day').toISOString()
 
-  const { data: revisionesSemana } = await supabase
+  const { data: revisionesData } = await supabase
     .from('revisiones')
     .select('*')
     .gte('created_at', start)
     .lte('created_at', end)
+
+  const revisionesSemana = revisionesData as RevisionRow[] | null
 
   // 3. Identificar buses sin revisión esta semana
   const busesRevisadosIds = new Set(revisionesSemana?.map((r) => r.bus_ppu))
@@ -56,16 +60,18 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
     // Para no saturar, podemos hacer batching si son muchos, o query específica.
     // Usaremos una query simple filtrando por PPU.
 
-    const { data: historial } = await supabase
+    const { data: historialData } = await supabase
       .from('revisiones')
       .select('*')
       .in('bus_ppu', ppusSinRevision)
       .order('created_at', { ascending: false })
 
+    const historial = historialData as RevisionRow[] | null
+
     // Filtrar para dejar solo la más reciente por PPU
     if (historial) {
       const latestMap = new Map<string, RevisionRow>()
-      historial.forEach(rev => {
+      historial.forEach((rev) => {
         if (!latestMap.has(rev.bus_ppu)) {
           latestMap.set(rev.bus_ppu, rev)
         }
@@ -76,7 +82,7 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
 
   // Combinar set de revisiones a consultar detalles
   const todasRevisiones = [...(revisionesSemana || []), ...revisionesHistoricas]
-  const revisionIds = todasRevisiones.map(r => r.id)
+  const revisionIds = todasRevisiones.map((r) => r.id)
 
   // 5. Obtener datos complementarios para TODAS las revisiones relevantes (semana + históricas)
   // Usamos 'in' con los IDs recolectados
@@ -98,18 +104,22 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
     const pPublicidades = supabase.from('publicidad').select('*').in('revision_id', revisionIds)
 
     const [resTags, resCamaras, resExtintores, resOdometros, resPublicidades] = await Promise.all([
-      pTags, pCamaras, pExtintores, pOdometros, pPublicidades
+      pTags,
+      pCamaras,
+      pExtintores,
+      pOdometros,
+      pPublicidades,
     ])
 
-    tags = resTags.data || []
-    camaras = resCamaras.data || []
-    extintores = resExtintores.data || []
-    odometros = resOdometros.data || []
-    publicidades = resPublicidades.data || []
+    tags = (resTags.data as TagRow[]) || []
+    camaras = (resCamaras.data as CamarasRow[]) || []
+    extintores = (resExtintores.data as ExtintoresRow[]) || []
+    odometros = (resOdometros.data as OdometroRow[]) || []
+    publicidades = (resPublicidades.data as PublicidadRow[]) || []
   }
 
   // 6. Agrupar flota por TERMINAL
-  const flotaPorTerminal = flota.reduce((acc, bus) => {
+  const flotaPorTerminal = flota.reduce((acc: Record<string, FlotaRow[]>, bus: FlotaRow) => {
     const term = bus.terminal || 'Sin Terminal'
     if (!acc[term]) acc[term] = []
     acc[term].push(bus)
@@ -155,16 +165,16 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
     headerRow.height = 30
 
     // Poblar datos
-    busesDelTerminal.forEach((bus) => {
+    busesDelTerminal.forEach((bus: FlotaRow) => {
       // Buscar revisión de ESTA semana
-      const revisionSemana = (revisionesSemana as RevisionRow[])?.find((r) => r.bus_ppu === bus.ppu)
+      const revisionSemana = revisionesSemana?.find((r) => r.bus_ppu === bus.ppu)
 
-      let revisionData = revisionSemana
+      let revisionData: RevisionRow | undefined = revisionSemana
       let esHistorica = false
 
       // Si no hay de esta semana, buscar la histórica
       if (!revisionSemana) {
-        revisionData = revisionesHistoricas.find(r => r.bus_ppu === bus.ppu)
+        revisionData = revisionesHistoricas.find((r) => r.bus_ppu === bus.ppu)
         if (revisionData) esHistorica = true
       }
 
@@ -191,7 +201,8 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
           rowValues.estado_revision = '✅ REVISADO SEMANA ACTUAL'
         }
 
-        rowValues.estado_bus = revisionData.estado_bus === 'OPERATIVO' ? '✅ OPERATIVO' : '⚠️ EN PANNE'
+        rowValues.estado_bus =
+          revisionData.estado_bus === 'OPERATIVO' ? '✅ OPERATIVO' : '⚠️ EN PANNE'
         rowValues.inspector = revisionData.inspector_nombre
         rowValues.fecha = dayjs(revisionData.created_at).format('DD/MM/YYYY HH:mm')
 
@@ -222,7 +233,6 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
             : 'Sin publicidad'
           : 'N/A'
         rowValues.observaciones = revisionData.observaciones || ''
-
       } else {
         // NUNCA REVISADO
         rowValues.estado_revision = '❌ NUNCA REVISADO'
@@ -280,24 +290,25 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
           right: { style: 'thin', color: { argb: 'FFD1D5DB' } },
         }
       })
-
     }) // Fin busesDelTerminal loop
 
     // Resumen al final de la hoja del terminal
     sheet.addRow([])
     const total = busesDelTerminal.length
-    const revisados = busesDelTerminal.filter(b => revisionesSemana?.find(r => r.bus_ppu === b.ppu)).length
+    const revisados = busesDelTerminal.filter((b: FlotaRow) =>
+      revisionesSemana?.find((r) => r.bus_ppu === b.ppu)
+    ).length
     const faltantes = total - revisados
 
     // De los revisados (esta semana), cuántos operativos
-    const operativosSemana = busesDelTerminal.filter(b => {
-      const r = revisionesSemana?.find(r => r.bus_ppu === b.ppu)
+    const operativosSemana = busesDelTerminal.filter((b: FlotaRow) => {
+      const r = revisionesSemana?.find((r) => r.bus_ppu === b.ppu)
       return r && r.estado_bus === 'OPERATIVO'
     }).length
 
     // De los revisados (esta semana), cuántos panne
-    const panneSemana = busesDelTerminal.filter(b => {
-      const r = revisionesSemana?.find(r => r.bus_ppu === b.ppu)
+    const panneSemana = busesDelTerminal.filter((b: FlotaRow) => {
+      const r = revisionesSemana?.find((r) => r.bus_ppu === b.ppu)
       return r && r.estado_bus === 'EN_PANNE'
     }).length
 
@@ -307,15 +318,14 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
       `Revisados Semana: ${revisados}`,
       `Faltantes: ${faltantes}`,
       `Operativos (Semana): ${operativosSemana}`,
-      `En Panne (Semana): ${panneSemana}`
+      `En Panne (Semana): ${panneSemana}`,
     ])
     resumenRow.font = { bold: true }
     resumenRow.fill = {
       type: 'pattern',
       pattern: 'solid',
-      fgColor: { argb: 'FFF3F4F6' }
+      fgColor: { argb: 'FFF3F4F6' },
     }
-
   }) // Fin terminal loop
 
   // Generar archivo
