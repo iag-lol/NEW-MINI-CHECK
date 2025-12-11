@@ -24,6 +24,7 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   const { data: flotaData } = await supabase
     .from('flota')
     .select('*')
+    .limit(10000)
     .order('terminal', { ascending: true })
     .order('numero_interno', { ascending: true })
 
@@ -43,6 +44,7 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
     .select('*')
     .gte('created_at', start)
     .lte('created_at', end)
+    .limit(10000)
 
   const revisionesSemana = revisionesData as RevisionRow[] | null
 
@@ -66,6 +68,7 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
       .select('*')
       .in('bus_ppu', ppusSinRevision)
       .order('created_at', { ascending: false })
+      .limit(10000)
 
     const historial = historialData as RevisionRow[] | null
 
@@ -98,11 +101,11 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   let publicidades: PublicidadRow[] = []
 
   if (revisionIds.length > 0) {
-    const pTags = supabase.from('tags').select('*').in('revision_id', revisionIds)
-    const pCamaras = supabase.from('camaras').select('*').in('revision_id', revisionIds)
-    const pExtintores = supabase.from('extintores').select('*').in('revision_id', revisionIds)
-    const pOdometros = supabase.from('odometro').select('*').in('revision_id', revisionIds)
-    const pPublicidades = supabase.from('publicidad').select('*').in('revision_id', revisionIds)
+    const pTags = supabase.from('tags').select('*').in('revision_id', revisionIds).limit(10000)
+    const pCamaras = supabase.from('camaras').select('*').in('revision_id', revisionIds).limit(10000)
+    const pExtintores = supabase.from('extintores').select('*').in('revision_id', revisionIds).limit(10000)
+    const pOdometros = supabase.from('odometro').select('*').in('revision_id', revisionIds).limit(10000)
+    const pPublicidades = supabase.from('publicidad').select('*').in('revision_id', revisionIds).limit(10000)
 
     const [resTags, resCamaras, resExtintores, resOdometros, resPublicidades] = await Promise.all([
       pTags,
