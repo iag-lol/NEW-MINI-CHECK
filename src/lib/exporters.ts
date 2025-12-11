@@ -100,26 +100,32 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   let odometros: OdometroRow[] = []
   let publicidades: PublicidadRow[] = []
 
-  if (revisionIds.length > 0) {
-    const pTags = supabase.from('tags').select('*').in('revision_id', revisionIds).limit(10000)
-    const pCamaras = supabase.from('camaras').select('*').in('revision_id', revisionIds).limit(10000)
-    const pExtintores = supabase.from('extintores').select('*').in('revision_id', revisionIds).limit(10000)
-    const pOdometros = supabase.from('odometro').select('*').in('revision_id', revisionIds).limit(10000)
-    const pPublicidades = supabase.from('publicidad').select('*').in('revision_id', revisionIds).limit(10000)
+  // Helper para batch fetching
+  const fetchInBatches = async (table: string, ids: string[], batchSize = 200) => {
+    let results: any[] = []
+    for (let i = 0; i < ids.length; i += batchSize) {
+      const batch = ids.slice(i, i + batchSize)
+      const { data } = await supabase.from(table).select('*').in('revision_id', batch).limit(10000)
+      if (data) results = [...results, ...data]
+    }
+    return results
+  }
 
+  if (revisionIds.length > 0) {
+    // Usar batching para evitar errores por URL muy larga o timeouts
     const [resTags, resCamaras, resExtintores, resOdometros, resPublicidades] = await Promise.all([
-      pTags,
-      pCamaras,
-      pExtintores,
-      pOdometros,
-      pPublicidades,
+      fetchInBatches('tags', revisionIds),
+      fetchInBatches('camaras', revisionIds),
+      fetchInBatches('extintores', revisionIds),
+      fetchInBatches('odometro', revisionIds),
+      fetchInBatches('publicidad', revisionIds),
     ])
 
-    tags = (resTags.data as TagRow[]) || []
-    camaras = (resCamaras.data as CamarasRow[]) || []
-    extintores = (resExtintores.data as ExtintoresRow[]) || []
-    odometros = (resOdometros.data as OdometroRow[]) || []
-    publicidades = (resPublicidades.data as PublicidadRow[]) || []
+    tags = (resTags as TagRow[]) || []
+    camaras = (resCamaras as CamarasRow[]) || []
+    extintores = (resExtintores as ExtintoresRow[]) || []
+    odometros = (resOdometros as OdometroRow[]) || []
+    publicidades = (resPublicidades as PublicidadRow[]) || []
   }
 
   // Helper para buscar datos de una revisión
