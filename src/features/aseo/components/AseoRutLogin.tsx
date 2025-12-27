@@ -13,9 +13,24 @@ export const AseoRutLogin = ({ onLogin }: Props) => {
     const [error, setError] = useState('');
 
     const formatRut = (value: string) => {
-        // Remove non-numeric characters except K
-        const cleaned = value.toUpperCase().replace(/[^0-9K]/g, '');
-        setRut(cleaned);
+        // Remove all non-alphanumeric except hyphen temporarily
+        const cleaned = value.toUpperCase().replace(/[^0-9K-]/g, '');
+
+        // Remove any existing hyphens to reformat
+        const withoutHyphen = cleaned.replace(/-/g, '');
+
+        // If less than 2 characters, just show as is
+        if (withoutHyphen.length < 2) {
+            setRut(withoutHyphen);
+            return;
+        }
+
+        // Auto-format with hyphen before last character
+        const body = withoutHyphen.slice(0, -1);
+        const verifier = withoutHyphen.slice(-1);
+        const formatted = `${body}-${verifier}`;
+
+        setRut(formatted);
     };
 
     const formatRutWithHyphen = (rut: string): string => {
