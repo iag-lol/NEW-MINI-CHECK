@@ -125,7 +125,7 @@ export const AseoInfoSection = ({ rut }: Props) => {
             {/* Header */}
             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
                 <h2 className="text-2xl font-black mb-2">{staff.nombre}</h2>
-                <div className="flex flex-wrap gap-2 text-sm">
+                <div className="flex flex-wrap gap-2 text-sm mb-3">
                     <span className="px-3 py-1 bg-white/20 rounded-full font-semibold">
                         <Icon name="user" size={14} className="inline mr-1" />
                         {staff.cargo}
@@ -138,6 +138,22 @@ export const AseoInfoSection = ({ rut }: Props) => {
                         <Icon name="clock" size={14} className="inline mr-1" />
                         {staff.horario || 'Sin horario'}
                     </span>
+                </div>
+
+                {/* Additional Info */}
+                <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-white/20">
+                    {staff.dia_libre && (
+                        <div className="text-xs">
+                            <div className="text-white/70 mb-1">Día Libre</div>
+                            <div className="font-bold text-lg">{staff.dia_libre}</div>
+                        </div>
+                    )}
+                    {staff.horario_salida && (
+                        <div className="text-xs">
+                            <div className="text-white/70 mb-1">Salida</div>
+                            <div className="font-bold text-lg">{staff.horario_salida}</div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -179,17 +195,23 @@ export const AseoInfoSection = ({ rut }: Props) => {
                     {weekDates.map((date) => {
                         const dayName = new Date(date).toLocaleDateString('es-CL', { weekday: 'short' });
                         const dayNum = new Date(date).getDate();
+                        const dayOfWeek = new Date(date).toLocaleDateString('es-CL', { weekday: 'long' });
                         const mark = marks.find(m => m.mark_date === date);
                         const hasLicense = licenses.some(l => date >= l.start_date && date <= l.end_date);
                         const hasPermission = permissions.some(p => date >= p.start_date && date <= p.end_date);
                         const hasDayChange = dayChanges.some(dc => dc.date === date);
                         const isToday = date === new Date().toISOString().split('T')[0];
+                        const isFreeDay = staff.dia_libre && dayOfWeek.toLowerCase().includes(staff.dia_libre.toLowerCase());
 
                         let bgColor = 'bg-slate-100';
                         let textColor = 'text-slate-600';
                         let badge = '';
 
-                        if (hasLicense) {
+                        if (isFreeDay) {
+                            bgColor = 'bg-indigo-100';
+                            textColor = 'text-indigo-700';
+                            badge = 'L';
+                        } else if (hasLicense) {
                             bgColor = 'bg-purple-100';
                             textColor = 'text-purple-700';
                             badge = 'LIC';

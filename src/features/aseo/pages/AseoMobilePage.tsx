@@ -11,7 +11,7 @@ import { AseoPendingBusesSection } from '../components/AseoPendingBusesSection';
 import { useFetchNotifications } from '../hooks';
 import { Icon } from '../../../shared/components/common/Icon';
 
-type Tab = 'form' | 'records' | 'tasks' | 'stats' | 'notifications' | 'info' | 'pending';
+type Tab = 'form' | 'records' | 'tasks' | 'stats' | 'info' | 'pending';
 
 export const AseoMobilePage = () => {
     const [rut, setRut] = useState<string | null>(null);
@@ -72,14 +72,13 @@ export const AseoMobilePage = () => {
                 {activeTab === 'records' && <MyRecords cleanerId={cleanerId} />}
                 {activeTab === 'tasks' && <Tasks cleanerId={cleanerId} />}
                 {activeTab === 'stats' && <Stats cleanerId={cleanerId} />}
-                {activeTab === 'notifications' && <Notifications cleanerId={cleanerId} />}
                 {activeTab === 'info' && <AseoInfoSection rut={rut} />}
                 {activeTab === 'pending' && <AseoPendingBusesSection />}
             </main>
 
             {/* Bottom Navigation */}
             <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-2xl z-20">
-                <div className="grid grid-cols-7 gap-0.5">
+                <div className="grid grid-cols-6 gap-0.5">
                     <button
                         onClick={() => setActiveTab('form')}
                         className={`flex flex-col items-center justify-center py-2 px-1 transition-all ${activeTab === 'form'
@@ -112,11 +111,16 @@ export const AseoMobilePage = () => {
                     </button>
                     <button
                         onClick={() => setActiveTab('tasks')}
-                        className={`flex flex-col items-center justify-center py-2 px-1 transition-all ${activeTab === 'tasks'
+                        className={`relative flex flex-col items-center justify-center py-2 px-1 transition-all ${activeTab === 'tasks'
                             ? 'text-indigo-600 bg-indigo-50'
                             : 'text-slate-600 hover:bg-slate-50'
                             }`}
                     >
+                        {unreadCount > 0 && (
+                            <span className="absolute top-1 right-2 w-4 h-4 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center shadow-lg animate-pulse">
+                                {unreadCount}
+                            </span>
+                        )}
                         <Icon name="check-circle" size={20} />
                         <span className="text-[10px] font-bold mt-0.5">Tareas</span>
                     </button>
@@ -130,21 +134,7 @@ export const AseoMobilePage = () => {
                         <Icon name="bar-chart" size={20} />
                         <span className="text-[10px] font-bold mt-0.5">Resumen</span>
                     </button>
-                    <button
-                        onClick={() => setActiveTab('notifications')}
-                        className={`relative flex flex-col items-center justify-center py-2 px-1 transition-all ${activeTab === 'notifications'
-                            ? 'text-indigo-600 bg-indigo-50'
-                            : 'text-slate-600 hover:bg-slate-50'
-                            }`}
-                    >
-                        {unreadCount > 0 && (
-                            <span className="absolute top-1 right-2 w-4 h-4 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center shadow-lg">
-                                {unreadCount}
-                            </span>
-                        )}
-                        <Icon name="bell" size={20} />
-                        <span className="text-[10px] font-bold mt-0.5">Avisos</span>
-                    </button>
+
                     <button
                         onClick={() => setActiveTab('pending')}
                         className={`flex flex-col items-center justify-center py-2 px-1 transition-all ${activeTab === 'pending'

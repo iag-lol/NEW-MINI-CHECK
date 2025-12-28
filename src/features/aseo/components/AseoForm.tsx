@@ -118,10 +118,13 @@ export const AseoForm = ({ cleanerId, cleanerName }: Props) => {
             setPhoto(null);
             setPhotoPreview(null);
 
-            alert('¡Registro guardado exitosamente!');
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            alert('✅ ¡Registro guardado exitosamente!');
         } catch (error) {
             console.error(error);
-            alert('Error al guardar. Intenta nuevamente.');
+            alert('❌ Error al guardar. Intenta nuevamente.');
         }
     };
 
