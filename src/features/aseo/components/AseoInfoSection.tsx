@@ -191,7 +191,7 @@ export const AseoInfoSection = ({ rut }: Props) => {
                     <Icon name="calendar" size={20} className="text-indigo-600" />
                     Semana Actual
                 </h3>
-                <div className="grid grid-cols-7 gap-1">
+                <div className="grid grid-cols-7 gap-2">
                     {weekDates.map((date) => {
                         const dayName = new Date(date).toLocaleDateString('es-CL', { weekday: 'short' });
                         const dayNum = new Date(date).getDate();
@@ -203,46 +203,73 @@ export const AseoInfoSection = ({ rut }: Props) => {
                         const isToday = date === new Date().toISOString().split('T')[0];
                         const isFreeDay = staff.dia_libre && dayOfWeek.toLowerCase().includes(staff.dia_libre.toLowerCase());
 
-                        let bgColor = 'bg-slate-100';
-                        let textColor = 'text-slate-600';
-                        let badge = '';
-
-                        if (isFreeDay) {
-                            bgColor = 'bg-indigo-100';
-                            textColor = 'text-indigo-700';
-                            badge = 'L';
-                        } else if (hasLicense) {
-                            bgColor = 'bg-purple-100';
-                            textColor = 'text-purple-700';
-                            badge = 'LIC';
-                        } else if (hasPermission) {
-                            bgColor = 'bg-orange-100';
-                            textColor = 'text-orange-700';
-                            badge = 'PER';
-                        } else if (hasDayChange) {
-                            bgColor = 'bg-blue-100';
-                            textColor = 'text-blue-700';
-                            badge = 'CD';
-                        } else if (mark) {
-                            if (mark.mark === 'P') {
-                                bgColor = 'bg-green-100';
-                                textColor = 'text-green-700';
-                                badge = 'P';
-                            } else {
-                                bgColor = 'bg-red-100';
-                                textColor = 'text-red-700';
-                                badge = 'A';
-                            }
-                        }
+                        // Parse horario (e.g., "10:00-20:00")
+                        const horario = staff.horario || '08:00-17:00';
+                        const [startTime, endTime] = horario.split('-');
 
                         return (
                             <div
                                 key={date}
-                                className={`${bgColor} ${textColor} rounded-lg p-2 text-center ${isToday ? 'ring-2 ring-indigo-500' : ''}`}
+                                className={`rounded-xl p-2 border-2 transition-all ${isToday ? 'border-indigo-500 bg-indigo-50 shadow-md' : 'border-slate-200 bg-white'
+                                    }`}
                             >
-                                <div className="text-[10px] font-semibold uppercase">{dayName}</div>
-                                <div className="text-lg font-black">{dayNum}</div>
-                                {badge && <div className="text-[8px] font-bold mt-1">{badge}</div>}
+                                {/* Day name */}
+                                <div className="text-[10px] font-bold text-slate-500 text-center uppercase mb-1">
+                                    {dayName}
+                                </div>
+
+                                {/* Date */}
+                                <div className={`text-xl font-black text-center mb-2 ${isToday ? 'text-indigo-600' : 'text-slate-900'
+                                    }`}>
+                                    {dayNum}
+                                </div>
+
+                                {/* Schedule or Status */}
+                                {isFreeDay ? (
+                                    <div className="bg-emerald-100 text-emerald-700 rounded-lg py-2 text-center font-bold text-base">
+                                        L
+                                    </div>
+                                ) : hasLicense ? (
+                                    <div className="bg-purple-100 text-purple-700 rounded-lg py-1 text-center font-bold text-[10px]">
+                                        LIC
+                                    </div>
+                                ) : hasPermission ? (
+                                    <div className="bg-orange-100 text-orange-700 rounded-lg py-1 text-center font-bold text-[10px]">
+                                        PER
+                                    </div>
+                                ) : hasDayChange ? (
+                                    <div className="bg-blue-100 text-blue-700 rounded-lg py-1 text-center font-bold text-[10px]">
+                                        CD
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Work hours */}
+                                        <div className="text-center space-y-0.5">
+                                            <div className="text-[11px] font-bold text-slate-900">
+                                                {startTime}
+                                            </div>
+                                            <div className="text-[8px] text-slate-400">-</div>
+                                            <div className="text-[11px] font-bold text-slate-900">
+                                                {endTime}
+                                            </div>
+                                        </div>
+
+                                        {/* Early departure if exists */}
+                                        {staff.horario_salida && (
+                                            <div className="mt-1 bg-orange-100 text-orange-700 rounded-md py-0.5 px-1 text-[9px] font-bold text-center">
+                                                Sale: {staff.horario_salida}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+
+                                {/* Attendance mark */}
+                                {mark && (
+                                    <div className={`mt-1 rounded-md py-0.5 text-center text-[9px] font-bold ${mark.mark === 'P' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                        }`}>
+                                        {mark.mark === 'P' ? '✓' : '✗'}
+                                    </div>
+                                )}
                             </div>
                         );
                     })}
