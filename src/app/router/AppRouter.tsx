@@ -2,6 +2,7 @@ import { HashRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { OnboardingPage } from '../../features/onboarding/OnboardingPage';
 import { DashboardLayout } from '../layouts/DashboardLayout';
+import { InspectorLayout } from '../layouts/InspectorLayout';
 import { useSessionStore } from '../../shared/state/sessionStore';
 import { LoadingState } from '../../shared/components/common/LoadingState';
 import { PersonalPage } from '../../features/personal/PersonalPage';
@@ -80,6 +81,14 @@ export const AppRouter = () => (
       </Route>
       {/* Isolated Aseo Mobile Portal */}
       <Route path="/aseo" element={<AseoMobilePage />} />
+
+      {/* Inspector-Only View - SRL and Aseo Admin only */}
+      <Route element={<InspectorLayout />}>
+        <Route path="/inspector" element={<Navigate to="/inspector/srl" replace />} />
+        <Route path="/inspector/srl" element={<SrlPage />} />
+        <Route path="/inspector/aseo-admin" element={<AseoAdminPage />} />
+      </Route>
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   </HashRouter>
