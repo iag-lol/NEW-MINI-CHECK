@@ -73,7 +73,15 @@ export function useUpdateTaskStatus() {
         }) => aseoApi.updateTaskStatus(taskId, status, evidenceFile),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['aseo-tasks'] });
+            queryClient.invalidateQueries({ queryKey: ['aseo', 'all-tasks'] });
         }
+    });
+}
+
+export function useFetchAllTasks() {
+    return useQuery({
+        queryKey: ['aseo', 'all-tasks'],
+        queryFn: () => aseoApi.fetchAllTasks()
     });
 }
 

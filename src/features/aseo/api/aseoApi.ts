@@ -122,6 +122,21 @@ export async function fetchTasks(cleanerId: string): Promise<AseoTask[]> {
     return data || [];
 }
 
+export async function fetchAllTasks(): Promise<AseoTask[]> {
+    const { data, error } = await supabase
+        .from('aseo_tasks')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error('❌ Error fetching all tasks:', error);
+        throw error;
+    }
+
+    console.log('✅ All tasks found:', data?.length || 0);
+    return data || [];
+}
+
 export async function updateTaskStatus(
     taskId: string,
     status: 'PENDIENTE' | 'TERMINADA',

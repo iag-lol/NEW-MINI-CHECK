@@ -10,6 +10,7 @@ import { AseoInfoSection } from '../components/AseoInfoSection';
 import { AseoPendingBusesSection } from '../components/AseoPendingBusesSection';
 import { useFetchNotifications, useFetchTasks } from '../hooks';
 import { Icon } from '../../../shared/components/common/Icon';
+import { pushNotificationService } from '../../../shared/services/pushNotifications';
 
 type Tab = 'form' | 'records' | 'tasks' | 'stats' | 'info' | 'pending';
 
@@ -25,10 +26,25 @@ export const AseoMobilePage = () => {
     const { data: tasks = [] } = useFetchTasks(cleanerId || '');
     const pendingTasksCount = tasks.filter(t => t.status === 'PENDIENTE').length;
 
-    const handleLogin = (userRut: string, userName: string, userCleanerId: string) => {
+    const handleLogin = async (userRut: string, userName: string, userCleanerId: string) => {
         setRut(userRut);
         setFullName(userName);
         setCleanerId(userCleanerId);
+
+        // Initialize push notifications
+        try {
+            if (pushNotificationService.isSupported()) {
+                const subscription = await pushNotificationService.initialize();
+                if (subscription) {
+                    console.log('✅ Push notifications enabled');
+                    // TODO: Send subscription to backend to store in database
+                } else {
+                    console.log('⚠️ Push notifications not enabled');
+                }
+            }
+        } catch (error) {
+            console.error('Failed to initialize push notifications:', error);
+        }
     };
 
     const handleLogout = () => {
