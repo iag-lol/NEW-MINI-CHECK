@@ -564,7 +564,7 @@ export async function fetchIncidencesForMonth(
             .lte('date', endDate),
         supabase
             .from('attendance_cambios_dia')
-            .select('rut, date, target_date')
+            .select('rut, date, day_on_date')
             .in('terminal_code', terminalCodes)
             .gte('date', startDate)
             .lte('date', endDate),
@@ -579,7 +579,7 @@ export async function fetchIncidencesForMonth(
     return {
         noMarcaciones: (nm.data || []).map(r => ({ rut: r.rut, date: r.date })),
         sinCredenciales: (sc.data || []).map(r => ({ rut: r.rut, date: r.date })),
-        cambiosDia: (cd.data || []).map(r => ({ rut: r.rut, date: r.date, target_date: r.target_date })),
+        cambiosDia: (cd.data || []).map(r => ({ rut: r.rut, date: r.date, target_date: r.day_on_date })),
         autorizaciones: (aut.data || []).map(r => ({ rut: r.rut, date: r.authorization_date })),
     };
 }

@@ -338,7 +338,6 @@ export const AttendanceGrid = ({
 
     // Action handlers
     const handleMarkPresent = () => {
-        console.log('handleMarkPresent called', { selectedCell, session });
         if (!selectedCell || !session) return;
         createMarkMutation.mutate({
             values: {
