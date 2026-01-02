@@ -248,7 +248,7 @@ export const AttendanceGrid = ({
 
         // Calculate off day based on shift pattern
         let isOff = false;
-        const horario = s.horario;
+        let horario = s.horario;
         let turno = getTurnoFromHorario(s.horario);
         const dayOfWeek = new Date(date + 'T12:00:00').getDay();
 
@@ -285,6 +285,27 @@ export const AttendanceGrid = ({
                     const details = getSpecialShiftDetails(date, specialTemplate);
                     if (details.type) {
                         turno = details.type;
+                    }
+
+                    // Apply Early Exit
+                    if (details.earlyExit && !isOff) {
+                        const match = s.horario?.match(/^(\d{1,2}:\d{2})/);
+                        // If original schedule has a start time, use it. Otherwise default to 08:00
+                        const startTime = match ? match[1] : '08:00';
+                        horario = `${startTime}-${details.earlyExit}`;
+
+                        // Mark as reducido/modified to highlight in UI (amber color)
+                        return {
+                            mark,
+                            license,
+                            vacation,
+                            permission,
+                            isOff,
+                            horario,
+                            turno,
+                            reducido: true, // Auto-enable styling for early exit
+                            incidencies: inc,
+                        };
                     }
                 }
             }

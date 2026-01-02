@@ -24,6 +24,7 @@ import {
     parseDateToUTC,
     getDayOfWeekUTC,
     getWeekInCycle,
+    getSpecialShiftDetails,
 } from '../utils/shiftEngine';
 import { useShiftTypes, useAllSpecialTemplates } from '../hooks';
 
@@ -244,6 +245,19 @@ export const RutPdfExportModal = ({
 
                     if (!isOff) {
                         displayHorario = (selectedStaff.horario || '10:00-20:00').replace('-', '-');
+
+                        // [NEW] Apply Early Exit in PDF
+                        if (selectedStaff.shift?.shift_type_code === 'ESPECIAL') {
+                            const specialTemplate = specialTemplatesMap.get(selectedStaff.id);
+                            if (specialTemplate) {
+                                const details = getSpecialShiftDetails(dateStr, specialTemplate);
+                                if (details.earlyExit) {
+                                    const match = selectedStaff.horario?.match(/^(\d{1,2}:\d{2})/);
+                                    const startTime = match ? match[1] : '08:00';
+                                    displayHorario = `${startTime}-${details.earlyExit}`;
+                                }
+                            }
+                        }
                     }
 
 
