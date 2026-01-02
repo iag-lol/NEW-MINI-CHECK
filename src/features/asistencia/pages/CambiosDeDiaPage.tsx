@@ -153,62 +153,132 @@ export const CambiosDeDiaPage = () => {
             {query.isLoading && <LoadingState label="Cargando registros..." />}
             {query.isError && <ErrorState onRetry={() => query.refetch()} />}
             {!query.isLoading && !query.isError && (
-                <div className="table-container overflow-x-auto">
-                    <table className="table">
-                        <thead className="table-header">
-                            <tr>
-                                <th className="table-header-cell">RUT</th>
-                                <th className="table-header-cell">Nombre</th>
-                                <th className="table-header-cell">Terminal</th>
-                                <th className="table-header-cell">Fecha</th>
-                                <th className="table-header-cell">Jornada Prog.</th>
-                                <th className="table-header-cell">Jornada Reprog.</th>
-                                <th className="table-header-cell">Doc</th>
-                                <th className="table-header-cell">Autorización</th>
-                                <th className="table-header-cell text-right">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody className="table-body">
-                            {(query.data || []).map((row) => (
-                                <tr key={row.id} className="table-row">
-                                    <td className="table-cell font-mono text-sm">{formatRut(row.rut)}</td>
-                                    <td className="table-cell font-medium">{row.nombre}</td>
-                                    <td className="table-cell">{displayTerminal(row.terminal_code)}</td>
-                                    <td className="table-cell">{row.date}</td>
-                                    <td className="table-cell text-xs">{row.prog_start} - {row.prog_end}</td>
-                                    <td className="table-cell text-xs">{row.reprogram_start} - {row.reprogram_end}</td>
-                                    <td className="table-cell">
+
+                <>
+                    {/* Mobile View - Cards */}
+                    <div className="md:hidden space-y-4">
+                        {(query.data || []).map((row) => (
+                            <div key={row.id} className="bg-white rounded-xl shadow-sm border p-4 space-y-3">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <div className="font-bold text-slate-800">{row.nombre}</div>
+                                        <div className="text-xs text-slate-500 font-mono">{formatRut(row.rut)}</div>
+                                        <div className="text-xs text-brand-600 mt-1">{displayTerminal(row.terminal_code)}</div>
+                                    </div>
+                                    {getStatusBadge(row.auth_status)}
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2 text-sm border-t border-b border-slate-100 py-3">
+                                    <div>
+                                        <span className="text-xs text-slate-400 block">Fecha</span>
+                                        <span className="font-medium text-slate-700">{row.date}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-slate-400 block">Documento</span>
                                         {row.document_path ? (
-                                            <button onClick={() => handleViewDocument(row.document_path!)} className="text-brand-600 hover:underline">
-                                                <Icon name="image" size={16} />
+                                            <button onClick={() => handleViewDocument(row.document_path!)} className="text-brand-600 font-medium hover:underline flex items-center gap-1">
+                                                <Icon name="image" size={14} /> Ver Doc
                                             </button>
-                                        ) : '-'}
-                                    </td>
-                                    <td className="table-cell">{getStatusBadge(row.auth_status)}</td>
-                                    <td className="table-cell">
-                                        <div className="flex items-center justify-end gap-1">
-                                            {row.auth_status === 'PENDIENTE' && (
-                                                <button onClick={() => setModal({ type: 'edit', record: row })} className="btn btn-ghost btn-icon" title="Editar">
-                                                    <Icon name="clipboard" size={16} />
-                                                </button>
-                                            )}
-                                            {canAuthorize && row.auth_status === 'PENDIENTE' && (
-                                                <>
-                                                    <button onClick={() => setModal({ type: 'authorize', record: row })} className="btn btn-ghost btn-icon text-success-600" title="Autorizar">
-                                                        <Icon name="check-circle" size={16} />
-                                                    </button>
-                                                    <button onClick={() => setModal({ type: 'reject', record: row })} className="btn btn-ghost btn-icon text-danger-600" title="Rechazar">
-                                                        <Icon name="x" size={16} />
-                                                    </button>
-                                                </>
-                                            )}
-                                        </div>
-                                    </td>
+                                        ) : <span className="text-slate-500">-</span>}
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-slate-400 block">Programado</span>
+                                        <span className="font-medium text-slate-700">{row.prog_start} - {row.prog_end}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-xs text-slate-400 block text-brand-600">Reprogramado</span>
+                                        <span className="font-bold text-brand-700">{row.reprogram_start} - {row.reprogram_end}</span>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-2">
+                                    {row.auth_status === 'PENDIENTE' && (
+                                        <button
+                                            onClick={() => setModal({ type: 'edit', record: row })}
+                                            className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors flex items-center gap-1"
+                                        >
+                                            <Icon name="clipboard" size={16} /> Editar
+                                        </button>
+                                    )}
+                                    {canAuthorize && row.auth_status === 'PENDIENTE' && (
+                                        <>
+                                            <button
+                                                onClick={() => setModal({ type: 'authorize', record: row })}
+                                                className="px-3 py-1.5 bg-success-50 text-success-700 rounded-lg text-sm font-medium hover:bg-success-100 transition-colors flex items-center gap-1"
+                                            >
+                                                <Icon name="check-circle" size={16} /> Aprobar
+                                            </button>
+                                            <button
+                                                onClick={() => setModal({ type: 'reject', record: row })}
+                                                className="px-3 py-1.5 bg-danger-50 text-danger-700 rounded-lg text-sm font-medium hover:bg-danger-100 transition-colors flex items-center gap-1"
+                                            >
+                                                <Icon name="x" size={16} /> Rechazar
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Desktop View - Table */}
+                    <div className="hidden md:block table-container overflow-x-auto">
+                        <table className="table">
+                            <thead className="table-header">
+                                <tr>
+                                    <th className="table-header-cell">RUT</th>
+                                    <th className="table-header-cell">Nombre</th>
+                                    <th className="table-header-cell">Terminal</th>
+                                    <th className="table-header-cell">Fecha</th>
+                                    <th className="table-header-cell">Jornada Prog.</th>
+                                    <th className="table-header-cell">Jornada Reprog.</th>
+                                    <th className="table-header-cell">Doc</th>
+                                    <th className="table-header-cell">Autorización</th>
+                                    <th className="table-header-cell text-right">Acciones</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody className="table-body">
+                                {(query.data || []).map((row) => (
+                                    <tr key={row.id} className="table-row">
+                                        <td className="table-cell font-mono text-sm">{formatRut(row.rut)}</td>
+                                        <td className="table-cell font-medium">{row.nombre}</td>
+                                        <td className="table-cell">{displayTerminal(row.terminal_code)}</td>
+                                        <td className="table-cell">{row.date}</td>
+                                        <td className="table-cell text-xs">{row.prog_start} - {row.prog_end}</td>
+                                        <td className="table-cell text-xs">{row.reprogram_start} - {row.reprogram_end}</td>
+                                        <td className="table-cell">
+                                            {row.document_path ? (
+                                                <button onClick={() => handleViewDocument(row.document_path!)} className="text-brand-600 hover:underline">
+                                                    <Icon name="image" size={16} />
+                                                </button>
+                                            ) : '-'}
+                                        </td>
+                                        <td className="table-cell">{getStatusBadge(row.auth_status)}</td>
+                                        <td className="table-cell">
+                                            <div className="flex items-center justify-end gap-1">
+                                                {row.auth_status === 'PENDIENTE' && (
+                                                    <button onClick={() => setModal({ type: 'edit', record: row })} className="btn btn-ghost btn-icon" title="Editar">
+                                                        <Icon name="clipboard" size={16} />
+                                                    </button>
+                                                )}
+                                                {canAuthorize && row.auth_status === 'PENDIENTE' && (
+                                                    <>
+                                                        <button onClick={() => setModal({ type: 'authorize', record: row })} className="btn btn-ghost btn-icon text-success-600" title="Autorizar">
+                                                            <Icon name="check-circle" size={16} />
+                                                        </button>
+                                                        <button onClick={() => setModal({ type: 'reject', record: row })} className="btn btn-ghost btn-icon text-danger-600" title="Rechazar">
+                                                            <Icon name="x" size={16} />
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
             )}
 
             {(modal.type === 'create' || modal.type === 'edit') && (

@@ -444,6 +444,12 @@ export const AttendanceGrid = ({
         );
     }
 
+    const formatDayNameShort = (date: string) => {
+        const d = new Date(date + 'T12:00:00');
+        const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        return days[d.getDay()];
+    };
+
     return (
         <>
             <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
@@ -458,17 +464,117 @@ export const AttendanceGrid = ({
                         className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium text-sm hover:bg-emerald-700 transition-colors flex items-center gap-2 disabled:opacity-50"
                     >
                         <Icon name="check" size={16} />
-                        {bulkMarkMutation.isPending ? 'Marcando...' : 'Marcar Todos Presente Hoy'}
+                        {bulkMarkMutation.isPending ? 'Marcando...' : 'Marcar Todos Pres. Hoy'}
                     </button>
                 </div>
 
-                {/* Grid table */}
-                <div className="overflow-x-auto">
+                {/* Mobile View - Cards */}
+                <div className="md:hidden space-y-4 p-3 bg-slate-50">
+                    {CARGO_ORDER.map((cargo) => {
+                        const staffInGroup = groupedStaff[cargo] || [];
+                        if (staffInGroup.length === 0) return null;
+
+                        return (
+                            <div key={cargo} className="space-y-3">
+                                {/* Cargo Header */}
+                                <div className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${CARGO_COLORS[cargo]}`}>
+                                    {cargo}
+                                </div>
+
+                                {staffInGroup.map((s) => {
+                                    const isDesvinculado = s.status === 'DESVINCULADO';
+                                    const shiftType = s.shift ? shiftTypesMap.get(s.shift.shift_type_code) : null;
+
+                                    return (
+                                        <div key={s.id} className={`bg-white rounded-xl shadow-sm border p-4 ${isDesvinculado ? 'opacity-60' : ''}`}>
+                                            {/* Card Header: Info + Config */}
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div>
+                                                    <h3 className={`font-bold text-slate-800 ${isDesvinculado ? 'line-through' : ''}`}>
+                                                        {s.nombre}
+                                                    </h3>
+                                                    <p className="text-xs text-slate-500 mt-0.5 font-mono">
+                                                        {s.rut}
+                                                    </p>
+                                                    <div className="flex flex-wrap gap-2 mt-1.5">
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                                            {s.horario || 'S/H'}
+                                                        </span>
+                                                        {shiftType && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-brand-50 text-brand-700 border border-brand-100">
+                                                                {shiftType.name}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-col gap-2">
+                                                    {onOpenShiftConfig && (
+                                                        <button
+                                                            onClick={() => onOpenShiftConfig(s)}
+                                                            className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-slate-100 hover:text-brand-600 transition-colors"
+                                                        >
+                                                            <Icon name="settings" size={20} />
+                                                        </button>
+                                                    )}
+                                                    {s.admonitionCount && s.admonitionCount > 0 ? (
+                                                        <span className="flex items-center justify-center h-6 w-6 text-xs font-bold bg-red-100 text-red-600 rounded-full">
+                                                            {s.admonitionCount}
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                            </div>
+
+                                            {/* Attendance Strip */}
+                                            <div className="mt-4">
+                                                <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide snap-x">
+                                                    {weekDates.map((date) => {
+                                                        const status = getDayStatus(s, date);
+                                                        const dayName = formatDayNameShort(date);
+                                                        const dayNum = formatDayNumber(date);
+                                                        const isTodayDate = isToday(date);
+
+                                                        return (
+                                                            <div key={date} className="flex-shrink-0 w-16 snap-center flex flex-col items-center gap-1">
+                                                                <div className={`text-[10px] font-medium uppercase ${isTodayDate ? 'text-brand-600 font-bold' : 'text-slate-400'}`}>
+                                                                    {dayName} {dayNum}
+                                                                </div>
+                                                                <div className="w-full">
+                                                                    <DayCell
+                                                                        date={date}
+                                                                        isOff={status.isOff}
+                                                                        horario={status.isOff ? undefined : status.horario}
+                                                                        reducido={status.reducido}
+                                                                        turno={status.turno}
+                                                                        mark={status.mark}
+                                                                        incidencies={status.incidencies}
+                                                                        isToday={isTodayDate}
+                                                                        isDisabled={isDesvinculado}
+                                                                        licenseCode={status.license ? 'LIC' : undefined}
+                                                                        vacationCode={status.vacation ? 'VAC' : undefined}
+                                                                        permissionCode={status.permission ? 'PER' : undefined}
+                                                                        onClick={() => setSelectedCell({ staff: s, date })}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Desktop View - Grid Table */}
+                <div className="hidden md:block overflow-x-auto">
                     <table className="w-full border-collapse">
                         {/* Header with day names and dates */}
                         <thead className="bg-slate-50">
                             <tr>
-
                                 <th className="sticky left-0 z-20 bg-slate-100 border-b border-r px-3 py-2 text-left min-w-[220px] shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)]">
                                     <span className="text-slate-700 font-semibold text-sm">Personal</span>
                                 </th>
@@ -518,8 +624,7 @@ export const AttendanceGrid = ({
                                             return (
                                                 <tr
                                                     key={s.id}
-                                                    className={`hover:bg-slate-50/50 transition-colors ${isDesvinculado ? 'bg-slate-50 opacity-60' : ''
-                                                        }`}
+                                                    className={`hover:bg-slate-50/50 transition-colors ${isDesvinculado ? 'bg-slate-50 opacity-60' : ''}`}
                                                 >
                                                     {/* Staff info cell */}
                                                     <td className="sticky left-0 z-10 bg-white border-b border-r px-3 py-2 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)]">
