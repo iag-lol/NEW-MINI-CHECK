@@ -198,10 +198,10 @@ export const PersonalPage = () => {
 
       {/* Filters */}
       <FiltersBar terminalContext={terminalContext} onTerminalChange={setTerminalContext}>
-        <div className="flex flex-col gap-1">
+        <div className="w-full sm:w-auto flex flex-col gap-1">
           <label className="label">Estado</label>
           <select
-            className="input"
+            className="input w-full"
             value={filters.status}
             onChange={(e) =>
               setFilters((prev) => ({
@@ -217,10 +217,10 @@ export const PersonalPage = () => {
             ))}
           </select>
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="w-full sm:w-auto flex flex-col gap-1">
           <label className="label">Cargo</label>
           <select
-            className="input"
+            className="input w-full"
             value={filters.cargo || 'todos'}
             onChange={(e) =>
               setFilters((prev) => ({
@@ -237,16 +237,21 @@ export const PersonalPage = () => {
             ))}
           </select>
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="w-full sm:w-auto flex flex-col gap-1 flex-grow">
           <label className="label">Buscar</label>
-          <input
-            className="input"
-            placeholder="RUT o nombre"
-            value={filters.search ?? ''}
-            onChange={(e) =>
-              setFilters((prev) => ({ ...prev, search: e.target.value }))
-            }
-          />
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <Icon name="search" size={16} />
+            </div>
+            <input
+              className="input pl-10 w-full"
+              placeholder="RUT o nombre..."
+              value={filters.search ?? ''}
+              onChange={(e) =>
+                setFilters((prev) => ({ ...prev, search: e.target.value }))
+              }
+            />
+          </div>
         </div>
       </FiltersBar>
 
