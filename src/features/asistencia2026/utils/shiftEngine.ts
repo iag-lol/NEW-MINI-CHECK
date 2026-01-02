@@ -9,7 +9,67 @@ import {
     ShiftPattern,
     StaffShiftSpecialTemplate,
     StaffShiftOverride,
+    ShiftType,
 } from '../types';
+
+/**
+ * Fallback shift patterns when DB doesn't have shift_types data
+ */
+export function getFallbackShiftType(code: ShiftTypeCode): ShiftType | undefined {
+    const fallbacks: Record<ShiftTypeCode, ShiftType> = {
+        '5X2_FIJO': {
+            id: '1',
+            code: '5X2_FIJO',
+            name: '5x2 Fijo',
+            pattern_json: { type: 'fixed', description: 'Lun-Vie trabaja', offDays: [6, 0] },
+            created_at: '',
+        },
+        '5X2_ROTATIVO': {
+            id: '2',
+            code: '5X2_ROTATIVO',
+            name: '5x2 Rotativo',
+            pattern_json: {
+                type: 'rotating',
+                description: 'Rotativo 2 semanas',
+                cycle: 2,
+                weeks: [{ offDays: [3, 0] }, { offDays: [5, 6] }],
+            },
+            created_at: '',
+        },
+        '5X2_SUPER': {
+            id: '3',
+            code: '5X2_SUPER',
+            name: '5x2 Super',
+            pattern_json: {
+                type: 'rotating',
+                description: 'Super 2 semanas',
+                cycle: 2,
+                weeks: [{ offDays: [3, 0] }, { offDays: [4, 5] }],
+            },
+            created_at: '',
+        },
+        'ESPECIAL': {
+            id: '4',
+            code: 'ESPECIAL',
+            name: 'Especial',
+            pattern_json: { type: 'manual', description: 'Manual 28 dias', cycleDays: 28 },
+            created_at: '',
+        },
+        'SUPERVISOR_RELEVO': {
+            id: '5',
+            code: 'SUPERVISOR_RELEVO',
+            name: 'Supervisor Relevo',
+            pattern_json: {
+                type: 'rotating',
+                description: 'Sem1: Mié+Dom (2 libres), Sem2: Mié+Vie+Sáb (3 libres)',
+                cycle: 2,
+                weeks: [{ offDays: [3, 0] }, { offDays: [3, 5, 6] }],
+            },
+            created_at: '',
+        },
+    };
+    return fallbacks[code];
+}
 
 // Reference date for cycle calculations - Monday Dec 29, 2025 at noon (to avoid TZ issues)
 // Week 1 (Dec 29 - Jan 4): Cycle index 0

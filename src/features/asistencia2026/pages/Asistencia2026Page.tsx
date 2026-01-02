@@ -38,6 +38,9 @@ import {
     getTurnoFromHorario,
     isPastDate,
     getLocalTodayStr,
+    isOffDay,
+    getReducedHourDays,
+    getFallbackShiftType,
 } from '../utils/shiftEngine';
 import { GridFilters, StaffWithShift, Asistencia2026KPIs } from '../types';
 import * as XLSX from 'xlsx';
@@ -193,16 +196,43 @@ export const Asistencia2026Page = () => {
             if (mark) return mark.mark; // P or A
 
             // Check if off day
-            const dayOfWeek = new Date(date + 'T12:00:00').getDay();
             const shiftType = s.shift ? shiftTypes.find(st => st.code === s.shift!.shift_type_code) : null;
-            let isOff = dayOfWeek === 0 || dayOfWeek === 6;
-            if (shiftType?.pattern_json) {
-                // Use pattern - simplified check
-                if (shiftType.pattern_json.type === 'fixed' && shiftType.pattern_json.offDays) {
-                    isOff = shiftType.pattern_json.offDays.includes(dayOfWeek);
+            let isOff = false;
+
+            if (s.shift) {
+                // Get pattern from DB or use fallback
+                let effectiveShiftType = shiftType;
+                if (!effectiveShiftType?.pattern_json) {
+                    effectiveShiftType = getFallbackShiftType(s.shift.shift_type_code);
                 }
+
+                if (effectiveShiftType?.pattern_json) {
+                    const specialTemplateFound = specialTemplates.find(t => t.staff_id === s.id);
+                    const overrideFound = overrides.find(o => o.staff_id === s.id && o.override_date === date);
+
+                    isOff = isOffDay(
+                        date,
+                        s.shift.shift_type_code,
+                        s.shift.variant_code,
+                        effectiveShiftType.pattern_json,
+                        specialTemplateFound,
+                        overrideFound
+                    );
+                } else {
+                    const dayOfWeek = new Date(date + 'T12:00:00').getDay();
+                    isOff = dayOfWeek === 0 || dayOfWeek === 6;
+                }
+            } else {
+                const dayOfWeek = new Date(date + 'T12:00:00').getDay();
+                isOff = dayOfWeek === 0 || dayOfWeek === 6;
             }
+
             if (isOff) return 'L';
+
+            // Check for Reduced Hours (Ley 40h) - Optional: mark as 'R' or just treat as work day?
+            // User requested correct off days. Reduced days are work days, just shorter.
+            // keeping as pending '-' or mark if present.
+
             return '-'; // Pending
         };
 
