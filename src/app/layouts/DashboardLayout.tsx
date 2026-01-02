@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from '../../shared/components/layout/Sidebar';
 import { AppHeader } from '../../shared/components/layout/AppHeader';
@@ -7,6 +7,19 @@ import { AsisCommand } from '../../features/asis_command/components/AsisCommand'
 export const DashboardLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Auto-collapse on smaller screens (12-inch laptops) to maximize space
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1280) {
+        setSidebarCollapsed(true);
+      }
+    };
+
+    // Run once on mount
+    handleResize();
+  }, []);
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-slate-50">

@@ -468,7 +468,8 @@ export const AttendanceGrid = ({
                         {/* Header with day names and dates */}
                         <thead className="bg-slate-50">
                             <tr>
-                                <th className="sticky left-0 z-10 bg-slate-100 border-b border-r px-3 py-2 text-left min-w-[220px]">
+
+                                <th className="sticky left-0 z-20 bg-slate-100 border-b border-r px-3 py-2 text-left min-w-[220px] shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)]">
                                     <span className="text-slate-700 font-semibold text-sm">Personal</span>
                                 </th>
                                 {weekDates.map((date) => {
@@ -521,7 +522,7 @@ export const AttendanceGrid = ({
                                                         }`}
                                                 >
                                                     {/* Staff info cell */}
-                                                    <td className="sticky left-0 z-10 bg-white border-b border-r px-3 py-2">
+                                                    <td className="sticky left-0 z-10 bg-white border-b border-r px-3 py-2 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)]">
                                                         <div className="flex items-center gap-2">
                                                             <div className="flex-1 min-w-0">
                                                                 <div className={`font-medium text-sm text-slate-800 truncate ${isDesvinculado ? 'line-through' : ''}`}>

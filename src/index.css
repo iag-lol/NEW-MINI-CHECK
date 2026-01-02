@@ -8,18 +8,18 @@
 
 :root {
   color-scheme: light;
-  
+
   /* Brand Gradients */
   --gradient-brand: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
   --gradient-accent: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
   --gradient-dark: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
   --gradient-surface: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  
+
   /* Glass Effect */
   --glass-bg: rgba(255, 255, 255, 0.7);
   --glass-border: rgba(255, 255, 255, 0.2);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
-  
+
   /* Sidebar */
   --sidebar-width: 280px;
   --sidebar-collapsed-width: 80px;
@@ -297,8 +297,23 @@ body {
   border: 1px solid var(--glass-border);
 }
 
+
+html {
+  scroll-behavior: smooth;
+}
+
 .divider {
   @apply h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent;
+}
+
+/* Scrollbar Utilities */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Scrollbar Styling */
