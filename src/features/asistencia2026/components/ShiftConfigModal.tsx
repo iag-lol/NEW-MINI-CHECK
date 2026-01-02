@@ -94,7 +94,7 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
     const [specialOffDays, setSpecialOffDays] = useState<number[]>([]);
     const [dailyShifts, setDailyShifts] = useState<Record<number, 'DIA' | 'NOCHE'>>({});
     const [earlyExitEnabled, setEarlyExitEnabled] = useState(false);
-    const [earlyExitDay, setEarlyExitDay] = useState<number>(5); // Default to Friday (5)
+    const [earlyExitDays, setEarlyExitDays] = useState<number[]>([]); // Array for multiple days
     const [earlyExitTime, setEarlyExitTime] = useState<string>('14:00');
 
     const [activeTab, setActiveTab] = useState<ConfigTab>('OFF_DAYS');
@@ -121,20 +121,31 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
                 setDailyShifts(settings.daily_shifts || {});
                 if (settings.early_exit) {
                     setEarlyExitEnabled(settings.early_exit.enabled);
-                    setEarlyExitDay(settings.early_exit.day_of_week);
+
+                    // Handle new array format or legacy single value
+                    if (settings.early_exit.days) {
+                        setEarlyExitDays(settings.early_exit.days);
+                    } else if (typeof settings.early_exit.day_of_week === 'number') {
+                        setEarlyExitDays([settings.early_exit.day_of_week]);
+                    } else {
+                        setEarlyExitDays([5]); // Default Fri
+                    }
+
                     setEarlyExitTime(settings.early_exit.time);
                 } else {
                     setEarlyExitEnabled(false);
+                    setEarlyExitDays([5]);
                 }
             } else {
                 setDailyShifts({});
                 setEarlyExitEnabled(false);
+                setEarlyExitDays([5]);
             }
         } else {
             setSpecialOffDays([]);
             setDailyShifts({});
             setEarlyExitEnabled(false);
-            setEarlyExitDay(5);
+            setEarlyExitDays([5]);
             setEarlyExitTime('14:00');
         }
 
@@ -169,7 +180,7 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
                     daily_shifts: dailyShifts,
                     early_exit: {
                         enabled: earlyExitEnabled,
-                        day_of_week: earlyExitDay,
+                        days: earlyExitDays, // Save array
                         time: earlyExitTime
                     }
                 };
@@ -213,8 +224,23 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
         }));
     };
 
+    const toggleEarlyExitDay = (day: number) => {
+        setEarlyExitDays(prev =>
+            prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+        );
+    };
+
     const isLoading = upsertShiftMutation.isPending || upsertTemplateMutation.isPending;
     const selectedShiftType = shiftTypes.find((t) => t.code === selectedType);
+
+    const getDaysDescription = () => {
+        if (earlyExitDays.length === 0) return 'ningún día';
+        const dayNames = ['Domingos', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábados'];
+        const selectedNames = earlyExitDays.sort().map(d => dayNames[d]);
+        if (selectedNames.length === 1) return selectedNames[0];
+        const last = selectedNames.pop();
+        return `${selectedNames.join(', ')} y ${last}`;
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
@@ -327,8 +353,8 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
                                 <button
                                     onClick={() => setActiveTab('OFF_DAYS')}
                                     className={`flex-1 py-3 px-4 font-medium transition-colors ${activeTab === 'OFF_DAYS'
-                                            ? 'text-brand-600 border-b-2 border-brand-500 bg-brand-50/50'
-                                            : 'text-slate-500 hover:bg-slate-50'
+                                        ? 'text-brand-600 border-b-2 border-brand-500 bg-brand-50/50'
+                                        : 'text-slate-500 hover:bg-slate-50'
                                         }`}
                                 >
                                     Días Libres
@@ -336,8 +362,8 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
                                 <button
                                     onClick={() => setActiveTab('SHIFT_TYPE')}
                                     className={`flex-1 py-3 px-4 font-medium transition-colors ${activeTab === 'SHIFT_TYPE'
-                                            ? 'text-brand-600 border-b-2 border-brand-500 bg-brand-50/50'
-                                            : 'text-slate-500 hover:bg-slate-50'
+                                        ? 'text-brand-600 border-b-2 border-brand-500 bg-brand-50/50'
+                                        : 'text-slate-500 hover:bg-slate-50'
                                         }`}
                                 >
                                     Turno D/N
@@ -345,8 +371,8 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
                                 <button
                                     onClick={() => setActiveTab('EARLY_EXIT')}
                                     className={`flex-1 py-3 px-4 font-medium transition-colors ${activeTab === 'EARLY_EXIT'
-                                            ? 'text-brand-600 border-b-2 border-brand-500 bg-brand-50/50'
-                                            : 'text-slate-500 hover:bg-slate-50'
+                                        ? 'text-brand-600 border-b-2 border-brand-500 bg-brand-50/50'
+                                        : 'text-slate-500 hover:bg-slate-50'
                                         }`}
                                 >
                                     Salida Temp.
@@ -461,19 +487,19 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
                                             <div className="bg-white p-4 rounded-lg border space-y-4 animate-in fade-in slide-in-from-top-1">
                                                 <div>
                                                     <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                                                        Día de la semana
+                                                        Días de la semana
                                                     </label>
                                                     <div className="flex gap-2 overflow-x-auto pb-1">
                                                         {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d, idx) => {
                                                             const dayVal = idx + 1 === 7 ? 0 : idx + 1; // 1=Mon... 6=Sat, 0=Sun
-                                                            const isSelected = earlyExitDay === dayVal;
+                                                            const isSelected = earlyExitDays.includes(dayVal);
                                                             return (
                                                                 <button
                                                                     key={d}
-                                                                    onClick={() => setEarlyExitDay(dayVal)}
+                                                                    onClick={() => toggleEarlyExitDay(dayVal)}
                                                                     className={`flex-1 min-w-[3rem] py-2 rounded-lg text-sm font-medium border transition-all ${isSelected
-                                                                            ? 'bg-brand-50 border-brand-500 text-brand-700 ring-1 ring-brand-500'
-                                                                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                                                        ? 'bg-brand-50 border-brand-500 text-brand-700 ring-1 ring-brand-500'
+                                                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                                                                         }`}
                                                                 >
                                                                     {d}
@@ -494,7 +520,7 @@ export const ShiftConfigModal = ({ isOpen, onClose, staff, onSuccess }: ShiftCon
                                                         className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 outline-none"
                                                     />
                                                     <p className="text-xs text-slate-500 mt-2">
-                                                        Se aplicará para todos los <strong>{['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][earlyExitDay]}s</strong> del año.
+                                                        Se aplicará para todos los <strong>{getDaysDescription()}</strong> del año.
                                                     </p>
                                                 </div>
                                             </div>

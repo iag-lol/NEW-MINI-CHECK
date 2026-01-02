@@ -195,11 +195,16 @@ export function getSpecialShiftDetails(
     let earlyExit: string | undefined;
     const dayOfWeek = getDayOfWeekUTC(date); // 0=Sun, 6=Sat
 
-    if (
-        specialTemplate.settings_json.early_exit?.enabled &&
-        specialTemplate.settings_json.early_exit.day_of_week === dayOfWeek
-    ) {
-        earlyExit = specialTemplate.settings_json.early_exit.time;
+    if (specialTemplate.settings_json.early_exit?.enabled) {
+        const settings = specialTemplate.settings_json.early_exit;
+        // Check new 'days' array or fallback to legacy 'day_of_week'
+        const isEarlyExitDay = settings.days
+            ? settings.days.includes(dayOfWeek)
+            : settings.day_of_week === dayOfWeek;
+
+        if (isEarlyExitDay) {
+            earlyExit = settings.time;
+        }
     }
 
     return { type: dailyType, earlyExit };

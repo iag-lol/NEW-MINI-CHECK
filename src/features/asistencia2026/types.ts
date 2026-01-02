@@ -49,7 +49,8 @@ export interface SpecialTemplateSettings {
     // Recurring early exit rules
     early_exit?: {
         enabled: boolean;
-        day_of_week: number; // 0-6 (Sun-Sat)
+        days: number[]; // Array of 0-6 (Sun-Sat)
+        day_of_week?: number; // Deprecated, kept for backward compat
         time: string; // "14:00"
     };
 }
