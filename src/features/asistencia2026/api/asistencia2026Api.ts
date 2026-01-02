@@ -22,6 +22,7 @@ import {
     OffboardingRequestFormValues,
     StaffShiftFormValues,
     GridFilters,
+    SpecialTemplateSettings,
 } from '../types';
 
 // ==========================================
@@ -244,16 +245,23 @@ export async function fetchAllSpecialTemplates(
 
 export async function upsertSpecialTemplate(
     staffId: string,
-    offDays: number[]
+    offDays: number[],
+    settings?: SpecialTemplateSettings
 ): Promise<StaffShiftSpecialTemplate> {
     if (!isSupabaseConfigured()) throw new Error('Supabase not configured');
 
+    const updatePayload: any = {
+        staff_id: staffId,
+        off_days_json: offDays,
+    };
+
+    if (settings) {
+        updatePayload.settings_json = settings;
+    }
+
     const { data, error } = await supabase
         .from('staff_shift_special_templates')
-        .upsert({
-            staff_id: staffId,
-            off_days_json: offDays,
-        }, { onConflict: 'staff_id' })
+        .upsert(updatePayload, { onConflict: 'staff_id' })
         .select()
         .single();
 

@@ -34,6 +34,7 @@ import {
     AttendanceLicenseFormValues,
     AttendancePermissionFormValues,
     OffboardingRequestFormValues,
+    SpecialTemplateSettings,
 } from './types';
 
 // ==========================================
@@ -175,8 +176,8 @@ export const useUpsertSpecialTemplate = () => {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: ({ staffId, offDays }: { staffId: string; offDays: number[] }) =>
-            upsertSpecialTemplate(staffId, offDays),
+        mutationFn: ({ staffId, offDays, settings }: { staffId: string; offDays: number[]; settings?: SpecialTemplateSettings }) =>
+            upsertSpecialTemplate(staffId, offDays, settings),
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: asistencia2026Keys.specialTemplate(data.staff_id) });
         },

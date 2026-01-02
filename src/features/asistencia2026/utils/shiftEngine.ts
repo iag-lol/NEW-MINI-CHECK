@@ -175,6 +175,37 @@ export function isOffDay(
 }
 
 /**
+ * Get special shift details (Day/Night, Early Exit) from template settings
+ */
+export function getSpecialShiftDetails(
+    dateStr: string,
+    specialTemplate?: StaffShiftSpecialTemplate
+): { type: 'DIA' | 'NOCHE'; earlyExit?: string } {
+    if (!specialTemplate?.settings_json) return { type: 'DIA' };
+
+    const date = parseDateToUTC(dateStr);
+
+    // Check Daily D/N
+    const days = daysBetween(CYCLE_REFERENCE_DATE, date);
+    const dayInCycle = ((days % 28) + 28) % 28; // Assume 28 for manual
+
+    const dailyType = specialTemplate.settings_json.daily_shifts?.[dayInCycle] || 'DIA';
+
+    // Check Early Exit
+    let earlyExit: string | undefined;
+    const dayOfWeek = getDayOfWeekUTC(date); // 0=Sun, 6=Sat
+
+    if (
+        specialTemplate.settings_json.early_exit?.enabled &&
+        specialTemplate.settings_json.early_exit.day_of_week === dayOfWeek
+    ) {
+        earlyExit = specialTemplate.settings_json.early_exit.time;
+    }
+
+    return { type: dailyType, earlyExit };
+}
+
+/**
  * Determine if turno is DIA or NOCHE based on horario string
  */
 export function getTurnoFromHorario(horario: string): 'DIA' | 'NOCHE' {

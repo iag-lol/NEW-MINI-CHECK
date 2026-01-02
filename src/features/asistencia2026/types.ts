@@ -38,7 +38,20 @@ export interface StaffShiftSpecialTemplate {
     staff_id: string;
     cycle_days: number;
     off_days_json: number[]; // Array of day indices (0-27) that are off
+    settings_json?: SpecialTemplateSettings; // Advanced settings (daily D/N, early exit)
     updated_at: string;
+}
+
+export interface SpecialTemplateSettings {
+    // Map day index (0-27) to 'DIA' or 'NOCHE'. Default is 'DIA' if not present.
+    daily_shifts?: Record<number, 'DIA' | 'NOCHE'>;
+
+    // Recurring early exit rules
+    early_exit?: {
+        enabled: boolean;
+        day_of_week: number; // 0-6 (Sun-Sat)
+        time: string; // "14:00"
+    };
 }
 
 export interface StaffShiftOverride {

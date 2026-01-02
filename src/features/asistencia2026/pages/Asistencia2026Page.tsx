@@ -40,7 +40,9 @@ import {
     getLocalTodayStr,
     isOffDay,
     getReducedHourDays,
+    getReducedHourDays,
     getFallbackShiftType,
+    getSpecialShiftDetails,
 } from '../utils/shiftEngine';
 import { GridFilters, StaffWithShift, Asistencia2026KPIs } from '../types';
 import * as XLSX from 'xlsx';
@@ -229,9 +231,21 @@ export const Asistencia2026Page = () => {
 
             if (isOff) return 'L';
 
-            // Check for Reduced Hours (Ley 40h) - Optional: mark as 'R' or just treat as work day?
-            // User requested correct off days. Reduced days are work days, just shorter.
-            // keeping as pending '-' or mark if present.
+            // Check for Special Details (D/N, Early Exit)
+            if (s.shift && s.shift.shift_type_code === 'ESPECIAL') {
+                const specialTemplateFound = specialTemplates.find(t => t.staff_id === s.id);
+                if (specialTemplateFound) {
+                    const details = getSpecialShiftDetails(date, specialTemplateFound);
+
+                    // If Early Exit exists, return it
+                    if (details.earlyExit) {
+                        return `Salida: ${details.earlyExit}`;
+                    }
+
+                    // If Night Shift, maybe indicate it? (Optional, user asked for config)
+                    // if (details.type === 'NOCHE') return 'Noche';
+                }
+            }
 
             return '-'; // Pending
         };

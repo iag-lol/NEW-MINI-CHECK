@@ -1329,3 +1329,10 @@ ALTER PUBLICATION supabase_realtime ADD TABLE srl_request_buses;
 INSERT INTO srl_email_settings (recipients, subject_template) 
 VALUES ('srl@example.com', 'Solicitud SRL - {terminal} - {count} Buses')
 ON CONFLICT DO NOTHING;
+
+-- 
+-- ALTER: Add settings_json to staff_shift_special_templates for advanced manual config
+-- 
+ALTER TABLE staff_shift_special_templates 
+ADD COLUMN IF NOT EXISTS settings_json JSONB DEFAULT '{}'::jsonb;
+
