@@ -144,10 +144,11 @@ function formatHorario(horario: string, reducido: boolean): string {
     const startHour = parseInt(match[1], 10);
     let endHour = parseInt(match[3], 10);
 
-    // If reducido (Ley 40 hrs), subtract 1 hour from end time
-    if (reducido) {
-        endHour = endHour === 0 ? 23 : endHour - 1;
-    }
+    // If reducido (Ley 40 hrs), logic removed.
+    // formatting now just shows provided times without modification.
+    // if (reducido) {
+    //    endHour = endHour === 0 ? 23 : endHour - 1;
+    // }
 
     return `${startHour.toString().padStart(2, '0')}-${endHour.toString().padStart(2, '0')}`;
 }
