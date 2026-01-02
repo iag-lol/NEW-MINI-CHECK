@@ -225,7 +225,14 @@ export const AseoInfoSection = ({ rut }: Props) => {
                             <div className="flex-1">
                                 <h3 className="font-bold text-red-900 text-sm">No Marcación</h3>
                                 <p className="text-xs text-red-700 mt-0.5">
-                                    {noMarks.length} día(s): {noMarks.map((n: any) => new Date(n.date).toLocaleDateString('es-CL', { day: 'numeric', month: 'numeric' })).join(', ')}
+                                    {noMarks.length} día(s): {noMarks.map((n: any) => {
+                                        // Fix: Check if date is string and parse valid parts
+                                        if (typeof n.date === 'string') {
+                                            const [y, m, d] = n.date.split('-');
+                                            return `${d}/${m}`;
+                                        }
+                                        return n.date;
+                                    }).join(', ')}
                                 </p>
                             </div>
                         </div>
@@ -346,6 +353,12 @@ export const AseoInfoSection = ({ rut }: Props) => {
                                                     <Icon name="clock" size={12} className="mr-1 text-slate-400" />
                                                     {displayStart} - {displayEnd}
                                                 </span>
+                                                {specialDetails?.type === 'NOCHE' && (
+                                                    <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200 flex items-center gap-1">
+                                                        <Icon name="moon" size={10} />
+                                                        Noche
+                                                    </span>
+                                                )}
                                                 {specialDetails?.earlyExit && (
                                                     <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded border border-amber-200">
                                                         Salida Temprana

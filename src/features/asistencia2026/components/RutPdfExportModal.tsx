@@ -21,8 +21,6 @@ import {
     getMonthName,
     isOffDay,
     getWeekStart,
-    getReducedHourDays,
-    getAdjustedHorario,
     parseDateToUTC,
     getDayOfWeekUTC,
     getWeekInCycle,
@@ -210,7 +208,6 @@ export const RutPdfExportModal = ({
                 const row: string[] = [];
                 const weekStart = week.find(d => d !== '') || '';
                 const weekStartFormatted = weekStart ? getWeekStart(weekStart) : '';
-                const reducedDays = weekStartFormatted ? getReducedHourDays(weekStartFormatted) : [];
 
                 for (const dateStr of week) {
                     if (!dateStr) {
@@ -246,12 +243,7 @@ export const RutPdfExportModal = ({
                     }
 
                     if (!isOff) {
-                        const isReduced = reducedDays.includes(dateStr);
-                        // Use base horario (week-specific scheduling not implemented in pattern yet)
-                        let horario = selectedStaff.horario || '10:00-20:00';
-
-                        if (isReduced) horario = getAdjustedHorario(horario, true);
-                        displayHorario = horario.replace('-', '-');
+                        displayHorario = (selectedStaff.horario || '10:00-20:00').replace('-', '-');
                     }
 
 

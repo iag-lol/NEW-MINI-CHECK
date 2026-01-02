@@ -27,7 +27,6 @@ import {
     isOffDay,
     isDateInRange,
     getTurnoFromHorario,
-    getReducedHourDays,
 } from '../utils/shiftEngine';
 import { useSessionStore } from '../../../shared/state/sessionStore';
 import {
@@ -282,10 +281,6 @@ export const AttendanceGrid = ({
             isOff = dayOfWeek === 0 || dayOfWeek === 6; // Sunday or Saturday
         }
 
-        // Check if this is a reduced hour day (Ley 40 hrs)
-        const reducedDays = getReducedHourDays(weekDates[0]);
-        const isReducido = reducedDays.includes(date) && !isOff;
-
         return {
             mark,
             license,
@@ -294,7 +289,7 @@ export const AttendanceGrid = ({
             isOff,
             horario,
             turno,
-            reducido: isReducido,
+            reducido: false, // Ley 40 removed
             incidencies: inc,
         };
     };
