@@ -90,10 +90,10 @@ export const MeetingsTableView = ({ onOpenMeeting }: MeetingsTableViewProps) => 
             />
 
             <FiltersBar terminalContext={terminalContext} onTerminalChange={setTerminalContext}>
-                <div className="flex flex-col gap-1">
+                <div className="w-full sm:w-auto flex flex-col gap-1">
                     <label className="label">Estado</label>
                     <select
-                        className="input"
+                        className="input w-full"
                         value={filters.status}
                         onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value as any }))}
                     >
@@ -102,89 +102,186 @@ export const MeetingsTableView = ({ onOpenMeeting }: MeetingsTableViewProps) => 
                         ))}
                     </select>
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="w-full sm:w-auto flex flex-col gap-1 flex-grow">
                     <label className="label">Buscar</label>
-                    <input
-                        className="input"
-                        placeholder="Título de reunión"
-                        value={filters.search ?? ''}
-                        onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-                    />
+                    <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <Icon name="search" size={16} />
+                        </div>
+                        <input
+                            className="input pl-10 w-full"
+                            placeholder="Título de reunión..."
+                            value={filters.search ?? ''}
+                            onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+                        />
+                    </div>
                 </div>
             </FiltersBar>
 
             {query.isLoading && <LoadingState label="Cargando reuniones..." />}
             {query.isError && <ErrorState onRetry={() => query.refetch()} />}
             {!query.isLoading && !query.isError && (
-                <div className="table-container overflow-x-auto">
-                    <table className="table">
-                        <thead className="table-header">
-                            <tr>
-                                <th className="table-header-cell">Fecha/Hora</th>
-                                <th className="table-header-cell">Título</th>
-                                <th className="table-header-cell">Terminal</th>
-                                <th className="table-header-cell">Estado</th>
-                                <th className="table-header-cell text-center">Inv.</th>
-                                <th className="table-header-cell text-center">Tareas</th>
-                                <th className="table-header-cell text-center">Adj.</th>
-                                <th className="table-header-cell text-right">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody className="table-body">
-                            {(query.data || []).length === 0 ? (
-                                <tr>
-                                    <td colSpan={8} className="table-cell text-center text-slate-500 py-8">
-                                        No hay reuniones registradas
-                                    </td>
-                                </tr>
-                            ) : (
-                                (query.data || []).map((row) => (
-                                    <tr key={row.id} className="table-row cursor-pointer hover:bg-slate-50" onClick={() => onOpenMeeting(row.id)}>
-                                        <td className="table-cell text-sm">{formatDateTime(row.starts_at)}</td>
-                                        <td className="table-cell font-medium">{row.title}</td>
-                                        <td className="table-cell text-sm">{displayTerminal(row.terminal_code)}</td>
-                                        <td className="table-cell">{getStatusBadge(row.status)}</td>
-                                        <td className="table-cell text-center">
-                                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-sm font-medium">
-                                                {row.invitees_count}
-                                            </span>
-                                        </td>
-                                        <td className="table-cell text-center">
-                                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-sm font-medium">
-                                                {row.actions_count}
-                                            </span>
-                                        </td>
-                                        <td className="table-cell text-center">
-                                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-sm font-medium">
-                                                {row.files_count}
-                                            </span>
-                                        </td>
-                                        <td className="table-cell" onClick={(e) => e.stopPropagation()}>
-                                            <div className="flex items-center justify-end gap-1">
-                                                <button onClick={() => onOpenMeeting(row.id)} className="btn btn-ghost btn-icon" title="Ver detalle">
-                                                    <Icon name="eye" size={16} />
-                                                </button>
-                                                {canManage && row.status === 'PROGRAMADA' && (
-                                                    <>
-                                                        <button onClick={() => setEditingMeeting(row)} className="btn btn-ghost btn-icon" title="Editar">
-                                                            <Icon name="edit" size={16} />
-                                                        </button>
-                                                        <button onClick={() => handleMarkComplete(row)} className="btn btn-ghost btn-icon text-success-600" title="Marcar realizada">
-                                                            <Icon name="check-circle" size={16} />
-                                                        </button>
-                                                        <button onClick={() => setCancelingMeeting(row)} className="btn btn-ghost btn-icon text-danger-600" title="Cancelar">
-                                                            <Icon name="x-circle" size={16} />
-                                                        </button>
-                                                    </>
-                                                )}
+                <>
+                    {/* Mobile View - Cards */}
+                    <div className="md:hidden space-y-4">
+                        {(query.data || []).length === 0 ? (
+                            <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                                No hay reuniones registradas
+                            </div>
+                        ) : (
+                            (query.data || []).map((row) => (
+                                <div
+                                    key={row.id}
+                                    className="card p-5 border-l-4 border-l-brand-500 tap-highlight-transparent"
+                                    onClick={() => onOpenMeeting(row.id)}
+                                >
+                                    {/* Header */}
+                                    <div className="flex justify-between items-start gap-3 mb-3">
+                                        <div>
+                                            <h3 className="font-bold text-lg text-slate-900 leading-tight mb-1">
+                                                {row.title}
+                                            </h3>
+                                            <div className="flex items-center gap-2 text-xs text-slate-500">
+                                                <Icon name="calendar" size={14} />
+                                                <span className="font-medium">{formatDateTime(row.starts_at)}</span>
                                             </div>
+                                        </div>
+                                        <div className="shrink-0">
+                                            {getStatusBadge(row.status)}
+                                        </div>
+                                    </div>
+
+                                    {/* Info Grid */}
+                                    <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-sm text-slate-600 mb-4 bg-slate-50 p-3 rounded-lg">
+                                        <div className="flex items-center gap-2">
+                                            <Icon name="building" size={16} className="text-slate-400 shrink-0" />
+                                            <span>{displayTerminal(row.terminal_code)}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Icon name="users" size={16} className="text-slate-400 shrink-0" />
+                                            <span>{row.invitees_count} Invitados</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Icon name="check-circle" size={16} className="text-slate-400 shrink-0" />
+                                            <span>{row.actions_count} Tareas</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Icon name="file" size={16} className="text-slate-400 shrink-0" />
+                                            <span>{row.files_count} Archivos</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100" onClick={(e) => e.stopPropagation()}>
+                                        <button
+                                            onClick={() => onOpenMeeting(row.id)}
+                                            className="flex flex-col items-center justify-center p-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
+                                        >
+                                            <Icon name="eye" size={20} />
+                                            <span className="text-[10px] font-medium mt-1">Ver</span>
+                                        </button>
+                                        {canManage && row.status === 'PROGRAMADA' && (
+                                            <>
+                                                <button
+                                                    onClick={() => setEditingMeeting(row)}
+                                                    className="flex flex-col items-center justify-center p-2 rounded-lg text-brand-600 hover:bg-brand-50 transition-colors"
+                                                >
+                                                    <Icon name="edit" size={20} />
+                                                    <span className="text-[10px] font-medium mt-1">Editar</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => handleMarkComplete(row)}
+                                                    className="flex flex-col items-center justify-center p-2 rounded-lg text-success-600 hover:bg-success-50 transition-colors"
+                                                >
+                                                    <Icon name="check-circle" size={20} />
+                                                    <span className="text-[10px] font-medium mt-1">Realizar</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => setCancelingMeeting(row)}
+                                                    className="flex flex-col items-center justify-center p-2 rounded-lg text-danger-600 hover:bg-danger-50 transition-colors"
+                                                >
+                                                    <Icon name="x-circle" size={20} />
+                                                    <span className="text-[10px] font-medium mt-1">Cancelar</span>
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    {/* Desktop View - Table */}
+                    <div className="hidden md:block table-container overflow-x-auto">
+                        <table className="table">
+                            <thead className="table-header">
+                                <tr>
+                                    <th className="table-header-cell">Fecha/Hora</th>
+                                    <th className="table-header-cell">Título</th>
+                                    <th className="table-header-cell">Terminal</th>
+                                    <th className="table-header-cell">Estado</th>
+                                    <th className="table-header-cell text-center">Inv.</th>
+                                    <th className="table-header-cell text-center">Tareas</th>
+                                    <th className="table-header-cell text-center">Adj.</th>
+                                    <th className="table-header-cell text-right">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody className="table-body">
+                                {(query.data || []).length === 0 ? (
+                                    <tr>
+                                        <td colSpan={8} className="table-cell text-center text-slate-500 py-8">
+                                            No hay reuniones registradas
                                         </td>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                                ) : (
+                                    (query.data || []).map((row) => (
+                                        <tr key={row.id} className="table-row cursor-pointer hover:bg-slate-50" onClick={() => onOpenMeeting(row.id)}>
+                                            <td className="table-cell text-sm">{formatDateTime(row.starts_at)}</td>
+                                            <td className="table-cell font-medium">{row.title}</td>
+                                            <td className="table-cell text-sm">{displayTerminal(row.terminal_code)}</td>
+                                            <td className="table-cell">{getStatusBadge(row.status)}</td>
+                                            <td className="table-cell text-center">
+                                                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-sm font-medium">
+                                                    {row.invitees_count}
+                                                </span>
+                                            </td>
+                                            <td className="table-cell text-center">
+                                                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-sm font-medium">
+                                                    {row.actions_count}
+                                                </span>
+                                            </td>
+                                            <td className="table-cell text-center">
+                                                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-sm font-medium">
+                                                    {row.files_count}
+                                                </span>
+                                            </td>
+                                            <td className="table-cell" onClick={(e) => e.stopPropagation()}>
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <button onClick={() => onOpenMeeting(row.id)} className="btn btn-ghost btn-icon" title="Ver detalle">
+                                                        <Icon name="eye" size={16} />
+                                                    </button>
+                                                    {canManage && row.status === 'PROGRAMADA' && (
+                                                        <>
+                                                            <button onClick={() => setEditingMeeting(row)} className="btn btn-ghost btn-icon" title="Editar">
+                                                                <Icon name="edit" size={16} />
+                                                            </button>
+                                                            <button onClick={() => handleMarkComplete(row)} className="btn btn-ghost btn-icon text-success-600" title="Marcar realizada">
+                                                                <Icon name="check-circle" size={16} />
+                                                            </button>
+                                                            <button onClick={() => setCancelingMeeting(row)} className="btn btn-ghost btn-icon text-danger-600" title="Cancelar">
+                                                                <Icon name="x-circle" size={16} />
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
             )}
 
             {showForm && (
