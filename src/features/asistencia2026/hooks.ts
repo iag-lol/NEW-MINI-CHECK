@@ -190,6 +190,8 @@ export const useUpsertSpecialTemplate = () => {
             upsertSpecialTemplate(staffId, offDays, settings),
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: asistencia2026Keys.specialTemplate(data.staff_id) });
+            // Invalidate the 'all' list used by the grid
+            queryClient.invalidateQueries({ queryKey: ['asistencia2026', 'specialTemplates', 'all'] });
         },
     });
 };
