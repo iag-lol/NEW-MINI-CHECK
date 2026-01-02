@@ -273,15 +273,12 @@ export async function upsertSpecialTemplate(
 // SHIFT OVERRIDES
 // ==========================================
 
-export async function fetchOverridesForMonth(
+export async function fetchOverridesForRange(
     staffIds: string[],
-    year: number,
-    month: number
+    startDate: string,
+    endDate: string
 ): Promise<StaffShiftOverride[]> {
     if (!isSupabaseConfigured() || staffIds.length === 0) return [];
-
-    const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
 
     const { data, error } = await supabase
         .from('staff_shift_overrides')
@@ -321,15 +318,16 @@ export async function upsertOverride(
 // ATTENDANCE MARKS
 // ==========================================
 
-export async function fetchMarksForMonth(
+// ==========================================
+// ATTENDANCE MARKS
+// ==========================================
+
+export async function fetchMarksForRange(
     staffIds: string[],
-    year: number,
-    month: number
+    startDate: string,
+    endDate: string
 ): Promise<AttendanceMark[]> {
     if (!isSupabaseConfigured() || staffIds.length === 0) return [];
-
-    const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
 
     const { data, error } = await supabase
         .from('attendance_marks')
@@ -392,15 +390,12 @@ export async function bulkMarkPresent(
 // LICENSES
 // ==========================================
 
-export async function fetchLicensesForMonth(
+export async function fetchLicensesForRange(
     staffIds: string[],
-    year: number,
-    month: number
+    startDate: string,
+    endDate: string
 ): Promise<AttendanceLicense[]> {
     if (!isSupabaseConfigured() || staffIds.length === 0) return [];
-
-    const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
 
     const { data, error } = await supabase
         .from('attendance_licenses')
@@ -452,15 +447,12 @@ export async function createLicense(
 // PERMISSIONS
 // ==========================================
 
-export async function fetchPermissionsForMonth(
+export async function fetchPermissionsForRange(
     staffIds: string[],
-    year: number,
-    month: number
+    startDate: string,
+    endDate: string
 ): Promise<AttendancePermission[]> {
     if (!isSupabaseConfigured() || staffIds.length === 0) return [];
-
-    const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
 
     const { data, error } = await supabase
         .from('attendance_permissions')
@@ -499,15 +491,12 @@ export async function createPermission(
 // VACATIONS (from existing table)
 // ==========================================
 
-export async function fetchVacationsForMonth(
+export async function fetchVacationsForRange(
     staffIds: string[],
-    year: number,
-    month: number
+    startDate: string,
+    endDate: string
 ): Promise<{ staff_id: string; start_date: string; end_date: string }[]> {
     if (!isSupabaseConfigured() || staffIds.length === 0) return [];
-
-    const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
 
     // Use existing vacaciones table - join by RUT to get staff_id
     const { data: staffData, error: staffError } = await supabase
@@ -540,22 +529,19 @@ export async function fetchVacationsForMonth(
 // INCIDENCES (from existing tables)
 // ==========================================
 
-export async function fetchIncidencesForMonth(
+export async function fetchIncidencesForRange(
     terminalCodes: string[],
-    year: number,
-    month: number
+    startDate: string,
+    endDate: string
 ): Promise<{
     noMarcaciones: { rut: string; date: string }[];
     sinCredenciales: { rut: string; date: string }[];
-    cambiosDia: { rut: string; date: string }[];
+    cambiosDia: { rut: string; date: string; target_date: string }[];
     autorizaciones: { rut: string; date: string }[];
 }> {
     if (!isSupabaseConfigured()) {
         return { noMarcaciones: [], sinCredenciales: [], cambiosDia: [], autorizaciones: [] };
     }
-
-    const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
 
     const [nm, sc, cd, aut] = await Promise.all([
         supabase
@@ -590,6 +576,36 @@ export async function fetchIncidencesForMonth(
         cambiosDia: (cd.data || []).map(r => ({ rut: r.rut, date: r.date, target_date: r.day_on_date })),
         autorizaciones: (aut.data || []).map(r => ({ rut: r.rut, date: r.authorization_date })),
     };
+}
+
+export async function fetchAdmonitionsForRange(
+    terminalCodes: string[],
+    startDate: string,
+    endDate: string
+): Promise<{ staff_id: string; date: string; reason: string }[]> {
+    if (!isSupabaseConfigured()) return [];
+
+    // staff_admonitions(staff_id, reason, admonition_date)
+    // Filter by date range on admonition_date
+    // Filter by terminal is tricky without join, so we fetch all in range for now
+    // Filtering by staff/terminal will be done by caller (Excel export) via staff_id matching
+
+    const { data, error } = await supabase
+        .from('staff_admonitions')
+        .select('staff_id, reason, admonition_date')
+        .gte('admonition_date', startDate)
+        .lte('admonition_date', endDate);
+
+    if (error) {
+        console.warn('Error fetching admonitions:', error);
+        return [];
+    }
+
+    return (data || []).map(a => ({
+        staff_id: a.staff_id,
+        date: a.admonition_date, // Already YYYY-MM-DD
+        reason: a.reason || ''
+    }));
 }
 
 // ==========================================

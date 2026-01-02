@@ -14,16 +14,17 @@ import {
     fetchSpecialTemplate,
     fetchAllSpecialTemplates,
     upsertSpecialTemplate,
-    fetchOverridesForMonth,
-    fetchMarksForMonth,
+    fetchOverridesForRange,
+    fetchMarksForRange,
     createOrUpdateMark,
     bulkMarkPresent,
-    fetchLicensesForMonth,
+    fetchLicensesForRange,
     createLicense,
-    fetchPermissionsForMonth,
+    fetchPermissionsForRange,
     createPermission,
-    fetchVacationsForMonth,
-    fetchIncidencesForMonth,
+    fetchVacationsForRange,
+    fetchIncidencesForRange,
+    fetchAdmonitionsForRange,
     createOffboardingRequest,
     subscribeToAsistencia2026Changes,
 } from './api/asistencia2026Api';
@@ -50,8 +51,8 @@ export const asistencia2026Keys = {
     staffShift: (staffId: string) => [...asistencia2026Keys.all, 'staffShift', staffId] as const,
     specialTemplate: (staffId: string) => [...asistencia2026Keys.all, 'specialTemplate', staffId] as const,
     monthData: () => [...asistencia2026Keys.all, 'monthData'] as const,
-    overrides: (staffIds: string[], year: number, month: number) =>
-        [...asistencia2026Keys.monthData(), 'overrides', staffIds.join(','), year, month] as const,
+    overrides: (staffIds: string[], startDate: string, endDate: string) =>
+        [...asistencia2026Keys.monthData(), 'overrides', staffIds.join(','), startDate, endDate] as const,
     marks: (staffIds: string[], year: number, month: number) =>
         [...asistencia2026Keys.monthData(), 'marks', staffIds.join(','), year, month] as const,
     licenses: (staffIds: string[], year: number, month: number) =>
@@ -106,52 +107,61 @@ export const useAllSpecialTemplates = (staffIds: string[]) => {
     });
 };
 
-export const useOverridesForMonth = (staffIds: string[], year: number, month: number) => {
+export const useOverridesForWeek = (staffIds: string[], startDate: string, endDate: string) => {
     return useQuery({
-        queryKey: asistencia2026Keys.overrides(staffIds, year, month),
-        queryFn: () => fetchOverridesForMonth(staffIds, year, month),
+        queryKey: asistencia2026Keys.overrides(staffIds, startDate, endDate),
+        queryFn: () => fetchOverridesForRange(staffIds, startDate, endDate),
         enabled: staffIds.length > 0,
     });
 };
 
-export const useMarksForMonth = (staffIds: string[], year: number, month: number) => {
+export const useMarksForWeek = (staffIds: string[], startDate: string, endDate: string) => {
     return useQuery({
-        queryKey: asistencia2026Keys.marks(staffIds, year, month),
-        queryFn: () => fetchMarksForMonth(staffIds, year, month),
+        queryKey: [...asistencia2026Keys.monthData(), 'marks', staffIds.join(','), startDate, endDate],
+        queryFn: () => fetchMarksForRange(staffIds, startDate, endDate),
         enabled: staffIds.length > 0,
     });
 };
 
-export const useLicensesForMonth = (staffIds: string[], year: number, month: number) => {
+export const useLicensesForWeek = (staffIds: string[], startDate: string, endDate: string) => {
     return useQuery({
-        queryKey: asistencia2026Keys.licenses(staffIds, year, month),
-        queryFn: () => fetchLicensesForMonth(staffIds, year, month),
+        queryKey: [...asistencia2026Keys.monthData(), 'licenses', staffIds.join(','), startDate, endDate],
+        queryFn: () => fetchLicensesForRange(staffIds, startDate, endDate),
         enabled: staffIds.length > 0,
     });
 };
 
-export const usePermissionsForMonth = (staffIds: string[], year: number, month: number) => {
+export const usePermissionsForWeek = (staffIds: string[], startDate: string, endDate: string) => {
     return useQuery({
-        queryKey: asistencia2026Keys.permissions(staffIds, year, month),
-        queryFn: () => fetchPermissionsForMonth(staffIds, year, month),
+        queryKey: [...asistencia2026Keys.monthData(), 'permissions', staffIds.join(','), startDate, endDate],
+        queryFn: () => fetchPermissionsForRange(staffIds, startDate, endDate),
         enabled: staffIds.length > 0,
     });
 };
 
-export const useVacationsForMonth = (staffIds: string[], year: number, month: number) => {
+export const useVacationsForWeek = (staffIds: string[], startDate: string, endDate: string) => {
     return useQuery({
-        queryKey: asistencia2026Keys.vacations(staffIds, year, month),
-        queryFn: () => fetchVacationsForMonth(staffIds, year, month),
+        queryKey: [...asistencia2026Keys.monthData(), 'vacations', staffIds.join(','), startDate, endDate],
+        queryFn: () => fetchVacationsForRange(staffIds, startDate, endDate),
         enabled: staffIds.length > 0,
     });
 };
 
-export const useIncidencesForMonth = (terminalContext: TerminalContext, year: number, month: number) => {
+export const useIncidencesForWeek = (terminalContext: TerminalContext, startDate: string, endDate: string) => {
     const terminals = resolveTerminalsForContext(terminalContext);
 
     return useQuery({
-        queryKey: asistencia2026Keys.incidences(terminals, year, month),
-        queryFn: () => fetchIncidencesForMonth(terminals, year, month),
+        queryKey: [...asistencia2026Keys.monthData(), 'incidences', terminals.join(','), startDate, endDate],
+        queryFn: () => fetchIncidencesForRange(terminals, startDate, endDate),
+    });
+};
+
+export const useAdmonitionsForWeek = (terminalContext: TerminalContext, startDate: string, endDate: string) => {
+    const terminals = resolveTerminalsForContext(terminalContext);
+
+    return useQuery({
+        queryKey: [...asistencia2026Keys.monthData(), 'admonitions', terminals.join(','), startDate, endDate],
+        queryFn: () => fetchAdmonitionsForRange(terminals, startDate, endDate),
     });
 };
 

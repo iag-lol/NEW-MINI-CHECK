@@ -12,12 +12,13 @@ import { emailService } from '../../../shared/services/emailService';
 import {
     useShiftTypes,
     useStaffWithShifts,
-    useMarksForMonth,
-    useLicensesForMonth,
-    usePermissionsForMonth,
-    useVacationsForMonth,
-    useOverridesForMonth,
-    useIncidencesForMonth,
+    useMarksForWeek,
+    useLicensesForWeek,
+    usePermissionsForWeek,
+    useVacationsForWeek,
+    useOverridesForWeek,
+    useIncidencesForWeek,
+    useAdmonitionsForWeek, // Added
     useAllSpecialTemplates,
     useCreateOffboardingRequest,
     useAsistencia2026Realtime,
@@ -69,7 +70,11 @@ export const Asistencia2026Page = () => {
     const [weekStart, setWeekStart] = useState(() => getWeekStart(today));
     const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
 
-    // Get month/year from week for data fetching
+    // Derived dates for API fetching (RANGE BASED)
+    const startDate = weekDates[0];
+    const endDate = weekDates[6];
+
+    // Get month/year only for PDF modal or legacy logic NOT for main grid anymore
     const weekMiddleDate = new Date(weekDates[3] + 'T12:00:00');
     const month = weekMiddleDate.getMonth();
     const year = weekMiddleDate.getFullYear();
@@ -91,24 +96,25 @@ export const Asistencia2026Page = () => {
     // Realtime
     useAsistencia2026Realtime();
 
-    // Data queries
+    // Data queries (Updated to use RANGE)
     const { data: shiftTypes = [], isLoading: loadingTypes } = useShiftTypes();
     const { data: staff = [], isLoading: loadingStaff } = useStaffWithShifts(terminalContext, filters);
 
     const staffIds = useMemo(() => staff.map((s) => s.id), [staff]);
 
-    const { data: marks = [], isLoading: loadingMarks } = useMarksForMonth(staffIds, year, month);
-    const { data: licenses = [], isLoading: loadingLicenses } = useLicensesForMonth(staffIds, year, month);
-    const { data: permissions = [], isLoading: loadingPermissions } = usePermissionsForMonth(staffIds, year, month);
-    const { data: vacations = [], isLoading: loadingVacations } = useVacationsForMonth(staffIds, year, month);
-    const { data: overrides = [], isLoading: loadingOverrides } = useOverridesForMonth(staffIds, year, month);
-    const { data: incidences, isLoading: loadingIncidences } = useIncidencesForMonth(terminalContext, year, month);
+    const { data: marks = [], isLoading: loadingMarks } = useMarksForWeek(staffIds, startDate, endDate);
+    const { data: licenses = [], isLoading: loadingLicenses } = useLicensesForWeek(staffIds, startDate, endDate);
+    const { data: permissions = [], isLoading: loadingPermissions } = usePermissionsForWeek(staffIds, startDate, endDate);
+    const { data: vacations = [], isLoading: loadingVacations } = useVacationsForWeek(staffIds, startDate, endDate);
+    const { data: overrides = [], isLoading: loadingOverrides } = useOverridesForWeek(staffIds, startDate, endDate);
+    const { data: incidences, isLoading: loadingIncidences } = useIncidencesForWeek(terminalContext, startDate, endDate);
+    const { data: admonitions = [], isLoading: loadingAdmonitions } = useAdmonitionsForWeek(terminalContext, startDate, endDate); // Added
     const { data: specialTemplates = [] } = useAllSpecialTemplates(staffIds);
 
     const offboardingMutation = useCreateOffboardingRequest();
 
     const isLoading = loadingTypes || loadingStaff || loadingMarks || loadingLicenses ||
-        loadingPermissions || loadingVacations || loadingOverrides || loadingIncidences;
+        loadingPermissions || loadingVacations || loadingOverrides || loadingIncidences || loadingAdmonitions;
 
     // KPIs
     const kpis = useMemo<Asistencia2026KPIs>(() => {
@@ -125,6 +131,10 @@ export const Asistencia2026Page = () => {
             incidences.cambiosDia.forEach((i) => activeIncidenceRuts.add(i.rut));
             incidences.autorizaciones.forEach((i) => activeIncidenceRuts.add(i.rut));
         }
+        admonitions.forEach(a => {
+            const s = staff.find(st => st.id === a.staff_id);
+            if (s) activeIncidenceRuts.add(s.rut);
+        });
 
         for (const s of staff) {
             const cargoUpper = s.cargo.toUpperCase();
@@ -160,7 +170,7 @@ export const Asistencia2026Page = () => {
         }
 
         return { byPosition, programmmedDay, programmedNight, onLicense, onVacation, onPermission, withIncidencies, pendingMarks };
-    }, [staff, marks, licenses, permissions, vacations, incidences, weekDates]);
+    }, [staff, marks, licenses, permissions, vacations, incidences, admonitions, weekDates]);
 
     // Week navigation
     const handlePrevWeek = () => setWeekStart(getPreviousWeek(weekStart));
@@ -172,19 +182,18 @@ export const Asistencia2026Page = () => {
         setFilters((f) => ({ ...f, terminal }));
     };
 
-    // Export XLSX - Professional multi-sheet export
+    // Export XLSX - Professional Dashboard & Report
     const handleExportXlsx = () => {
         const wb = XLSX.utils.book_new();
         const weekRange = formatWeekRange(weekStart);
 
-        // Helper to format date for column headers (e.g., "Lun 29/12")
+        // Helper to format date for column headers
         const formatDateHeader = (dateStr: string) => {
             const d = new Date(dateStr + 'T12:00:00');
             const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
             return `${days[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`;
         };
 
-        // Get day status for a staff member (same logic as grid)
         const getStatusText = (s: StaffWithShift, date: string): string => {
             const mark = marks.find(m => m.staff_id === s.id && m.mark_date === date);
             const hasLicense = licenses.some(l => l.staff_id === s.id && date >= l.start_date && date <= l.end_date);
@@ -194,14 +203,12 @@ export const Asistencia2026Page = () => {
             if (hasLicense) return 'LIC';
             if (hasVacation) return 'VAC';
             if (hasPerm) return 'PER';
-            if (mark) return mark.mark; // P or A
+            if (mark) return mark.mark;
 
-            // Check if off day
             const shiftType = s.shift ? shiftTypes.find(st => st.code === s.shift!.shift_type_code) : null;
             let isOff = false;
 
             if (s.shift) {
-                // Get pattern from DB or use fallback
                 let effectiveShiftType = shiftType;
                 if (!effectiveShiftType?.pattern_json) {
                     effectiveShiftType = getFallbackShiftType(s.shift.shift_type_code);
@@ -235,30 +242,49 @@ export const Asistencia2026Page = () => {
                 const specialTemplateFound = specialTemplates.find(t => t.staff_id === s.id);
                 if (specialTemplateFound) {
                     const details = getSpecialShiftDetails(date, specialTemplateFound);
-
-                    // If Early Exit exists, return it
-                    if (details.earlyExit) {
-                        return `Salida: ${details.earlyExit}`;
-                    }
-
-                    // If Night Shift, maybe indicate it? (Optional, user asked for config)
-                    // if (details.type === 'NOCHE') return 'Noche';
+                    if (details.earlyExit) return `Salida: ${details.earlyExit}`;
                 }
             }
 
-            return '-'; // Pending
+            return '-';
         };
 
-        // ===== SHEET 1: ASISTENCIA SEMANAL =====
+        // ===== SHEET 1: DASHBOARD / GENERAL =====
+        const totalMarks = marks.length;
+        const totalLicenses = licenses.filter(l => l.start_date <= endDate && l.end_date >= startDate).length;
+        const totalVacations = vacations.filter(v => v.start_date <= endDate && v.end_date >= startDate).length;
+        const totalIncidences = (incidences?.noMarcaciones.length || 0) + (incidences?.sinCredenciales.length || 0) + (incidences?.cambiosDia.length || 0) + (incidences?.autorizaciones.length || 0);
+
+        const dashboardData = [
+            { Concepto: 'REPORTE SEMANAL ASISTENCIA 2026', Valor: '' },
+            { Concepto: 'Semana', Valor: weekRange },
+            { Concepto: 'Fecha y Hora Generación', Valor: new Date().toLocaleString('es-CL') },
+            { Concepto: 'Generado Por', Valor: session?.supervisorName || 'Sistema' },
+            { Concepto: '', Valor: '' },
+            { Concepto: 'RESUMEN ESTADÍSTICO', Valor: '' },
+            { Concepto: 'Total Personal Activo', Valor: staff.length },
+            { Concepto: 'Total Marcas Recibidas', Valor: totalMarks },
+            { Concepto: 'Licencias Médicas Activas', Valor: totalLicenses },
+            { Concepto: 'Vacaciones en Curso', Valor: totalVacations },
+            { Concepto: 'Incidencias Totales', Valor: totalIncidences },
+            { Concepto: 'Amonestaciones/Informes', Valor: admonitions.length },
+        ];
+        const wsDashboard = XLSX.utils.json_to_sheet(dashboardData, { skipHeader: true });
+        wsDashboard['!cols'] = [{ wch: 30 }, { wch: 40 }];
+        // Add minimal title styling mock by merging
+        wsDashboard['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
+        XLSX.utils.book_append_sheet(wb, wsDashboard, 'Resumen Gerencial');
+
+
+        // ===== SHEET 2: ASISTENCIA DETALLADA =====
         const attendanceData = staff.map(s => {
             const row: Record<string, string> = {
                 'RUT': s.rut,
-                'Nombre': s.nombre,
-                'Cargo': s.cargo,
-                'Terminal': s.terminal_code,
-                'Horario': s.horario || '',
+                'NOMBRE COMPLETO': s.nombre,
+                'CARGO': s.cargo,
+                'TERMINAL': s.terminal_code,
+                'TURNO': s.horario || '',
             };
-            // Add each day of the week
             for (const date of weekDates) {
                 row[formatDateHeader(date)] = getStatusText(s, date);
             }
@@ -266,146 +292,140 @@ export const Asistencia2026Page = () => {
         });
 
         const wsAttendance = XLSX.utils.json_to_sheet(attendanceData);
-        // Set column widths
         wsAttendance['!cols'] = [
-            { wch: 12 }, // RUT
-            { wch: 30 }, // Nombre
-            { wch: 15 }, // Cargo
-            { wch: 12 }, // Terminal
-            { wch: 12 }, // Horario
-            ...weekDates.map(() => ({ wch: 10 })), // Each day
+            { wch: 12 }, { wch: 35 }, { wch: 20 }, { wch: 12 }, { wch: 15 },
+            ...weekDates.map(() => ({ wch: 12 })),
         ];
-        XLSX.utils.book_append_sheet(wb, wsAttendance, 'Asistencia Semanal');
+        XLSX.utils.book_append_sheet(wb, wsAttendance, 'Asistencia Detallada');
 
-        // ===== SHEET 2: SIN CREDENCIAL =====
-        const ncData = incidences?.sinCredenciales
-            ?.filter(item => weekDates.includes(item.date))
-            ?.map(item => {
-                const staffMember = staff.find(s => s.rut === item.rut);
-                return {
-                    'Fecha': item.date,
-                    'RUT': item.rut,
-                    'Nombre': staffMember?.nombre || 'N/A',
-                    'Cargo': staffMember?.cargo || 'N/A',
-                    'Terminal': staffMember?.terminal_code || 'N/A',
-                };
-            }) || [];
-        const wsNC = XLSX.utils.json_to_sheet(ncData.length > 0 ? ncData : [{ 'Info': 'Sin registros esta semana' }]);
-        XLSX.utils.book_append_sheet(wb, wsNC, 'Sin Credencial');
 
-        // ===== SHEET 3: NO MARCACIÓN =====
+        // ===== SHEET 3: NO MARCACIONES =====
         const nmData = incidences?.noMarcaciones
-            ?.filter(item => weekDates.includes(item.date))
+            ?.filter(item => item.date >= startDate && item.date <= endDate)
             ?.map(item => {
-                const staffMember = staff.find(s => s.rut === item.rut);
+                const s = staff.find(st => st.rut === item.rut);
                 return {
-                    'Fecha': item.date,
+                    'FECHA': item.date,
                     'RUT': item.rut,
-                    'Nombre': staffMember?.nombre || 'N/A',
-                    'Cargo': staffMember?.cargo || 'N/A',
-                    'Terminal': staffMember?.terminal_code || 'N/A',
+                    'NOMBRE': s?.nombre || 'N/A',
+                    'CARGO': s?.cargo || 'N/A',
+                    'TERMINAL': s?.terminal_code || 'N/A',
                 };
             }) || [];
-        const wsNM = XLSX.utils.json_to_sheet(nmData.length > 0 ? nmData : [{ 'Info': 'Sin registros esta semana' }]);
-        XLSX.utils.book_append_sheet(wb, wsNM, 'No Marcación');
+        const wsNM = XLSX.utils.json_to_sheet(nmData.length > 0 ? nmData : [{ 'Status': 'Sin Registros' }]);
+        wsNM['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 12 }];
+        XLSX.utils.book_append_sheet(wb, wsNM, 'No Marcacion');
 
-        // ===== SHEET 4: CAMBIOS DE DÍA =====
+
+        // ===== SHEET 4: SIN CREDENCIAL =====
+        const scData = incidences?.sinCredenciales
+            ?.filter(item => item.date >= startDate && item.date <= endDate)
+            ?.map(item => {
+                const s = staff.find(st => st.rut === item.rut);
+                return {
+                    'FECHA': item.date,
+                    'RUT': item.rut,
+                    'NOMBRE': s?.nombre || 'N/A',
+                    'CARGO': s?.cargo || 'N/A',
+                    'TERMINAL': s?.terminal_code || 'N/A',
+                };
+            }) || [];
+        const wsSC = XLSX.utils.json_to_sheet(scData.length > 0 ? scData : [{ 'Status': 'Sin Registros' }]);
+        wsSC['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 12 }];
+        XLSX.utils.book_append_sheet(wb, wsSC, 'Sin Credencial');
+
+
+        // ===== SHEET 5: CAMBIOS DE DÍA =====
         const cdData = incidences?.cambiosDia
-            ?.filter(item => weekDates.includes(item.date))
+            ?.filter(item => item.date >= startDate && item.date <= endDate)
             ?.map(item => {
-                const staffMember = staff.find(s => s.rut === item.rut);
+                const s = staff.find(st => st.rut === item.rut);
                 return {
-                    'Fecha': item.date,
+                    'FECHA ORIGINAL': item.date,
+                    'FECHA CAMBIO': item.target_date,
                     'RUT': item.rut,
-                    'Nombre': staffMember?.nombre || 'N/A',
-                    'Cargo': staffMember?.cargo || 'N/A',
-                    'Terminal': staffMember?.terminal_code || 'N/A',
+                    'NOMBRE': s?.nombre || 'N/A',
+                    'CARGO': s?.cargo || 'N/A',
                 };
             }) || [];
-        const wsCD = XLSX.utils.json_to_sheet(cdData.length > 0 ? cdData : [{ 'Info': 'Sin registros esta semana' }]);
-        XLSX.utils.book_append_sheet(wb, wsCD, 'Cambios de Día');
+        const wsCD = XLSX.utils.json_to_sheet(cdData.length > 0 ? cdData : [{ 'Status': 'Sin Registros' }]);
+        wsCD['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 30 }, { wch: 15 }];
+        XLSX.utils.book_append_sheet(wb, wsCD, 'Cambios de Dia');
 
-        // ===== SHEET 5: AUTORIZACIONES =====
+
+        // ===== SHEET 6: AUTORIZACIONES =====
         const autData = incidences?.autorizaciones
-            ?.filter(item => weekDates.includes(item.date))
+            ?.filter(item => item.date >= startDate && item.date <= endDate)
             ?.map(item => {
-                const staffMember = staff.find(s => s.rut === item.rut);
+                const s = staff.find(st => st.rut === item.rut);
                 return {
-                    'Fecha': item.date,
+                    'FECHA': item.date,
                     'RUT': item.rut,
-                    'Nombre': staffMember?.nombre || 'N/A',
-                    'Cargo': staffMember?.cargo || 'N/A',
-                    'Terminal': staffMember?.terminal_code || 'N/A',
+                    'NOMBRE': s?.nombre || 'N/A',
+                    'CARGO': s?.cargo || 'N/A',
                 };
             }) || [];
-        const wsAut = XLSX.utils.json_to_sheet(autData.length > 0 ? autData : [{ 'Info': 'Sin registros esta semana' }]);
+        const wsAut = XLSX.utils.json_to_sheet(autData.length > 0 ? autData : [{ 'Status': 'Sin Registros' }]);
+        wsAut['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 15 }];
         XLSX.utils.book_append_sheet(wb, wsAut, 'Autorizaciones');
 
-        // ===== SHEET 6: VACACIONES =====
+
+        // ===== SHEET 7: VACACIONES =====
         const vacData = vacations
-            .filter(v => weekDates.some(d => d >= v.start_date && d <= v.end_date))
+            .filter(v => v.end_date >= startDate && v.start_date <= endDate)
             .map(v => {
-                const staffMember = staff.find(s => s.id === v.staff_id);
+                const s = staff.find(st => st.id === v.staff_id);
                 return {
-                    'RUT': staffMember?.rut || 'N/A',
-                    'Nombre': staffMember?.nombre || 'N/A',
-                    'Cargo': staffMember?.cargo || 'N/A',
-                    'Terminal': staffMember?.terminal_code || 'N/A',
-                    'Inicio': v.start_date,
-                    'Fin': v.end_date,
+                    'RUT': s?.rut || 'N/A',
+                    'NOMBRE': s?.nombre || 'N/A',
+                    'CARGO': s?.cargo || 'N/A',
+                    'INICIO': v.start_date,
+                    'TERMINO': v.end_date,
                 };
             });
-        const wsVac = XLSX.utils.json_to_sheet(vacData.length > 0 ? vacData : [{ 'Info': 'Sin vacaciones esta semana' }]);
+        const wsVac = XLSX.utils.json_to_sheet(vacData.length > 0 ? vacData : [{ 'Status': 'Sin Registros' }]);
+        wsVac['!cols'] = [{ wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 12 }];
         XLSX.utils.book_append_sheet(wb, wsVac, 'Vacaciones');
 
-        // ===== SHEET 7: LICENCIAS =====
+
+        // ===== SHEET 8: LICENCIAS =====
         const licData = licenses
-            .filter(l => weekDates.some(d => d >= l.start_date && d <= l.end_date))
+            .filter(l => l.end_date >= startDate && l.start_date <= endDate)
             .map(l => {
-                const staffMember = staff.find(s => s.id === l.staff_id);
+                const s = staff.find(st => st.id === l.staff_id);
                 return {
-                    'RUT': staffMember?.rut || 'N/A',
-                    'Nombre': staffMember?.nombre || 'N/A',
-                    'Cargo': staffMember?.cargo || 'N/A',
-                    'Terminal': staffMember?.terminal_code || 'N/A',
-                    'Inicio': l.start_date,
-                    'Fin': l.end_date,
-                    'Nota': l.note || '',
+                    'RUT': s?.rut || 'N/A',
+                    'NOMBRE': s?.nombre || 'N/A',
+                    'CARGO': s?.cargo || 'N/A',
+                    'INICIO': l.start_date,
+                    'TERMINO': l.end_date,
+                    'NOTA': l.note || '',
                 };
             });
-        const wsLic = XLSX.utils.json_to_sheet(licData.length > 0 ? licData : [{ 'Info': 'Sin licencias esta semana' }]);
+        const wsLic = XLSX.utils.json_to_sheet(licData.length > 0 ? licData : [{ 'Status': 'Sin Registros' }]);
+        wsLic['!cols'] = [{ wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 30 }];
         XLSX.utils.book_append_sheet(wb, wsLic, 'Licencias');
 
-        // ===== SHEET 8: RESUMEN =====
-        const presentCount = staff.reduce((acc, s) => {
-            return acc + weekDates.filter(d => getStatusText(s, d) === 'P').length;
-        }, 0);
-        const absentCount = staff.reduce((acc, s) => {
-            return acc + weekDates.filter(d => getStatusText(s, d) === 'A').length;
-        }, 0);
-        const pendingCount = staff.reduce((acc, s) => {
-            return acc + weekDates.filter(d => getStatusText(s, d) === '-').length;
-        }, 0);
 
-        const summaryData = [
-            { 'Concepto': 'Semana', 'Valor': weekRange },
-            { 'Concepto': 'Total Personal', 'Valor': staff.length.toString() },
-            { 'Concepto': 'Marcas Presente', 'Valor': presentCount.toString() },
-            { 'Concepto': 'Marcas Ausente', 'Valor': absentCount.toString() },
-            { 'Concepto': 'Marcas Pendientes', 'Valor': pendingCount.toString() },
-            { 'Concepto': 'Vacaciones Activas', 'Valor': vacData.length.toString() },
-            { 'Concepto': 'Licencias Activas', 'Valor': licData.length.toString() },
-            { 'Concepto': 'Sin Credencial', 'Valor': ncData.length.toString() },
-            { 'Concepto': 'No Marcación', 'Valor': nmData.length.toString() },
-            { 'Concepto': 'Cambios de Día', 'Valor': cdData.length.toString() },
-            { 'Concepto': 'Autorizaciones', 'Valor': autData.length.toString() },
-        ];
-        const wsSummary = XLSX.utils.json_to_sheet(summaryData);
-        wsSummary['!cols'] = [{ wch: 20 }, { wch: 30 }];
-        XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen');
+        // ===== SHEET 9: INFORMES (ADMONITIONS) =====
+        const informData = admonitions
+            .filter(a => a.date >= startDate && a.date <= endDate)
+            .map(a => {
+                const s = staff.find(st => st.id === a.staff_id);
+                return {
+                    'FECHA': a.date,
+                    'RUT': s?.rut || 'N/A',
+                    'NOMBRE': s?.nombre || 'N/A',
+                    'CARGO': s?.cargo || 'N/A',
+                    'MOTIVO': a.reason,
+                };
+            });
+        const wsInf = XLSX.utils.json_to_sheet(informData.length > 0 ? informData : [{ 'Status': 'Sin Registros' }]);
+        wsInf['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 50 }];
+        XLSX.utils.book_append_sheet(wb, wsInf, 'Informes');
 
-        // Save file
-        const fileName = `Asistencia_${weekRange.replace(/\s/g, '_').replace(/\//g, '-')}.xlsx`;
+        // Save
+        const fileName = `Reporte_Asistencia_${weekRange.replace(/\s/g, '_').replace(/\//g, '-')}.xlsx`;
         XLSX.writeFile(wb, fileName);
     };
 
