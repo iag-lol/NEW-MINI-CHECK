@@ -9,11 +9,11 @@ import { useSessionStore } from '../../../shared/state/sessionStore';
 import { useTerminalStore } from '../../../shared/state/terminalStore';
 import {
     useStaffWithShifts,
-    useMarksForMonth,
-    useLicensesForMonth,
-    usePermissionsForMonth,
-    useVacationsForMonth,
-    useOverridesForMonth,
+    useMarksForWeek,
+    useLicensesForWeek,
+    usePermissionsForWeek,
+    useVacationsForWeek,
+    useOverridesForWeek,
     useShiftTypes,
 } from '../hooks';
 import {
@@ -25,6 +25,13 @@ import {
     isPastDate,
     getLocalTodayStr,
 } from '../utils/shiftEngine';
+import {
+    AttendanceMark,
+    AttendanceLicense,
+    AttendancePermission,
+    AttendanceVacation,
+    StaffShiftOverride
+} from '../types';
 
 const DAY_NAMES = ['DOM', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB'];
 
@@ -65,11 +72,14 @@ export const MyInfoPage = () => {
 
     const staffIds = useMemo(() => myStaffRecord ? [myStaffRecord.id] : [], [myStaffRecord]);
 
-    const { data: marks = [] } = useMarksForMonth(staffIds, year, month);
-    const { data: licenses = [] } = useLicensesForMonth(staffIds, year, month);
-    const { data: permissions = [] } = usePermissionsForMonth(staffIds, year, month);
-    const { data: vacations = [] } = useVacationsForMonth(staffIds, year, month);
-    const { data: overrides = [] } = useOverridesForMonth(staffIds, year, month);
+    const startDate = weekDates[0];
+    const endDate = weekDates[6];
+
+    const { data: marks = [] } = useMarksForWeek(staffIds, startDate, endDate);
+    const { data: licenses = [] } = useLicensesForWeek(staffIds, startDate, endDate);
+    const { data: permissions = [] } = usePermissionsForWeek(staffIds, startDate, endDate);
+    const { data: vacations = [] } = useVacationsForWeek(staffIds, startDate, endDate);
+    const { data: overrides = [] } = useOverridesForWeek(staffIds, startDate, endDate);
 
     // Check if can view next month (within 3 days of month end)
     const canViewNextMonth = () => {
@@ -88,9 +98,9 @@ export const MyInfoPage = () => {
         const dayOfWeek = new Date(date + 'T12:00:00').getDay();
 
         // Check absences
-        const hasLicense = licenses.some(l => l.staff_id === myStaffRecord.id && date >= l.start_date && date <= l.end_date);
-        const hasVacation = vacations.some(v => v.staff_id === myStaffRecord.id && date >= v.start_date && date <= v.end_date);
-        const hasPermission = permissions.some(p => p.staff_id === myStaffRecord.id && date >= p.start_date && date <= p.end_date);
+        const hasLicense = licenses.some((l: AttendanceLicense) => l.staff_id === myStaffRecord.id && date >= l.start_date && date <= l.end_date);
+        const hasVacation = vacations.some((v: AttendanceVacation) => v.staff_id === myStaffRecord.id && date >= v.start_date && date <= v.end_date);
+        const hasPermission = permissions.some((p: AttendancePermission) => p.staff_id === myStaffRecord.id && date >= p.start_date && date <= p.end_date);
 
         if (hasLicense || hasVacation || hasPermission) {
             return { isLibre: false, hasLicense, hasVacation, hasPermission, startTime: '', endTime: '' };
@@ -115,11 +125,11 @@ export const MyInfoPage = () => {
         const [startTime, endTime] = horario.split('-');
 
         // Check for early departure
-        const override = overrides.find(o => o.staff_id === myStaffRecord.id && o.override_date === date);
+        const override = overrides.find((o: StaffShiftOverride) => o.staff_id === myStaffRecord.id && o.override_date === date);
         const earlyDeparture = override?.meta_json?.early_departure_time as string | undefined;
 
         // Get attendance mark
-        const mark = marks.find(m => m.staff_id === myStaffRecord.id && m.mark_date === date)?.mark as 'P' | 'A' | undefined;
+        const mark = marks.find((m: AttendanceMark) => m.staff_id === myStaffRecord.id && m.mark_date === date)?.mark as 'P' | 'A' | undefined;
 
         return {
             isLibre: false,
