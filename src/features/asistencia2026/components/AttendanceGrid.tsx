@@ -27,6 +27,7 @@ import {
     isOffDay,
     isDateInRange,
     getTurnoFromHorario,
+    getSpecialShiftDetails,
 } from '../utils/shiftEngine';
 import { useSessionStore } from '../../../shared/state/sessionStore';
 import {
@@ -274,6 +275,17 @@ export const AttendanceGrid = ({
                 isOff = dayOfWeek === 0 || dayOfWeek === 6;
                 if (date === weekDates[0]) {
                     console.log('getDayStatus -', s.nombre, 'NO PATTERN FOUND, using default Sat/Sun');
+                }
+            }
+
+            // [NEW] Override Turno (D/N) manually if 'ESPECIAL'
+            if (s.shift.shift_type_code === 'ESPECIAL') {
+                const specialTemplate = specialTemplatesMap.get(s.id);
+                if (specialTemplate) {
+                    const details = getSpecialShiftDetails(date, specialTemplate);
+                    if (details.type) {
+                        turno = details.type;
+                    }
                 }
             }
         } else {
