@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchStaffByRut } from '../../personal/api';
 import { Staff } from '../../personal/types';
 import { formatRut, normalizeRut, validateRut } from '../../personal/utils/rutUtils';
@@ -39,22 +39,34 @@ export const RutLookupInput = ({ value, onChange, onStaffFound, disabled }: Prop
         }
     };
 
+    const lastLookedUpRut = useRef<string>('');
+
     const lookupStaff = async (rut: string) => {
+        lastLookedUpRut.current = rut;
         setIsSearching(true);
         try {
             const staff = await fetchStaffByRut(rut);
+            // Verify this is still the most recent request
+            if (rut !== lastLookedUpRut.current) return;
+
             if (staff) {
                 setFound(true);
+                setError(null); // Explicitly clear error
                 onStaffFound(staff);
             } else {
+                setFound(false); // Explicitly clear found
                 setError('RUT no encontrado en Personal');
                 onStaffFound(null);
             }
         } catch (err) {
+            if (rut !== lastLookedUpRut.current) return;
             setError('Error al buscar RUT');
+            setFound(false);
             onStaffFound(null);
         } finally {
-            setIsSearching(false);
+            if (rut === lastLookedUpRut.current) {
+                setIsSearching(false);
+            }
         }
     };
 
