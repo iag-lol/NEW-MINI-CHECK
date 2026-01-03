@@ -396,37 +396,38 @@ export function determineDailyShift(
     staffId: string,
     shiftTypes: ShiftType[] // Needed for name lookup
 ): 'DIA' | 'NOCHE' {
-    // 1. Try Horario string first (most specific)
-    let dailyShift: 'DIA' | 'NOCHE' = getTurnoFromHorario(horario || '');
+    // 1. Check Horario (Time/String) - Strong Signal
+    const isNightByHorario = getTurnoFromHorario(horario || '') === 'NOCHE';
 
-    // 2. Fallback: Check global Shift Name/Code
+    // 2. Check Global Shift Name/Code
+    let isNightByName = false;
     if (shift) {
         const globalShiftDef = shiftTypes.find(t => t.code === shift.shift_type_code);
         const nameUpper = (globalShiftDef?.name || shift.name || '').toUpperCase();
         const codeUpper = (shift.shift_type_code || '').toUpperCase();
-
-        // If the shift itself implies Night, and Horario was default/unknown (DIA), force Night
         if (nameUpper.includes('NOCHE') || codeUpper.includes('NOCHE')) {
-            // Only override if getTurnoFromHorario returned 'DIA' (default) maybe incorrectly
-            // Actually, if the roster says "Turno Noche", it IS Night, regardless of horario string usually.
-            // But let's respect specific "08:00" in horario if present? 
-            // User case: "Turno Noche" label with empty horario.
-            if (dailyShift === 'DIA' && !horario?.match(/^\d{1,2}:\d{2}/)) {
-                dailyShift = 'NOCHE';
-            }
+            isNightByName = true;
         }
     }
 
-    // 3. Special Manual Shift Override
+    // 3. Check Special Manual Shift Override
+    let isNightByTemplate = false;
     if (shift?.shift_type_code === 'ESPECIAL') {
         const specialTemplateFound = specialTemplates.find(t => t.staff_id === staffId);
         if (specialTemplateFound) {
             const details = getSpecialShiftDetails(date, specialTemplateFound);
-            dailyShift = details.type;
+            if (details.type === 'NOCHE') {
+                isNightByTemplate = true;
+            }
         }
     }
 
-    return dailyShift;
+    // If ANY signal indicates Night, it's Night.
+    if (isNightByHorario || isNightByName || isNightByTemplate) {
+        return 'NOCHE';
+    }
+
+    return 'DIA';
 }
 
 // Removed Ley 40 automatic reduction logic as per user request.
