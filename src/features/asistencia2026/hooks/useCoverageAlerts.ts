@@ -40,25 +40,20 @@ export const useCoverageAlerts = (
 ) => {
     return useMemo(() => {
         const alerts: CoverageAlert[] = [];
-        const stats: Record<string, CoverageStats> = {};
 
         // Iterate through each day of the week
         weekDates.forEach((date) => {
-            const dayName = formatDayOfWeek(date);
-            const isTodayOrFuture = !isPastDate(date); // Alerts are most relevant for present/future planning
-
             // Group by Terminal -> Shift -> Cargo
-            const coverage: Record<string, Record<string, Record<string, number>>> = {};
+            // We track: citados (Scheduled), libres (Off)
+            const coverage: Record<string, Record<string, Record<string, { citados: number; libres: number }>>> = {};
 
             staff.forEach((s) => {
                 if (s.status === 'DESVINCULADO') return;
 
-                // 1. Check if OFF or ABSENT
-                let isWorking = true;
+                // 1. Determine if OFF (Libre) based on Pattern/Schedule
                 let effectiveShiftType = s.shift ? shiftTypes.find(st => st.code === s.shift!.shift_type_code) : null;
-
-                // Determine if OFF based on Pattern
                 let isOff = false;
+
                 if (s.shift) {
                     if (!effectiveShiftType?.pattern_json) {
                         effectiveShiftType = getFallbackShiftType(s.shift.shift_type_code);
@@ -76,30 +71,30 @@ export const useCoverageAlerts = (
                         );
                     } else {
                         const dayOfWeek = new Date(date + 'T12:00:00').getDay();
-                        isOff = dayOfWeek === 0 || dayOfWeek === 6; // Default Mon-Fri
+                        isOff = dayOfWeek === 0 || dayOfWeek === 6;
                     }
                 } else {
                     const dayOfWeek = new Date(date + 'T12:00:00').getDay();
                     isOff = dayOfWeek === 0 || dayOfWeek === 6;
                 }
 
-                if (isOff) isWorking = false;
-
-                // Check Absences
-                if (isWorking) {
+                // 2. Determine Validity (Absences)
+                // Even if "Scheduled" (not off), if they have License/Vacation, they count as a gap, NOT as coverage.
+                let isAbsent = false;
+                if (!isOff) {
                     const hasLicense = licenses.some(l => l.staff_id === s.id && date >= l.start_date && date <= l.end_date);
                     const hasVacation = vacations.some(v => v.rut === s.rut && date >= v.start_date && date <= v.end_date);
                     const hasPerm = permissions.some(p => p.staff_id === s.id && date >= p.start_date && date <= p.end_date);
-                    const hasMark = marks.some(m => m.staff_id === s.id && m.mark_date === date); // If past, confirmed present?
 
-                    if (hasLicense || hasVacation || hasPerm) isWorking = false;
+                    if (hasLicense || hasVacation || hasPerm) isAbsent = true;
                 }
 
-                if (!isWorking) return;
+                // "Evaluated Status" for planning
+                // Citado = !isOff && !isAbsent
+                const isCitado = !isOff && !isAbsent;
 
-                // 2. Determine Shift (DIA/NOCHE) - Handle Special Templates
+                // 3. Determine Shift (DIA/NOCHE) 
                 let shift: 'DIA' | 'NOCHE' = getTurnoFromHorario(s.horario);
-
                 if (s.shift?.shift_type_code === 'ESPECIAL') {
                     const specialTemplateFound = specialTemplates.find(t => t.staff_id === s.id);
                     if (specialTemplateFound) {
@@ -108,15 +103,15 @@ export const useCoverageAlerts = (
                     }
                 }
 
-                // 3. Count
+                // 4. Accumulate
                 const term = s.terminal_code;
-                const cargo = s.cargo.toUpperCase(); // Normalize
+                const cargo = s.cargo.toUpperCase();
 
-                // Initialize structure
                 if (!coverage[term]) coverage[term] = { DIA: {}, NOCHE: {} };
-                if (!coverage[term][shift][cargo]) coverage[term][shift][cargo] = 0;
+                if (!coverage[term][shift][cargo]) coverage[term][shift][cargo] = { citados: 0, libres: 0 };
 
-                coverage[term][shift][cargo]++;
+                if (isCitado) coverage[term][shift][cargo].citados++;
+                if (isOff) coverage[term][shift][cargo].libres++;
             });
 
             // Analyze Coverage & Generate Alerts
@@ -125,8 +120,13 @@ export const useCoverageAlerts = (
                     const cargos = shifts[shift];
 
                     // Check Supervisor Coverage
-                    const supCount = Object.keys(cargos).filter(k => k.includes('SUPERVISOR')).reduce((acc, k) => acc + cargos[k], 0);
-                    if (supCount < MIN_STAFFING['SUPERVISOR']) {
+                    // Find all keys containing 'SUPERVISOR'
+                    const supervisorCounts = Object.keys(cargos)
+                        .filter(k => k.includes('SUPERVISOR'))
+                        .map(k => cargos[k].citados)
+                        .reduce((a, b) => a + b, 0);
+
+                    if (supervisorCounts < MIN_STAFFING['SUPERVISOR']) {
                         alerts.push({
                             id: `${date}-${term}-${shift}-NOSUP`,
                             date,
@@ -134,39 +134,31 @@ export const useCoverageAlerts = (
                             role: 'SUPERVISOR',
                             shift,
                             level: 'CRITICAL',
-                            message: `Sin Supervisor asignado en turno ${shift} (${term})`
+                            message: `Sin Supervisor asignado en turno ${shift} (${term}). Requeridos: ${MIN_STAFFING['SUPERVISOR']}, Citados: ${supervisorCounts}`
                         });
                     }
 
-                    // Check Generic Roles
+                    // Check Other Roles
                     Object.keys(MIN_STAFFING).forEach((roleKeyword) => {
-                        if (roleKeyword === 'SUPERVISOR') return; // Handled above
+                        if (roleKeyword === 'SUPERVISOR') return;
 
-                        // Sum counts for roles matching keyword (e.g. CONDUCTOR A, CONDUCTOR B -> CONDUCTOR)
-                        const count = Object.keys(cargos)
+                        const citadosCount = Object.keys(cargos)
                             .filter(k => k.includes(roleKeyword))
-                            .reduce((acc, k) => acc + cargos[k], 0);
+                            .reduce((acc, k) => acc + cargos[k].citados, 0);
 
-                        if (count < MIN_STAFFING[roleKeyword] && count > 0) { // Warning if low but not zero (context dependent)
+                        const required = MIN_STAFFING[roleKeyword];
+
+                        if (citadosCount < required) {
+                            const deficit = required - citadosCount;
+                            const level = citadosCount === 0 ? 'CRITICAL' : 'WARNING';
                             alerts.push({
                                 id: `${date}-${term}-${shift}-${roleKeyword}`,
                                 date,
                                 terminal: term,
                                 role: roleKeyword,
                                 shift,
-                                level: 'WARNING',
-                                message: `Baja dotación de ${roleKeyword}s (${count}/${MIN_STAFFING[roleKeyword]}) en turno ${shift}`
-                            });
-                        } else if (count === 0 && roleKeyword === 'CONDUCTOR' && term !== 'LA_REINA') {
-                            // Specific rule example: No drivers is critical unless typically none there
-                            alerts.push({
-                                id: `${date}-${term}-${shift}-${roleKeyword}-ZERO`,
-                                date,
-                                terminal: term,
-                                role: roleKeyword,
-                                shift,
-                                level: 'INFO',
-                                message: `No hay ${roleKeyword}s programados`
+                                level,
+                                message: `Faltan ${deficit} ${roleKeyword}(s) en turno ${shift}. (Citados: ${citadosCount}/${required})`
                             });
                         }
                     });
@@ -174,9 +166,6 @@ export const useCoverageAlerts = (
             });
         });
 
-        // Filter and Sort Alerts
-        // Prioritize: Critical -> Warning -> Info
-        // Sort by Date
         const sortedAlerts = alerts.sort((a, b) => {
             const levelScore = { CRITICAL: 0, WARNING: 1, INFO: 2 };
             if (levelScore[a.level] !== levelScore[b.level]) return levelScore[a.level] - levelScore[b.level];
