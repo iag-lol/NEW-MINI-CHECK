@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { X, AlertTriangle, ShieldAlert, Info, Filter, Users, Calendar, Activity } from 'lucide-react';
 import { StaffWithShift, ShiftType, AttendanceMark, AttendanceLicense, AttendanceVacation, AttendancePermission, StaffShiftSpecialTemplate, StaffShiftOverride, AttendanceIncidences, CARGO_ORDER, DAY_NAMES_SHORT } from '../types';
 import { useCoverageAlerts } from '../hooks/useCoverageAlerts';
-import { formatDayOfWeek, formatDayNumber, isToday } from '../utils/shiftEngine';
+import { formatDayOfWeek, formatDayNumber, isToday, isOffDay } from '../utils/shiftEngine';
 import { displayTerminal } from '../../../shared/utils/terminal';
 
 interface Props {
@@ -167,7 +167,7 @@ export const AdvancedReportModal = ({
                                     alerts.map((alert) => (
                                         <div key={alert.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
                                             <div className={`absolute left-0 top-0 bottom-0 w-1 ${alert.level === 'CRITICAL' ? 'bg-red-500' :
-                                                    alert.level === 'WARNING' ? 'bg-amber-500' : 'bg-blue-500'
+                                                alert.level === 'WARNING' ? 'bg-amber-500' : 'bg-blue-500'
                                                 }`} />
                                             <div className="pl-3">
                                                 <div className="flex justify-between items-start mb-1">
