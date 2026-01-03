@@ -18,12 +18,38 @@ interface CoverageStats {
 }
 
 // Minimum staffing requirements (Heuristic)
-const MIN_STAFFING: Record<string, number> = {
+const DEFAULT_MIN_STAFFING: Record<string, number> = {
     'SUPERVISOR': 1,
     'INSPECTOR': 1,
     'CONDUCTOR': 2,
     'PLANILLERO': 1,
     'CLEANER': 1,
+};
+
+// Terminal-specific exceptions (overrides default)
+const TERMINAL_EXCEPTIONS: Record<string, Record<string, number>> = {
+    'EL DESCANSO': {
+        'CLEANER': 1,
+        'SUPERVISOR': 0,
+        'INSPECTOR': 0,
+        'CONDUCTOR': 0,
+        'PLANILLERO': 0
+    },
+    'MARIA': {
+        'SUPERVISOR': 0
+    },
+    // Add more exceptions here if needed (e.g., specific codes like 'T-MARIA')
+};
+
+const getRequiredStaff = (terminal: string, role: string): number => {
+    // 1. Try Specific Exception for Terminal
+    const termConfig = Object.entries(TERMINAL_EXCEPTIONS).find(([key]) => terminal.toUpperCase().includes(key));
+    if (termConfig && termConfig[1][role] !== undefined) {
+        return termConfig[1][role];
+    }
+
+    // 2. Default Global Requirement
+    return DEFAULT_MIN_STAFFING[role] || 0;
 };
 
 export const useCoverageAlerts = (
@@ -44,7 +70,6 @@ export const useCoverageAlerts = (
         // Iterate through each day of the week
         weekDates.forEach((date) => {
             // Group by Terminal -> Shift -> Cargo
-            // We track: citados (Scheduled), libres (Off)
             // We track: citados (Scheduled), libres (Off), ausentes (Absent), total (Total Staff)
             const coverage: Record<string, Record<string, Record<string, { citados: number; libres: number; ausentes: number; total: number }>>> = {};
 
@@ -123,31 +148,37 @@ export const useCoverageAlerts = (
                     const cargos = shifts[shift];
 
                     // Check Supervisor Coverage
-                    // Find all keys containing 'SUPERVISOR'
-                    const supStats = Object.keys(cargos)
-                        .filter(k => k.includes('SUPERVISOR'))
-                        .reduce((acc, k) => ({
-                            citados: acc.citados + cargos[k].citados,
-                            libres: acc.libres + cargos[k].libres,
-                            ausentes: acc.ausentes + cargos[k].ausentes,
-                            total: acc.total + cargos[k].total
-                        }), { citados: 0, libres: 0, ausentes: 0, total: 0 });
+                    const requiredSup = getRequiredStaff(term, 'SUPERVISOR');
+                    if (requiredSup > 0) {
+                        // Find all keys containing 'SUPERVISOR'
+                        const supStats = Object.keys(cargos)
+                            .filter(k => k.includes('SUPERVISOR'))
+                            .reduce((acc, k) => ({
+                                citados: acc.citados + cargos[k].citados,
+                                libres: acc.libres + cargos[k].libres,
+                                ausentes: acc.ausentes + cargos[k].ausentes,
+                                total: acc.total + cargos[k].total
+                            }), { citados: 0, libres: 0, ausentes: 0, total: 0 });
 
-                    if (supStats.citados < MIN_STAFFING['SUPERVISOR']) {
-                        alerts.push({
-                            id: `${date}-${term}-${shift}-NOSUP`,
-                            date,
-                            terminal: term,
-                            role: 'SUPERVISOR',
-                            shift,
-                            level: 'CRITICAL',
-                            message: `Sin Supervisor asignado en turno ${shift} (${term}). Requeridos: ${MIN_STAFFING['SUPERVISOR']} | Actual: ${supStats.citados} (Total: ${supStats.total}, Libres: ${supStats.libres}, Ausentes: ${supStats.ausentes})`
-                        });
+                        if (supStats.citados < requiredSup) {
+                            alerts.push({
+                                id: `${date}-${term}-${shift}-NOSUP`,
+                                date,
+                                terminal: term,
+                                role: 'SUPERVISOR',
+                                shift,
+                                level: 'CRITICAL',
+                                message: `Sin Supervisor asignado en turno ${shift} (${term}). Requeridos: ${requiredSup} | Actual: ${supStats.citados} (Total: ${supStats.total}, Libres: ${supStats.libres}, Ausentes: ${supStats.ausentes})`
+                            });
+                        }
                     }
 
                     // Check Other Roles
-                    Object.keys(MIN_STAFFING).forEach((roleKeyword) => {
+                    Object.keys(DEFAULT_MIN_STAFFING).forEach((roleKeyword) => {
                         if (roleKeyword === 'SUPERVISOR') return;
+
+                        const required = getRequiredStaff(term, roleKeyword);
+                        if (required === 0) return; // Skip if not needed for this terminal
 
                         const stats = Object.keys(cargos)
                             .filter(k => k.includes(roleKeyword))
@@ -157,8 +188,6 @@ export const useCoverageAlerts = (
                                 ausentes: acc.ausentes + cargos[k].ausentes,
                                 total: acc.total + cargos[k].total
                             }), { citados: 0, libres: 0, ausentes: 0, total: 0 });
-
-                        const required = MIN_STAFFING[roleKeyword];
 
                         if (stats.citados < required) {
                             const deficit = required - stats.citados;
