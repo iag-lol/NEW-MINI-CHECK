@@ -396,10 +396,22 @@ export function determineDailyShift(
     staffId: string,
     shiftTypes: ShiftType[] // Needed for name lookup
 ): 'DIA' | 'NOCHE' {
-    // 1. Check Horario (Time/String) - Strong Signal
+    // 1. PRIORIDAD TOTAL: Special Manual Shift Override
+    // Si es un turno MANUAL (Especial), obedecemos 100% a la grilla configurada.
+    // Ignoramos el texto del horario global porque puede ser "22:00" pero el usuario configuró un "Día" específico.
+    if (shift?.shift_type_code === 'ESPECIAL') {
+        const specialTemplateFound = specialTemplates.find(t => t.staff_id === staffId);
+        if (specialTemplateFound) {
+            const details = getSpecialShiftDetails(date, specialTemplateFound);
+            return details.type; // Retornamos directamente lo que diga la grilla (DIA o NOCHE)
+        }
+    }
+
+    // 2. Si no es manual (o no hay template), usamos el texto del Horario o Nombre del Turno
+    // Check Horario (Time/String) - Strong Signal
     const isNightByHorario = getTurnoFromHorario(horario || '') === 'NOCHE';
 
-    // 2. Check Global Shift Name/Code
+    // Check Global Shift Name/Code
     let isNightByName = false;
     if (shift) {
         const globalShiftDef = shiftTypes.find(t => t.code === shift.shift_type_code);
@@ -410,20 +422,8 @@ export function determineDailyShift(
         }
     }
 
-    // 3. Check Special Manual Shift Override
-    let isNightByTemplate = false;
-    if (shift?.shift_type_code === 'ESPECIAL') {
-        const specialTemplateFound = specialTemplates.find(t => t.staff_id === staffId);
-        if (specialTemplateFound) {
-            const details = getSpecialShiftDetails(date, specialTemplateFound);
-            if (details.type === 'NOCHE') {
-                isNightByTemplate = true;
-            }
-        }
-    }
-
     // If ANY signal indicates Night, it's Night.
-    if (isNightByHorario || isNightByName || isNightByTemplate) {
+    if (isNightByHorario || isNightByName) {
         return 'NOCHE';
     }
 
