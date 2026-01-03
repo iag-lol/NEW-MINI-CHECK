@@ -29,6 +29,7 @@ import { ShiftLegend } from '../components/ShiftLegend';
 import { RutPdfExportModal } from '../components/RutPdfExportModal';
 import { OffboardingRequestModal } from '../components/OffboardingRequestModal';
 import { ShiftConfigModal } from '../components/ShiftConfigModal';
+import { AdvancedReportModal } from '../components/AdvancedReportModal';
 import { TERMINAL_COLORS, BUTTON_VARIANTS } from '../utils/colors';
 import {
     getWeekStart,
@@ -88,7 +89,9 @@ export const Asistencia2026Page = () => {
     });
 
     // Modals
+    // Modals
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+    const [isAdvancedReportOpen, setIsAdvancedReportOpen] = useState(false);
     const [offboardingStaff, setOffboardingStaff] = useState<StaffWithShift | null>(null);
     const [shiftConfigStaff, setShiftConfigStaff] = useState<StaffWithShift | null>(null);
 
@@ -560,7 +563,7 @@ export const Asistencia2026Page = () => {
                             onClick={() => setIsAdvancedReportOpen(true)}
                             className="px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 bg-gradient-to-r from-violet-600 to-indigo-600 text-white hover:from-violet-700 hover:to-indigo-700 shadow-sm"
                         >
-                            <Icon name="zap" size={16} className="text-yellow-200" />
+                            <Icon name="sparkles" size={16} className="text-yellow-200" />
                             <span className="hidden sm:inline">Reporte Inteligente</span>
                         </button>
                     </div>
