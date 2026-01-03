@@ -41,7 +41,8 @@ const NAVIGATION: NavSection[] = [
     label: 'Aseo',
     icon: 'sparkles',
     items: [
-      { label: 'Panel Admin', to: '/aseo/admin', icon: 'bar-chart' },
+      { icon: 'trash-2', label: 'Aseo Admin', to: '/aseo/admin' },
+      { icon: 'alert-triangle', label: 'Amonestaciones', to: '/amonestaciones' },
       { label: 'Portal Móvil', to: '/aseo', icon: 'sparkles' },
     ],
   },

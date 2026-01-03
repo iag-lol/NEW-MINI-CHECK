@@ -28,6 +28,7 @@ import { SrlPage } from '../../features/srl/pages/SrlPage';
 import { AseoMobilePage } from '../../features/aseo/pages/AseoMobilePage';
 import { AseoAdminPage } from '../../features/aseo/pages/AseoAdminPage';
 import { MyInfoPage } from '../../features/asistencia2026/pages/MyInfoPage';
+import { AmonestacionesPage } from '../../features/amonestaciones/AmonestacionesPage';
 
 const RequireSession = () => {
   const session = useSessionStore((state) => state.session);
@@ -77,6 +78,7 @@ export const AppRouter = () => (
           <Route path="/insumos" element={<SolicitudesInsumosPage />} />
           <Route path="/srl" element={<SrlPage />} />
           <Route path="/aseo/admin" element={<AseoAdminPage />} />
+          <Route path="/amonestaciones" element={<AmonestacionesPage />} />
         </Route>
       </Route>
       {/* Isolated Aseo Mobile Portal */}
