@@ -2,6 +2,7 @@ import { supabase } from '../../../shared/lib/supabaseClient';
 import { SrlRequest, SrlRequestBus, SrlEmailSetting, SrlFilters, SrlStatus, SrlBusImage } from '../types';
 import { emailService } from '../../../shared/services/emailService';
 import { EmailPayload } from '../../../shared/types/email';
+import { useToastStore } from '../../../shared/state/toastStore';
 
 // ==========================================
 // REQUESTS
@@ -102,9 +103,14 @@ export async function createSrlRequest(
             code: emailError?.code,
             details: emailError
         });
-        // Don't throw - email failure shouldn't block request creation
-        // But alert user that email failed
-        alert('⚠️ Solicitud creada correctamente, pero el correo NO se envió. Verifica la configuración de email en SRL.');
+
+        // Alert via Toast
+        useToastStore.getState().addToast({
+            type: 'warning',
+            title: 'Correo no enviado',
+            message: 'Solicitud creada, pero falló el envío del correo. Verifica la configuración de email en SRL.',
+            duration: 8000
+        });
     }
 
     return reqData;
@@ -282,11 +288,16 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
         throw new Error('No hay destinatarios configurados. Ve a SRL → Configuración para agregar emails.');
     }
 
-    // 3. Fetch Images for ALL buses
+    // 3. Fetch Images for ALL buses (Defensive)
     const busesWithImages = await Promise.all(
-        request.srl_request_buses.map(async (bus: any) => {
-            const images = await fetchBusImages(bus.id);
-            return { ...bus, images };
+        (request.srl_request_buses || []).map(async (bus: any) => {
+            try {
+                const images = await fetchBusImages(bus.id);
+                return { ...bus, images: images || [] };
+            } catch (err) {
+                console.error('Error fetching images for bus:', bus.id, err);
+                return { ...bus, images: [] };
+            }
         })
     );
 
