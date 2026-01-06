@@ -50,41 +50,30 @@ export const AmonestacionFormModal = ({ open, onClose, currentUserName, currentU
         setEvidence(code.evidence_required);
 
         // --- SMART LEGAL NARRATIVE GENERATOR ---
-        // Format: City, Date, Time, Location, Worker Details, Turn Details, Statement of Facts.
+        // --- SMART LEGAL NARRATIVE GENERATOR (UPDATED FORMAT) ---
+        // Header: NAME, RUT, CARGO, EN TERMINAL [TERMINAL], CON TURNO PROGRAMADO DE [TURNO], EL DÍA [FECHA]
 
-        const city = "Santiago";
-        const dateStr = formData.date || "________";
-        const timeStr = formData.time || "________";
-        const terminalStr = formData.place_terminal || "[LUGAR/TERMINAL]";
+        const workerName = (formData.worker_name || "____________________").toUpperCase();
+        const workerRut = (formData.worker_rut || "____________________").toUpperCase();
+        const workerCargo = (formData.worker_cargo || "CONDUCTOR").toUpperCase();
+        const terminalStr = (formData.place_terminal || "[LUGAR/TERMINAL]").toUpperCase();
+        const shiftStr = (formData.shift_schedule || "____________").toUpperCase();
+        const dateStr = (formData.date || "________").toUpperCase();
 
-        const workerName = formData.worker_name || "____________________";
-        const workerRut = formData.worker_rut || "____________________";
-        const workerCargo = formData.worker_cargo || "CONDUCTOR";
-        const shiftStr = formData.shift_schedule ? `turno de ${formData.shift_schedule}` : "turno ____________";
+        // 1. HEADER
+        const header = `${workerName}, RUT: ${workerRut}, ${workerCargo}, EN TERMINAL ${terminalStr}, CON TURNO PROGRAMADO DE ${shiftStr}, EL DÍA ${dateStr}.`;
 
-        // 1. INTRO
-        let intro = `En ${city}, a ${dateStr}, siendo las ${timeStr} horas, en las dependencias de ${terminalStr}, se procede a dejar constancia de los siguientes hechos relacionados con el trabajador Sr(a). ${workerName}, RUT ${workerRut}, quien desempeña el cargo de ${workerCargo}.`;
-
-        // 2. CONSTATATION
-        let constatation = `\n\nQue, encontrándose el trabajador en cumplimiento de su ${shiftStr}, SE CONSTATA que:`;
-
-        // 3. FACTS (The "Meat")
-        // We smart-wrap the manual facts or provide a prompt
+        // 2. CONSTATATION & FACTS
         const factsEncoded = manualFacts
             ? manualFacts.toUpperCase()
-            : `[DESCRIBA DETALLADAMENTE LA SITUACIÓN: EJ. EL TRABAJADOR NO SE PRESENTÓ A SU SERVICIO PROGRAMADO A LAS 08:00...]`;
+            : `[DESCRIBA DETALLADAMENTE LA SITUACIÓN: EJ. A ESO DE LAS 20:10 HORAS, EL COLABORADOR RECIBE LA INSTRUCCIÓN...]`;
 
-        // 4. LEGAL LINK
-        let legalLink = `\n\nEl hecho descrito constituye la falta tipificada con el CÓDIGO ${code.code}: "${code.description.toUpperCase()}".`;
+        const body = `\n\nSE CONSTATA QUE ${factsEncoded}`;
 
-        if (code.code === 8) {
-            legalLink = `\n\nLa situación descrita configura un incumplimiento directo a las instrucciones impartidas por su Jefatura, lo que corresponde a la falta CÓDIGO 8: DESOBEDIENCIA A INSTRUCCIONES FORMALES.`;
-        }
+        // 3. CLOSING
+        const closing = `\n\nCAYENDO EN FALTA GRAVE (CÓDIGO ${code.code}).`;
 
-        // 5. CLOSING
-        const closing = `\n\nEsta conducta vulnera las obligaciones contractuales y el Reglamento Interno de Orden, Higiene y Seguridad vigente, afectando el normal desarrollo de la operación.`;
-
-        const fullText = `${intro}${constatation}\n\n"${factsEncoded}"${legalLink}${closing}`;
+        const fullText = `${header}${body}${closing}`;
 
         setFormData(prev => ({ ...prev, description: fullText, sanction_code_id: code.code }));
 
