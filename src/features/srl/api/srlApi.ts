@@ -329,7 +329,7 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px;">
                     <div style="display: flex; align-items: center; gap: 12px;">
                         <span style="background-color: #3b82f6; color: white; padding: 4px 10px; border-radius: 6px; font-size: 14px; font-weight: 700;">${bus.bus_ppu}</span>
-                        ${bus.applus ? '<span style="background-color: #fee2e2; color: #dc2626; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; border: 1px solid #fecaca;">⚠️ APPLUS</span>' : ''}
+                        ${bus.applus ? '<span style="background-color: #fee2e2; color: #dc2626; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; border: 1px solid #fecaca; margin-left: 12px; white-space: nowrap;">⚠️ RECHAZO POR APPLUS</span>' : ''}
                     </div>
                     <span style="color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase;">${bus.problem_type || 'General'}</span>
                 </div>
@@ -394,7 +394,7 @@ export async function sendSrlEmailNotification(requestId: string, trigger: 'CREA
                                     Solicitud en ${request.terminal_code.replace(/_/g, ' ')}
                                 </h2>
                                 <p style="margin: 8px 0 0 0; color: #64748b; font-size: 16px;">
-                                    Se ha registrado una solicitud de Mantenimiento / Reparación.
+                                    Estimados, solicitamos gestionar la reparación de la flota adjunta a la brevedad posible. Quedamos atentos a su respuesta.
                                 </p>
                             </div>
 
