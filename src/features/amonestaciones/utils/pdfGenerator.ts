@@ -287,7 +287,7 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
     // --- FOOTER ---
     doc.line(PAGE_W - 80, y, PAGE_W - 20, y);
     doc.setFont('helvetica', 'bold');
-    doc.fs = 10;
+    doc.setFontSize(10);
     doc.text('FIRMA', PAGE_W - 50, y + 5, { align: 'center' });
 
     doc.save(`Amonestacion_Acta_${data.worker_rut}.pdf`);
