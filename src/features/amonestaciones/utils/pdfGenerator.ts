@@ -75,13 +75,9 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
     // --- HEADER ---
     y += 5;
 
-    // Header Layout: Left Logo - Line - Right Logo
+    // Header Layout: Line - Right Logo
     const logoY = y - 4;
     const logoH = 10;
-
-    // Left Logo (Asiss)
-    const leftLogoW = 25;
-    doc.addImage(LOGO_ASISS_BASE64, 'PNG', MARGIN_X - 2, logoY, leftLogoW, logoH, undefined, 'FAST');
 
     // Right Logo (RBU)
     const rbuLogoW = 30;
@@ -94,8 +90,8 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
     doc.setFontSize(11);
     const titleW = doc.getTextWidth(title);
 
-    // Draw Line (Start after Asiss logo, End before RBU logo)
-    const lineStart = MARGIN_X + leftLogoW;
+    // Draw Line (Start at Margin, End before RBU logo)
+    const lineStart = MARGIN_X;
     const lineEnd = rbuX;
 
     const lineY = y + 2;
