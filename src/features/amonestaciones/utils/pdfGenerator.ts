@@ -1,17 +1,8 @@
 import jsPDF from 'jspdf';
 import { AmonestacionFormData } from '../types';
+import { LOGO_RBU_BASE64, LOGO_ASISS_BASE64 } from './logos';
 
-// Helper to load image
-const loadImage = (src: string): Promise<HTMLImageElement> => {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.src = src;
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-    });
-};
-
-export const generateAmonestacionPDF = async (data: AmonestacionFormData) => {
+export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
     // Letter Size: 215.9mm x 279.4mm
     const doc = new jsPDF({
         format: 'letter',
@@ -26,20 +17,6 @@ export const generateAmonestacionPDF = async (data: AmonestacionFormData) => {
     const CONTENT_W = PAGE_W - (MARGIN_X * 2);
 
     let y = 10;
-
-    // --- IMAGES ---
-    // Load logos
-    let rbuLogo: HTMLImageElement | null = null;
-    let asissLogo: HTMLImageElement | null = null;
-
-    try {
-        [rbuLogo, asissLogo] = await Promise.all([
-            loadImage('/logo_rbu.png'),
-            loadImage('/logo_asiss_header.png')
-        ]);
-    } catch (e) {
-        console.error("Error loading logos", e);
-    }
 
     // --- UTILS ---
     const drawSectionTitle = (title: string, yPos: number) => {
@@ -104,16 +81,12 @@ export const generateAmonestacionPDF = async (data: AmonestacionFormData) => {
 
     // Left Logo (Asiss)
     const leftLogoW = 25;
-    if (asissLogo) {
-        doc.addImage(asissLogo, 'PNG', MARGIN_X - 2, logoY, leftLogoW, logoH, undefined, 'FAST');
-    }
+    doc.addImage(LOGO_ASISS_BASE64, 'PNG', MARGIN_X - 2, logoY, leftLogoW, logoH, undefined, 'FAST');
 
     // Right Logo (RBU)
     const rbuLogoW = 30;
     const rbuX = PAGE_W - MARGIN_X - rbuLogoW + 2;
-    if (rbuLogo) {
-        doc.addImage(rbuLogo, 'PNG', rbuX, logoY, rbuLogoW, logoH, undefined, 'FAST');
-    }
+    doc.addImage(LOGO_RBU_BASE64, 'PNG', rbuX, logoY, rbuLogoW, logoH, undefined, 'FAST');
 
     // Centered Title
     const title = "ACTA DE CONSTATACIÓN DE HECHOS";
