@@ -208,11 +208,10 @@ export async function fetchSrlEmailSettings() {
     const { data, error } = await supabase
         .from('srl_email_settings')
         .select('*')
-        .limit(1)
-        .single();
+        .limit(1);
 
-    if (error && error.code !== 'PGRST116') throw error;
-    return data as SrlEmailSetting | null;
+    if (error) throw error;
+    return data?.[0] || null;
 }
 
 export async function updateSrlEmailSettings(settings: Partial<SrlEmailSetting>) {
