@@ -10,6 +10,7 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
 
     // --- CONFIG & STYLES ---
     const BLUE_COLOR = [0, 74, 153] as [number, number, number]; // #004a99
+
     // Letter dims in mm typically ~216 x 279
     const PAGE_W = 215.9;
     const PAGE_H = 279.4;
@@ -115,7 +116,25 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
     doc.setTextColor(0, 0, 0);
     doc.text(title, PAGE_W / 2, y + 4, { align: 'center' });
 
-    // NO EXTRA TEXT - USER REQUEST REMOVED "ASISS OPERACIONES"
+    // --- LOGO (Left side, matching Sidebar "A" logo) ---
+    const logoX = MARGIN_X + 2;
+    const logoY = y - 3;
+    // Blue Brand Box
+    doc.setFillColor(...BLUE_COLOR);
+    doc.roundedRect(logoX, logoY - 2, 8, 8, 2, 2, 'F');
+    // "A"
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text("A", logoX + 2, logoY + 3.5);
+    // "Asiss" Text
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.text("Asiss", logoX + 10, logoY + 1.5);
+    doc.setFontSize(6);
+    doc.setTextColor(100);
+    doc.text("OPERACIONES", logoX + 10, logoY + 4.5);
+
 
     y += 12;
 
@@ -143,15 +162,20 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
     y += drawSectionTitle('II. Antecedentes de la Falta', y);
 
     const c = parseInt(data.sanction_code_id.toString());
+
+    // LOGIC CORRECTION
     const isAbandono = c === 9;
     const isNegativa = c === 8;
     const isDesobedecer = c === 8;
     const isAgresionV = c === 1;
     const isAgresionF = false;
-    const isIncumplimiento = c === 10 || c === 2 || c === 5;
+    const isIncumplimiento = (c === 10 || c === 2 || c === 5);
     const isDia = false;
     const isAtraso = false;
-    const isOtro = ![9, 8, 1, 10, 2, 5].includes(c);
+
+    // Explicit isOtro: True ONLY if c is NOT one of the known ones that have boxes
+    const knownCodes = [9, 8, 1, 10, 2, 5];
+    const isOtro = !knownCodes.includes(c);
 
     // Grid 3 Cols
     const colW = CONTENT_W / 3;
@@ -211,8 +235,10 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    const splitDesc = doc.splitTextToSize(data.description.toUpperCase(), CONTENT_W - 4);
-    doc.text(splitDesc, MARGIN_X + 2, y + 4);
+    // Increased padding for text wrapping
+    const textW = CONTENT_W - 8;
+    const splitDesc = doc.splitTextToSize(data.description.toUpperCase(), textW);
+    doc.text(splitDesc, MARGIN_X + 4, y + 4);
 
     y += descH + 6;
 
@@ -267,11 +293,6 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
     doc.line(sigX, y + rBoxH - 8, PAGE_W - MARGIN_X - 10, y + rBoxH - 8);
     doc.setFontSize(7);
     doc.text('FIRMA Y TIMBRE', sigX + ((PAGE_W - MARGIN_X - 10 - sigX) / 2), y + rBoxH - 4, { align: 'center' });
-
-    // Footer Info
-    doc.setFontSize(6);
-    doc.setTextColor(150);
-    doc.text('Documento generado digitalmente por ASISS - Prohibida su adulteración', MARGIN_X, PAGE_H - 10);
 
     doc.save(`Amonestacion_Acta_${data.worker_rut}.pdf`);
 };
