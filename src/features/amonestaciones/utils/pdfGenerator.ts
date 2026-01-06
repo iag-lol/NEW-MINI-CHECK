@@ -1,7 +1,17 @@
 import jsPDF from 'jspdf';
 import { AmonestacionFormData } from '../types';
 
-export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
+// Helper to load image
+const loadImage = (src: string): Promise<HTMLImageElement> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.src = src;
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+    });
+};
+
+export const generateAmonestacionPDF = async (data: AmonestacionFormData) => {
     // Letter Size: 215.9mm x 279.4mm
     const doc = new jsPDF({
         format: 'letter',
@@ -10,14 +20,26 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
 
     // --- CONFIG & STYLES ---
     const BLUE_COLOR = [0, 74, 153] as [number, number, number]; // #004a99
-
-    // Letter dims in mm typically ~216 x 279
     const PAGE_W = 215.9;
     const PAGE_H = 279.4;
     const MARGIN_X = 15;
     const CONTENT_W = PAGE_W - (MARGIN_X * 2);
 
-    let y = 10; // Start closer to top
+    let y = 10;
+
+    // --- IMAGES ---
+    // Load logos
+    let rbuLogo: HTMLImageElement | null = null;
+    let asissLogo: HTMLImageElement | null = null;
+
+    try {
+        [rbuLogo, asissLogo] = await Promise.all([
+            loadImage('/logo_rbu.png'),
+            loadImage('/logo_asiss_header.png')
+        ]);
+    } catch (e) {
+        console.error("Error loading logos", e);
+    }
 
     // --- UTILS ---
     const drawSectionTitle = (title: string, yPos: number) => {
@@ -51,28 +73,12 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(8);
             doc.setTextColor(0);
-            doc.text(value.toUpperCase(), boxX + 2, yPos + 3.5);
-        }
-    };
-
-    const drawLineInput = (label: string, value: string, x: number, yPos: number, w: number, labelWidth: number = 0) => {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
-        doc.text(label, x, yPos + 4);
-
-        const lineX = x + labelWidth;
-        const lineW = w - labelWidth;
-        doc.line(lineX, yPos + 6, lineX + lineW, yPos + 6);
-
-        if (value) {
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(9);
-            doc.text(value.toUpperCase(), lineX + 2, yPos + 4.5);
+            const valStr = value ? value.toUpperCase() : '';
+            doc.text(valStr, boxX + 2, yPos + 3.5);
         }
     };
 
     const drawCheckbox = (label: string, checked: boolean, x: number, yPos: number, w: number) => {
-        const boxSize = 4;
         doc.setDrawColor(0);
         doc.setFillColor(255, 255, 255);
         doc.rect(x, yPos, 4, 4);
@@ -91,49 +97,51 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
 
     // --- HEADER ---
     y += 5;
-    // Blue decorations
-    doc.setDrawColor(...BLUE_COLOR);
-    doc.setLineWidth(0.8);
-    const lineY = y + 2;
-    doc.line(MARGIN_X, lineY, PAGE_W - MARGIN_X, lineY);
 
-    // Circles
-    doc.setFillColor(255, 255, 255);
-    doc.setLineWidth(0.5);
-    doc.circle(MARGIN_X, lineY, 1.5, 'FD');
-    doc.circle(PAGE_W - MARGIN_X, lineY, 1.5, 'FD');
+    // Header Layout: Left Logo - Line - Right Logo
+    const logoY = y - 4;
+    const logoH = 10;
 
-    // Title box (Center, white bg to mask line)
+    // Left Logo (Asiss)
+    const leftLogoW = 25;
+    if (asissLogo) {
+        doc.addImage(asissLogo, 'PNG', MARGIN_X - 2, logoY, leftLogoW, logoH, undefined, 'FAST');
+    }
+
+    // Right Logo (RBU)
+    const rbuLogoW = 30;
+    const rbuX = PAGE_W - MARGIN_X - rbuLogoW + 2;
+    if (rbuLogo) {
+        doc.addImage(rbuLogo, 'PNG', rbuX, logoY, rbuLogoW, logoH, undefined, 'FAST');
+    }
+
+    // Centered Title
     const title = "ACTA DE CONSTATACIÓN DE HECHOS";
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
+    doc.setFontSize(11);
     const titleW = doc.getTextWidth(title);
 
-    // White rect behind title
+    // Draw Line (Start after Asiss logo, End before RBU logo)
+    const lineStart = MARGIN_X + leftLogoW;
+    const lineEnd = rbuX;
+
+    const lineY = y + 2;
+    doc.setDrawColor(...BLUE_COLOR);
+    doc.setLineWidth(0.8);
+    doc.line(lineStart, lineY, lineEnd, lineY);
+
+    // Circle decorations at line ends
     doc.setFillColor(255, 255, 255);
-    doc.rect((PAGE_W / 2) - (titleW / 2) - 5, y - 3, titleW + 10, 8, 'F');
+    doc.setLineWidth(0.5);
+    doc.circle(lineStart, lineY, 1.5, 'FD');
+    doc.circle(lineEnd, lineY, 1.5, 'FD');
+
+    // Title centered on page, with white bg to mask middle of line
+    doc.setFillColor(255, 255, 255);
+    doc.rect((PAGE_W / 2) - (titleW / 2) - 4, y - 3, titleW + 8, 8, 'F');
 
     doc.setTextColor(0, 0, 0);
     doc.text(title, PAGE_W / 2, y + 4, { align: 'center' });
-
-    // --- LOGO (Left side, matching Sidebar "A" logo) ---
-    const logoX = MARGIN_X + 2;
-    const logoY = y - 3;
-    // Blue Brand Box
-    doc.setFillColor(...BLUE_COLOR);
-    doc.roundedRect(logoX, logoY - 2, 8, 8, 2, 2, 'F');
-    // "A"
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text("A", logoX + 2, logoY + 3.5);
-    // "Asiss" Text
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(10);
-    doc.text("Asiss", logoX + 10, logoY + 1.5);
-    doc.setFontSize(6);
-    doc.setTextColor(100);
-    doc.text("OPERACIONES", logoX + 10, logoY + 4.5);
 
 
     y += 12;
@@ -163,15 +171,11 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
 
     const c = parseInt(data.sanction_code_id.toString());
 
-    // LOGIC CORRECTION
     const isAbandono = c === 9;
     const isNegativa = c === 8;
     const isDesobedecer = c === 8;
     const isAgresionV = c === 1;
-    const isAgresionF = false;
     const isIncumplimiento = (c === 10 || c === 2 || c === 5);
-    const isDia = false;
-    const isAtraso = false;
 
     // Explicit isOtro: True ONLY if c is NOT one of the known ones that have boxes
     const knownCodes = [9, 8, 1, 10, 2, 5];
@@ -184,13 +188,13 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
     // Row 1
     drawCheckbox('Abandono de trabajo', isAbandono, MARGIN_X, cy, colW);
     drawCheckbox('Agresión verbal', isAgresionV, MARGIN_X + colW, cy, colW);
-    drawCheckbox('Ausencia injustif.', isDia, MARGIN_X + (colW * 2), cy, colW);
+    drawCheckbox('Ausencia injustif.', false, MARGIN_X + (colW * 2), cy, colW);
     cy += 5;
 
     // Row 2
     drawCheckbox('Negativa a trabajar', isNegativa, MARGIN_X, cy, colW);
-    drawCheckbox('Agresión física', isAgresionF, MARGIN_X + colW, cy, colW);
-    drawCheckbox('Atrasos reiterados', isAtraso, MARGIN_X + (colW * 2), cy, colW);
+    drawCheckbox('Agresión física', false, MARGIN_X + colW, cy, colW);
+    drawCheckbox('Atrasos reiterados', false, MARGIN_X + (colW * 2), cy, colW);
     cy += 5;
 
     // Row 3
@@ -204,7 +208,7 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
     y += drawSectionTitle('III. Lugar de la Falta', y);
 
     // Row 1: Terminal | Via Publica
-    drawBoxedField('TERMINAL', data.place_terminal?.toUpperCase(), MARGIN_X, y, halfW - 2, 20);
+    drawBoxedField('TERMINAL', data.place_terminal?.toUpperCase() || '', MARGIN_X, y, halfW - 2, 20);
     drawBoxedField('VÍA PÚBLICA', data.place_public_way?.toUpperCase() || '', MARGIN_X + halfW, y, halfW, 20);
     y += 6;
 
@@ -222,7 +226,6 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
     // Horizontal Layout
     drawCheckbox('Jefatura Directa', true, MARGIN_X, y, colW);
     drawCheckbox('Compañeros de Trabajo', false, MARGIN_X + colW, y, colW);
-    // Line for other
     doc.setFontSize(7);
     doc.text('Otros: _______________________', MARGIN_X + (colW * 2), y + 3);
     y += 8;
@@ -235,7 +238,6 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    // Increased padding for text wrapping
     const textW = CONTENT_W - 8;
     const splitDesc = doc.splitTextToSize(data.description.toUpperCase(), textW);
     doc.text(splitDesc, MARGIN_X + 4, y + 4);
@@ -278,7 +280,6 @@ export const generateAmonestacionPDF = (data: AmonestacionFormData) => {
     y += wBoxH + 8;
 
     // --- VII. RESPONSABLE ---
-    // Make sure we have enough space, or move closer
     y += drawSectionTitle('VII. Responsable (Jefe de Terminal)', y);
 
     const rBoxH = 25;
