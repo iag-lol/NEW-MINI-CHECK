@@ -65,7 +65,10 @@ const NAVIGATION: NavSection[] = [
   {
     label: 'Flota',
     icon: 'truck',
-    items: [{ label: 'Estado de Flota', to: '/estado-flota', icon: 'truck' }],
+    items: [
+      { label: 'Estado de Flota', to: '/estado-flota', icon: 'truck' },
+      { label: 'Fiscalización ICA', to: '/fiscalizacion-ica', icon: 'clipboard' },
+    ],
   },
 ];
 
