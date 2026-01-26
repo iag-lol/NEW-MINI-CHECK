@@ -48,7 +48,7 @@ export const ExtintoresModulePage = () => {
       description="Control de vencimientos, certificaciones y estado físico"
       icon={BadgeCheck}
       searchFields={['bus_ppu', 'terminal']}
-      disableWeekFilter={true}
+      disableWeekFilter={false}
       queryLimit={null}
       getStats={(data: ExtintoresRow[]) => {
         const total = data.length
