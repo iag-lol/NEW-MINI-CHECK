@@ -69,55 +69,55 @@ const inspectionSchema = z
       .string()
       .max(600, 'Máximo 600 caracteres')
       .optional(),
-  terminalReportado: z.string().min(2, 'Selecciona el terminal'),
-  tag: z.object({
-    tiene: z.boolean(),
-    serie: z.string().optional(),
-    observacion: z.string().optional(),
-  }),
-  camaras: z.object({
-    monitorEstado: z.enum(['FUNCIONA', 'APAGADO', 'CON_DAÑO', 'SIN_SENAL']),
-    monitorDetalle: z.string().optional(),
-    camDelantera: z.boolean().nullable(),
-    camCabina: z.boolean().nullable(),
-    camInteriores: z.boolean().nullable(),
-    camTrasera: z.boolean().nullable(),
-    visiblesMonitor: z.boolean().nullable(),
-    activaReversa: z.boolean().nullable(),
-    activaPuertas: z.boolean().nullable(),
-    visiblesPuertasCerradas: z.boolean().nullable(),
-    observacion: z.string().optional(),
-  }),
-  extintores: z.object({
-    tiene: z.boolean(),
-    vencimientoMes: z.coerce.number().min(1).max(12).optional(),
-    vencimientoAnio: z.coerce.number().min(2023).max(2035).optional(),
-    certificacion: z.enum(['BUENA', 'DAÑADA']).nullable(),
-    sonda: z.enum(['BUENA', 'DAÑADA']).nullable(),
-    manometro: z.enum(['BUENO', 'DAÑADO']).nullable(),
-    presion: z.enum(['SOBRECARGA', 'OPTIMO', 'BAJA_CARGA']).nullable(),
-    cilindro: z.enum(['OK', 'ABOLLADO', 'OXIDADO']).nullable(),
-    porta: z.enum(['TIENE', 'NO_TIENE', 'DANADO']).nullable(),
-    observacion: z.string().optional(),
-  }),
-  mobileye: z.object({
-    aplica: z.boolean(),
-    alertaIzq: z.boolean().nullable(),
-    alertaDer: z.boolean().nullable(),
-    consola: z.boolean().nullable(),
-    sensorFrontal: z.boolean().nullable(),
-    sensorIzq: z.boolean().nullable(),
-    sensorDer: z.boolean().nullable(),
-    observacion: z.string().optional(),
-  }),
-  odometro: z.object({
-    lectura: z.preprocess(
-      (value) => (value === '' || value === null ? undefined : Number(value)),
-      z.number().min(0, 'Debe ser positivo')
-    ),
-    estado: z.enum(['OK', 'INCONSISTENTE', 'NO_FUNCIONA']),
-    observacion: z.string().optional(),
-  }),
+    terminalReportado: z.string().min(2, 'Selecciona el terminal'),
+    tag: z.object({
+      tiene: z.boolean(),
+      serie: z.string().optional(),
+      observacion: z.string().optional(),
+    }),
+    camaras: z.object({
+      monitorEstado: z.enum(['FUNCIONA', 'APAGADO', 'CON_DAÑO', 'SIN_SENAL']),
+      monitorDetalle: z.string().optional(),
+      camDelantera: z.boolean().nullable(),
+      camCabina: z.boolean().nullable(),
+      camInteriores: z.boolean().nullable(),
+      camTrasera: z.boolean().nullable(),
+      visiblesMonitor: z.boolean().nullable(),
+      activaReversa: z.boolean().nullable(),
+      activaPuertas: z.boolean().nullable(),
+      visiblesPuertasCerradas: z.boolean().nullable(),
+      observacion: z.string().optional(),
+    }),
+    extintores: z.object({
+      tiene: z.boolean(),
+      vencimientoMes: z.coerce.number().min(1).max(12).optional(),
+      vencimientoAnio: z.coerce.number().min(2023).max(2035).optional(),
+      certificacion: z.enum(['VIGENTE', 'VENCIDA']).nullable(),
+      sonda: z.enum(['OK', 'SIN_LECTURA', 'FUERA_DE_RANGO']).nullable(),
+      manometro: z.enum(['OK', 'SIN_LECTURA', 'FUERA_DE_RANGO']).nullable(),
+      presion: z.enum(['SOBRECARGA', 'OPTIMO', 'BAJA_CARGA']).nullable(),
+      cilindro: z.enum(['OK', 'ABOLLADO', 'OXIDADO']).nullable(),
+      porta: z.enum(['TIENE', 'NO_TIENE', 'DANADO']).nullable(),
+      observacion: z.string().optional(),
+    }),
+    mobileye: z.object({
+      aplica: z.boolean(),
+      alertaIzq: z.boolean().nullable(),
+      alertaDer: z.boolean().nullable(),
+      consola: z.boolean().nullable(),
+      sensorFrontal: z.boolean().nullable(),
+      sensorIzq: z.boolean().nullable(),
+      sensorDer: z.boolean().nullable(),
+      observacion: z.string().optional(),
+    }),
+    odometro: z.object({
+      lectura: z.preprocess(
+        (value) => (value === '' || value === null ? undefined : Number(value)),
+        z.number().min(0, 'Debe ser positivo')
+      ),
+      estado: z.enum(['OK', 'INCONSISTENTE', 'NO_FUNCIONA']),
+      observacion: z.string().optional(),
+    }),
     publicidad: z.object({
       izquierda: publicidadAreaSchema,
       derecha: publicidadAreaSchema,
@@ -177,8 +177,8 @@ const extinguisherFieldConfig = [
     label: 'Certificación',
     placeholder: 'Selecciona estado',
     options: [
-      { value: 'BUENA', label: 'Buena' },
-      { value: 'DAÑADA', label: 'Dañada' },
+      { value: 'VIGENTE', label: 'Vigente' },
+      { value: 'VENCIDA', label: 'Vencida' },
     ],
   },
   {
@@ -186,8 +186,9 @@ const extinguisherFieldConfig = [
     label: 'Sonda',
     placeholder: 'Estado de la sonda',
     options: [
-      { value: 'BUENA', label: 'Buena' },
-      { value: 'DAÑADA', label: 'Dañada' },
+      { value: 'OK', label: 'OK' },
+      { value: 'SIN_LECTURA', label: 'Sin lectura' },
+      { value: 'FUERA_DE_RANGO', label: 'Fuera de rango' },
     ],
   },
   {
@@ -195,8 +196,9 @@ const extinguisherFieldConfig = [
     label: 'Manómetro',
     placeholder: 'Estado del manómetro',
     options: [
-      { value: 'BUENO', label: 'Bueno' },
-      { value: 'DAÑADO', label: 'Dañado' },
+      { value: 'OK', label: 'OK' },
+      { value: 'SIN_LECTURA', label: 'Sin lectura' },
+      { value: 'FUERA_DE_RANGO', label: 'Fuera de rango' },
     ],
   },
   {
@@ -744,11 +746,11 @@ export const InspectionFormPage = () => {
       if (!isEnPanne) {
         const extintorCritico =
           !values.extintores.tiene ||
-          values.extintores.certificacion === 'DAÑADA' ||
+          values.extintores.certificacion === 'VENCIDA' ||
           (values.extintores.presion && values.extintores.presion !== 'OPTIMO') ||
           (values.extintores.cilindro && values.extintores.cilindro !== 'OK') ||
-          values.extintores.sonda === 'DAÑADA' ||
-          values.extintores.manometro === 'DAÑADO' ||
+          (values.extintores.sonda && values.extintores.sonda !== 'OK') ||
+          (values.extintores.manometro && values.extintores.manometro !== 'OK') ||
           (values.extintores.porta && values.extintores.porta !== 'TIENE')
 
         const tickets: Array<{ modulo: string; descripcion: string }> = []
@@ -1356,8 +1358,8 @@ export const InspectionFormPage = () => {
                   publicityState?.[area.key].danio == null
                     ? null
                     : publicityState?.[area.key].danio === false
-                    ? true
-                    : false
+                      ? true
+                      : false
                 }
                 positiveLabel="Sin daño"
                 negativeLabel="Con daño"
@@ -1373,8 +1375,8 @@ export const InspectionFormPage = () => {
                   publicityState?.[area.key].residuos == null
                     ? null
                     : publicityState?.[area.key].residuos === false
-                    ? true
-                    : false
+                      ? true
+                      : false
                 }
                 positiveLabel="Limpio"
                 negativeLabel="Con residuos"
@@ -1591,11 +1593,10 @@ export const InspectionFormPage = () => {
               <button
                 key={item.key}
                 type="button"
-                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide ${
-                  step === index
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-500 dark:bg-slate-900/40'
-                }`}
+                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide ${step === index
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 text-slate-500 dark:bg-slate-900/40'
+                  }`}
                 onClick={() => attemptNavigateToStep(index)}
               >
                 {item.label}

@@ -57,6 +57,7 @@ interface ModuleLayoutProps<T extends TableName> {
   searchFields?: (keyof TableRow<T>)[]
   queryLimit?: number | null
   tableScrollClassName?: string
+  disableWeekFilter?: boolean
 }
 
 export const ModuleLayout = <T extends TableName>({
@@ -72,6 +73,7 @@ export const ModuleLayout = <T extends TableName>({
   searchFields = [],
   queryLimit = 200,
   tableScrollClassName,
+  disableWeekFilter = false,
 }: ModuleLayoutProps<T>) => {
   const { weekInfo } = useWeekFilter()
   const [searchQuery, setSearchQuery] = useState('')
@@ -79,15 +81,22 @@ export const ModuleLayout = <T extends TableName>({
   const [showFilters, setShowFilters] = useState(false)
 
   const { data, refetch, isFetching } = useQuery({
-    queryKey: ['module', table, queryLimit ?? 'all', weekInfo.startISO, weekInfo.endISO],
+    queryKey: ['module', table, queryLimit ?? 'all', disableWeekFilter ? 'no-filter' : weekInfo.startISO, disableWeekFilter ? 'no-filter' : weekInfo.endISO],
     queryFn: async () => {
-      const baseQuery = supabase
+      let baseQuery = supabase
         .from(table)
         .select('*')
-        .gte('created_at', weekInfo.startISO)
-        .lte('created_at', weekInfo.endISO)
-        .order('created_at', { ascending: false })
-      const { data, error} = queryLimit ? await baseQuery.limit(queryLimit) : await baseQuery
+
+      // Only apply week filter if not disabled
+      if (!disableWeekFilter) {
+        baseQuery = baseQuery
+          .gte('created_at', weekInfo.startISO)
+          .lte('created_at', weekInfo.endISO)
+      }
+
+      baseQuery = baseQuery.order('created_at', { ascending: false })
+
+      const { data, error } = queryLimit ? await baseQuery.limit(queryLimit) : await baseQuery
       if (error) throw error
       return (data ?? []) as unknown as TableRow<T>[]
     },
@@ -156,7 +165,7 @@ export const ModuleLayout = <T extends TableName>({
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <WeekSelector />
+            {!disableWeekFilter && <WeekSelector />}
             <Button
               variant="ghost"
               size="sm"
@@ -296,48 +305,48 @@ export const ModuleLayout = <T extends TableName>({
       <Card className="p-0">
         <div className={cn(tableScrollClassName ?? 'max-h-[60vh]', 'overflow-auto')}>
           <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
-              <thead className="sticky top-0 z-10 bg-slate-50/95 text-left uppercase tracking-wide text-slate-500 backdrop-blur-sm dark:bg-slate-900/95">
-                <tr>
-                  {columns.map((column) => (
-                    <th
-                      key={column.label}
-                      className={cn('px-6 py-4 font-semibold whitespace-nowrap', column.className)}
-                    >
-                      {column.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100/70 bg-white dark:divide-slate-900/70 dark:bg-slate-950">
-                {filteredData?.map((row) => {
-                  const rowKey = 'id' in row && row.id ? (row.id as string) : JSON.stringify(row)
-                  return (
-                    <tr
-                      key={rowKey}
-                      className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-900/50"
-                    >
-                      {columns.map((column) => (
-                        <td key={column.label} className={cn('px-6 py-4', column.className)}>
-                          {column.render(row)}
-                        </td>
-                      ))}
-                    </tr>
-                  )
-                })}
-                {filteredData?.length === 0 && (
-                  <tr>
-                    <td
-                      className="px-6 py-12 text-center text-slate-400"
-                      colSpan={columns.length}
-                    >
-                      {data?.length === 0
-                        ? 'No hay registros para mostrar todavía. Las revisiones completadas serán visibles al instante gracias a Supabase Realtime.'
-                        : 'No se encontraron resultados con los filtros aplicados.'}
-                    </td>
+            <thead className="sticky top-0 z-10 bg-slate-50/95 text-left uppercase tracking-wide text-slate-500 backdrop-blur-sm dark:bg-slate-900/95">
+              <tr>
+                {columns.map((column) => (
+                  <th
+                    key={column.label}
+                    className={cn('px-6 py-4 font-semibold whitespace-nowrap', column.className)}
+                  >
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100/70 bg-white dark:divide-slate-900/70 dark:bg-slate-950">
+              {filteredData?.map((row) => {
+                const rowKey = 'id' in row && row.id ? (row.id as string) : JSON.stringify(row)
+                return (
+                  <tr
+                    key={rowKey}
+                    className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-900/50"
+                  >
+                    {columns.map((column) => (
+                      <td key={column.label} className={cn('px-6 py-4', column.className)}>
+                        {column.render(row)}
+                      </td>
+                    ))}
                   </tr>
-                )}
-              </tbody>
-            </table>
+                )
+              })}
+              {filteredData?.length === 0 && (
+                <tr>
+                  <td
+                    className="px-6 py-12 text-center text-slate-400"
+                    colSpan={columns.length}
+                  >
+                    {data?.length === 0
+                      ? 'No hay registros para mostrar todavía. Las revisiones completadas serán visibles al instante gracias a Supabase Realtime.'
+                      : 'No se encontraron resultados con los filtros aplicados.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </Card>
     </div>

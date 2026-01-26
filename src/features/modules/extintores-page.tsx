@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge'
 import { ModuleLayout } from '@/components/layout/module-layout'
 import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
-import { BadgeCheck, CheckCircle2, AlertTriangle, XCircle, Gauge as GaugeIcon } from 'lucide-react'
+import { BadgeCheck, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 type ExtintoresRow = Database['public']['Tables']['extintores']['Row']
@@ -48,12 +48,23 @@ export const ExtintoresModulePage = () => {
       description="Control de vencimientos, certificaciones y estado físico"
       icon={BadgeCheck}
       searchFields={['bus_ppu', 'terminal']}
+      disableWeekFilter={true}
+      queryLimit={null}
       getStats={(data: ExtintoresRow[]) => {
         const total = data.length
-        const buenas = data.filter(r => r.certificacion === 'BUENA').length
-        const danadas = data.filter(r => r.certificacion === 'DAÑADA').length
-        const presionOptima = data.filter(r => r.presion === 'OPTIMO').length
-        const tasaBuenas = total > 0 ? Math.round((buenas / total) * 100) : 0
+        const conExtintor = data.filter(r => r.tiene).length
+        const sinExtintor = data.filter(r => !r.tiene).length
+        const problemasExistentes = data.filter(r =>
+          !r.tiene ||
+          r.certificacion === 'VENCIDA' ||
+          r.presion !== 'OPTIMO' ||
+          r.cilindro !== 'OK' ||
+          r.sonda !== 'OK' ||
+          r.manometro !== 'OK' ||
+          r.porta !== 'TIENE'
+        ).length
+
+        const tasaConExtintor = total > 0 ? Math.round((conExtintor / total) * 100) : 0
 
         return [
           {
@@ -64,29 +75,38 @@ export const ExtintoresModulePage = () => {
             variant: 'default' as const,
           },
           {
-            title: 'Buenas',
-            value: buenas,
-            description: `${tasaBuenas}% del total`,
+            title: 'Con Extintor',
+            value: conExtintor,
+            description: `${tasaConExtintor}% del total`,
             icon: CheckCircle2,
             variant: 'success' as const,
           },
           {
-            title: 'Dañadas',
-            value: danadas,
-            description: 'Requieren atención',
-            icon: AlertTriangle,
-            variant: danadas > 0 ? 'danger' as const : 'success' as const,
+            title: 'Sin Extintor',
+            value: sinExtintor,
+            description: 'Requieren instalación',
+            icon: XCircle,
+            variant: sinExtintor > 0 ? 'danger' as const : 'success' as const,
           },
           {
-            title: 'Presión Óptima',
-            value: presionOptima,
-            description: `${total > 0 ? Math.round((presionOptima / total) * 100) : 0}% del total`,
-            icon: GaugeIcon,
-            variant: presionOptima === total ? 'success' as const : 'warning' as const,
+            title: 'Problemas Detectados',
+            value: problemasExistentes,
+            description: `${total > 0 ? Math.round((problemasExistentes / total) * 100) : 0}% del total`,
+            icon: AlertTriangle,
+            variant: problemasExistentes > 5 ? 'danger' as const : problemasExistentes > 0 ? 'warning' as const : 'success' as const,
           },
         ]
       }}
       filters={[
+        {
+          key: 'tiene',
+          label: 'Estado de Instalación',
+          type: 'select',
+          options: [
+            { label: 'Instalado', value: 'true' },
+            { label: 'Sin extintor', value: 'false' },
+          ],
+        },
         {
           key: 'certificacion',
           label: 'Certificación',
@@ -119,9 +139,14 @@ export const ExtintoresModulePage = () => {
         },
       ]}
       getCharts={(rows) => {
+        const instalacionData = [
+          { estado: 'Con Extintor', cantidad: rows.filter((r) => r.tiene).length },
+          { estado: 'Sin Extintor', cantidad: rows.filter((r) => !r.tiene).length },
+        ]
+
         const certificacionData = [
-          { estado: 'Buena', cantidad: rows.filter((r) => r.certificacion === 'BUENA').length },
-          { estado: 'Dañada', cantidad: rows.filter((r) => r.certificacion === 'DAÑADA').length },
+          { estado: 'Vigente', cantidad: rows.filter((r) => r.certificacion === 'VIGENTE').length },
+          { estado: 'Vencida', cantidad: rows.filter((r) => r.certificacion === 'VENCIDA').length },
           { estado: 'Sin dato', cantidad: rows.filter((r) => !r.certificacion).length },
         ]
         const presionDataRaw = [
@@ -133,6 +158,23 @@ export const ExtintoresModulePage = () => {
         const presionData = presionDataRaw.filter((item) => item.value > 0)
         if (presionData.length === 0) presionData.push({ name: 'Sin registros', value: 1, color: '#e2e8f0' })
         return [
+          {
+            title: 'Estado de instalación',
+            component: (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={instalacionData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="estado" stroke="#64748b" fontSize={12} />
+                  <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
+                  />
+                  <Legend />
+                  <Bar dataKey="cantidad" fill="#10b981" name="Cantidad" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ),
+          },
           {
             title: 'Estado de certificaciones',
             component: (
@@ -214,9 +256,8 @@ export const ExtintoresModulePage = () => {
                   {formatEnumValue(row.certificacion)}
                 </Badge>
                 <p
-                  className={`text-xs ${
-                    estaVencido ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'
-                  }`}
+                  className={`text-xs ${estaVencido ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'
+                    }`}
                 >
                   {tieneFecha ? `Vence ${row.vencimiento_mes}/${row.vencimiento_anio}` : 'Sin fecha registrada'}
                 </p>

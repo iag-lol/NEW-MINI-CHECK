@@ -59,9 +59,9 @@ type ExtintoresRow = {
   tiene: boolean
   vencimiento_mes: number | null
   vencimiento_anio: number | null
-  certificacion: 'BUENA' | 'DAÑADA' | null
-  sonda: 'BUENA' | 'DAÑADA' | null
-  manometro: 'BUENO' | 'DAÑADO' | null
+  certificacion: 'VIGENTE' | 'VENCIDA' | null
+  sonda: 'OK' | 'SIN_LECTURA' | 'FUERA_DE_RANGO' | null
+  manometro: 'OK' | 'SIN_LECTURA' | 'FUERA_DE_RANGO' | null
   presion: 'SOBRECARGA' | 'OPTIMO' | 'BAJA_CARGA' | null
   cilindro: 'OK' | 'ABOLLADO' | 'OXIDADO' | null
   porta: 'TIENE' | 'NO_TIENE' | 'DANADO' | null
