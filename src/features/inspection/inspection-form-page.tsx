@@ -561,6 +561,45 @@ export const InspectionFormPage = () => {
     }
   }, [estadoBus, step])
 
+  // Auto-rellenar TAG cuando se cambia al paso "tag" si hay un bus seleccionado
+  useEffect(() => {
+    const loadLastTag = async () => {
+      if (stepKey === 'tag' && bus?.ppu) {
+        const currentTagTiene = methods.getValues('tag.tiene')
+        const currentTagSerie = methods.getValues('tag.serie')
+        
+        // Solo auto-rellenar si no hay valores ya establecidos (evitar sobrescribir)
+        if (currentTagTiene === true && !currentTagSerie) {
+          try {
+            const { data: lastTag, error: tagError } = await supabase
+              .from('tags')
+              .select('tiene, serie')
+              .eq('bus_ppu', bus.ppu)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+
+            if (!tagError && lastTag) {
+              // Si el último registro tiene TAG instalado y tiene serie, auto-rellenar
+              if (lastTag.tiene === true && lastTag.serie) {
+                methods.setValue('tag.serie', lastTag.serie, { shouldDirty: true })
+              } else if (lastTag.tiene === false) {
+                // Si el último registro dice que NO tiene TAG, cambiar a "No tiene"
+                methods.setValue('tag.tiene', false, { shouldDirty: true })
+                methods.setValue('tag.serie', '', { shouldDirty: true })
+                methods.setValue('tag.observacion', '', { shouldDirty: true })
+              }
+            }
+          } catch (err) {
+            console.error('Error al cargar último TAG:', err)
+          }
+        }
+      }
+    }
+
+    loadLastTag()
+  }, [stepKey, bus?.ppu, methods])
+
   useEffect(() => {
     let isMounted = true
     const ppuParam = searchParams.get('ppu')
