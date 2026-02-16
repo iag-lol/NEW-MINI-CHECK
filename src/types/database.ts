@@ -128,6 +128,18 @@ type PublicidadRow = {
   terminal: string
 }
 
+type WifiRow = {
+  id: string
+  revision_id: string
+  ppu_visible: boolean | null
+  bus_encendido: boolean | null
+  tiene_internet: boolean | null
+  observacion: string | null
+  created_at: string
+  bus_ppu: string
+  terminal: string
+}
+
 type TicketRow = {
   id: string
   modulo: string
@@ -225,6 +237,7 @@ export type Database = {
       mobileye: TableRecord<MobileyeRow, Omit<MobileyeRow, 'id' | 'created_at'>>
       odometro: TableRecord<OdometroRow, Omit<OdometroRow, 'id' | 'created_at'>>
       publicidad: TableRecord<PublicidadRow, Omit<PublicidadRow, 'id' | 'created_at'>>
+      wifi: TableRecord<WifiRow, Omit<WifiRow, 'id' | 'created_at'>>
       tickets: TableRecord<TicketRow, Omit<TicketRow, 'id' | 'created_at' | 'actualizado_en'>>
       personal: TableRecord<PersonalRow, Omit<PersonalRow, 'id' | 'created_at'>>
       flota: TableRecord<FlotaRow, Omit<FlotaRow, 'id' | 'created_at'>>

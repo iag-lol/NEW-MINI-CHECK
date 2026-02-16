@@ -123,6 +123,12 @@ const inspectionSchema = z
       derecha: publicidadAreaSchema,
       luneta: publicidadAreaSchema,
     }),
+    wifi: z.object({
+      ppuVisible: z.boolean().nullable(),
+      busEncendido: z.boolean().nullable(),
+      tieneInternet: z.boolean().nullable(),
+      observacion: z.string().optional(),
+    }),
   })
 
 const steps = [
@@ -132,6 +138,7 @@ const steps = [
   { key: 'extintores', label: 'Extintores' },
   { key: 'odometro', label: 'Odómetro' },
   { key: 'mobileye', label: 'Mobileye' },
+  { key: 'wifi', label: 'WiFi' },
   { key: 'publicidad', label: 'Publicidad' },
   { key: 'cierre', label: 'Cierre' },
 ] as const
@@ -351,6 +358,12 @@ export const InspectionFormPage = () => {
         derecha: { tiene: false, danio: null, residuos: null, observacion: '' },
         luneta: { tiene: false, danio: null, residuos: null, observacion: '' },
       },
+      wifi: {
+        ppuVisible: null,
+        busEncendido: null,
+        tieneInternet: null,
+        observacion: '',
+      },
     },
   })
   const [step, setStep] = useState(0)
@@ -373,6 +386,8 @@ export const InspectionFormPage = () => {
     staleTime: 60_000,
   })
   const [validationMessage, setValidationMessage] = useState<string | null>(null)
+  const [wifiWaitingTime, setWifiWaitingTime] = useState(0)
+  const [isWifiWaiting, setIsWifiWaiting] = useState(false)
   const {
     location: trackingLocation,
     error: trackingError,
@@ -716,6 +731,16 @@ export const InspectionFormPage = () => {
         terminal: values.terminalReportado,
       })
 
+      await supabase.from('wifi').insert({
+        revision_id: revisionData.id,
+        ppu_visible: isEnPanne ? null : (values.wifi.ppuVisible ?? null),
+        bus_encendido: isEnPanne ? null : (values.wifi.busEncendido ?? null),
+        tiene_internet: isEnPanne ? null : (values.wifi.tieneInternet ?? null),
+        observacion: isEnPanne ? 'Bus en panne - no revisado' : (values.wifi.observacion || null),
+        bus_ppu: bus.ppu,
+        terminal: values.terminalReportado,
+      })
+
       const publicidadTiene = isEnPanne ? false : publicityAreas.some((area) => values.publicidad[area.key].tiene)
       const publicidadDanio = isEnPanne ? false : publicityAreas.some((area) => values.publicidad[area.key].danio)
       const publicidadResiduos = isEnPanne ? false : publicityAreas.some((area) => values.publicidad[area.key].residuos)
@@ -900,6 +925,23 @@ export const InspectionFormPage = () => {
           missing.push('Ingresa la lectura del odómetro')
         }
         break
+      case 'wifi': {
+        const wifi = snapshot.wifi
+        if (wifi.ppuVisible === null || wifi.ppuVisible === undefined) {
+          missing.push('Indica si aparece la PPU en la señal buscada')
+        } else if (wifi.ppuVisible === false) {
+          if (wifi.busEncendido === null || wifi.busEncendido === undefined) {
+            missing.push('Indica si el bus está encendido')
+          }
+        } else if (wifi.ppuVisible === true) {
+          if (wifi.tieneInternet === null || wifi.tieneInternet === undefined) {
+            missing.push('Indica si tiene conexión a internet')
+          } else if (wifi.tieneInternet === false && !wifi.observacion?.trim()) {
+            missing.push('Agrega una observación sobre el problema de conexión')
+          }
+        }
+        break
+      }
       case 'publicidad':
         publicityAreas.forEach((area) => {
           const lateral = snapshot.publicidad[area.key]
@@ -1336,6 +1378,194 @@ export const InspectionFormPage = () => {
     </SectionCard>
   )
 
+  // Timer de espera WiFi de 3 minutos
+  useEffect(() => {
+    if (isWifiWaiting && wifiWaitingTime < 180) {
+      const timer = setTimeout(() => {
+        setWifiWaitingTime(wifiWaitingTime + 1)
+      }, 1000)
+      return () => clearTimeout(timer)
+    } else if (isWifiWaiting && wifiWaitingTime >= 180) {
+      setIsWifiWaiting(false)
+      setWifiWaitingTime(0)
+    }
+  }, [isWifiWaiting, wifiWaitingTime])
+
+  const renderWifi = () => {
+    const wifiState = methods.watch('wifi')
+    const ppuVisible = wifiState.ppuVisible
+    const busEncendido = wifiState.busEncendido
+    const tieneInternet = wifiState.tieneInternet
+
+    const formatTime = (seconds: number) => {
+      const mins = Math.floor(seconds / 60)
+      const secs = seconds % 60
+      return `${mins}:${secs.toString().padStart(2, '0')}`
+    }
+
+    return (
+      <SectionCard title="WiFi" description="Revisión de conexión WiFi del bus">
+        <BinaryQuestion
+          label="¿Aparece la PPU del bus en la señal buscada?"
+          value={ppuVisible}
+          positiveLabel="Sí, aparece"
+          negativeLabel="No aparece"
+          onChange={(value) => {
+            methods.setValue('wifi.ppuVisible', value, { shouldDirty: true })
+            if (value === false) {
+              // Resetear valores siguientes si no aparece PPU
+              methods.setValue('wifi.tieneInternet', null, { shouldDirty: true })
+            }
+          }}
+        />
+
+        {ppuVisible === false && (
+          <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              La PPU no aparece en la señal buscada
+            </p>
+            <BinaryQuestion
+              label="¿El bus está encendido?"
+              value={busEncendido}
+              positiveLabel="Sí, está encendido"
+              negativeLabel="No, está apagado"
+              onChange={(value) => {
+                methods.setValue('wifi.busEncendido', value, { shouldDirty: true })
+                if (value === false) {
+                  setIsWifiWaiting(false)
+                  setWifiWaitingTime(0)
+                }
+              }}
+            />
+
+            {busEncendido === true && (
+              <div className="space-y-3">
+                {!isWifiWaiting ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setIsWifiWaiting(true)
+                      setWifiWaitingTime(0)
+                    }}
+                  >
+                    Esperar 3 minutos y revisar nuevamente
+                  </Button>
+                ) : (
+                  <div className="rounded-lg border border-blue-300 bg-blue-50 p-4 dark:border-blue-900/50 dark:bg-blue-950/30">
+                    <p className="mb-2 text-sm font-semibold text-blue-900 dark:text-blue-100">
+                      Esperando... {formatTime(180 - wifiWaitingTime)}
+                    </p>
+                    <p className="text-xs text-blue-800 dark:text-blue-200">
+                      Por favor espera al menos 3 minutos antes de revisar nuevamente.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => {
+                        setIsWifiWaiting(false)
+                        setWifiWaitingTime(0)
+                        // Permitir revisar nuevamente
+                        methods.setValue('wifi.ppuVisible', null, { shouldDirty: true })
+                      }}
+                    >
+                      Revisar nuevamente
+                    </Button>
+                  </div>
+                )}
+                <div>
+                  <Label>Observación</Label>
+                  <Textarea
+                    className="mt-2"
+                    placeholder="Describe el motivo por el cual no aparece la PPU"
+                    value={wifiState.observacion ?? ''}
+                    onChange={(event) =>
+                      methods.setValue('wifi.observacion', event.target.value, { shouldDirty: true })
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
+            {busEncendido === false && (
+              <div className="space-y-3 rounded-lg border border-orange-300 bg-orange-50 p-4 dark:border-orange-900/50 dark:bg-orange-950/30">
+                <p className="text-sm font-semibold text-orange-900 dark:text-orange-100">
+                  El bus debe estar encendido para revisar la conexión WiFi
+                </p>
+                <p className="text-xs text-orange-800 dark:text-orange-200">
+                  Por favor enciende el bus y vuelve a revisar si aparece la PPU en la señal buscada.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    // Resetear para volver a revisar
+                    methods.setValue('wifi.ppuVisible', null, { shouldDirty: true })
+                    methods.setValue('wifi.busEncendido', null, { shouldDirty: true })
+                  }}
+                >
+                  Volver a revisar
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {ppuVisible === true && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+                ✓ La PPU aparece en la señal buscada
+              </p>
+            </div>
+            <BinaryQuestion
+              label="¿Tiene conexión a internet?"
+              value={tieneInternet}
+              positiveLabel="Sí, tiene internet"
+              negativeLabel="No tiene internet"
+              onChange={(value) => {
+                methods.setValue('wifi.tieneInternet', value, { shouldDirty: true })
+                if (value === true) {
+                  // Si tiene internet, la revisión está OK
+                  methods.setValue('wifi.observacion', '', { shouldDirty: true })
+                }
+              }}
+            />
+
+            {tieneInternet === false && (
+              <div>
+                <Label>Observación (obligatorio)</Label>
+                <Textarea
+                  className="mt-2"
+                  placeholder="Describe qué problema tiene la conexión a internet"
+                  value={wifiState.observacion ?? ''}
+                  onChange={(event) =>
+                    methods.setValue('wifi.observacion', event.target.value, { shouldDirty: true })
+                  }
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Es obligatorio agregar una observación cuando no hay conexión a internet
+                </p>
+              </div>
+            )}
+
+            {tieneInternet === true && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+                <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
+                  ✓ Revisión WiFi completada correctamente
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </SectionCard>
+    )
+  }
+
   const renderPublicidad = () => (
     <SectionCard title="Publicidad" description="Evalúa cada cara del bus">
       <div className="grid gap-6">
@@ -1438,6 +1668,8 @@ export const InspectionFormPage = () => {
         return renderMobileye()
       case 'odometro':
         return renderOdometro()
+      case 'wifi':
+        return renderWifi()
       case 'publicidad':
         return renderPublicidad()
       case 'cierre':
