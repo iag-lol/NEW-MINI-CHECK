@@ -497,6 +497,30 @@ export const InspectionFormPage = () => {
         busRecord.marca?.toLowerCase().includes('volvo') ?? false,
         { shouldDirty: true }
       )
+
+      // Buscar el último registro de TAG para este bus
+      const { data: lastTag, error: tagError } = await supabase
+        .from('tags')
+        .select('tiene, serie')
+        .eq('bus_ppu', busRecord.ppu)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (!tagError && lastTag) {
+        // Si el último registro tiene TAG instalado y tiene serie, auto-rellenar
+        if (lastTag.tiene === true && lastTag.serie) {
+          methods.setValue('tag.tiene', true, { shouldDirty: true })
+          methods.setValue('tag.serie', lastTag.serie, { shouldDirty: true })
+          methods.setValue('tag.observacion', '', { shouldDirty: true })
+        } else if (lastTag.tiene === false) {
+          // Si el último registro dice que NO tiene TAG, marcar como "No tiene"
+          methods.setValue('tag.tiene', false, { shouldDirty: true })
+          methods.setValue('tag.serie', '', { shouldDirty: true })
+          methods.setValue('tag.observacion', '', { shouldDirty: true })
+        }
+        // Si tiene === true pero no tiene serie, mantener el valor por defecto (instalado)
+      }
     } catch (err) {
       console.error('Error in searchBus:', err)
       setBus(null)
