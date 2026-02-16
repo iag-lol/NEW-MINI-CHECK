@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge'
 import { ModuleLayout } from '@/components/layout/module-layout'
 import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
-import { Wifi, CheckCircle2, XCircle, AlertCircle, WifiOff } from 'lucide-react'
+import { Wifi, CheckCircle2, WifiOff } from 'lucide-react'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 type WifiRow = Database['public']['Tables']['wifi']['Row']
@@ -18,7 +18,6 @@ export const WifiModulePage = () => {
       getStats={(data: WifiRow[]) => {
         const total = data.length
         const ppuVisible = data.filter(r => r.ppu_visible === true).length
-        const ppuNoVisible = data.filter(r => r.ppu_visible === false).length
         const tieneInternet = data.filter(r => r.tiene_internet === true).length
         const sinInternet = data.filter(r => r.tiene_internet === false).length
         const tasaConectividad = total > 0 ? Math.round((tieneInternet / total) * 100) : 0
