@@ -184,6 +184,42 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
     headerRow.height = 30
   }
 
+  const booleanToLabel = (value: boolean | null | undefined) => {
+    if (value === null || value === undefined) return '-'
+    return value ? 'SI' : 'NO'
+  }
+
+  const monitorStatusToLabel = (value: CamarasRow['monitor_estado'] | null | undefined) => {
+    switch (value) {
+      case 'FUNCIONA':
+        return 'FUNCIONA'
+      case 'APAGADO':
+        return 'APAGADO / SIN ENERGIA'
+      case 'CON_DAÑO':
+        return 'CON DANO FISICO'
+      case 'SIN_SENAL':
+        return 'SIN SENAL'
+      default:
+        return '-'
+    }
+  }
+
+  const getCameraDetailField = (detalle: CamarasRow['detalle'], keys: string[]) => {
+    if (!detalle || typeof detalle !== 'object') return null
+    const detailRecord = detalle as Record<string, unknown>
+    for (const key of keys) {
+      if (key in detailRecord) {
+        return detailRecord[key]
+      }
+    }
+    return null
+  }
+
+  const getCameraDetailBoolean = (detalle: CamarasRow['detalle'], keys: string[]) => {
+    const value = getCameraDetailField(detalle, keys)
+    return typeof value === 'boolean' ? booleanToLabel(value) : '-'
+  }
+
   // ==========================================
   // HOJA 1: RESUMEN GENERAL
   // ==========================================
@@ -298,8 +334,16 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
     { header: 'PPU', key: 'ppu', width: 12 },
     { header: 'Nº INTERNO', key: 'interno', width: 12 },
     { header: 'TERMINAL', key: 'terminal', width: 20 },
-    { header: 'ESTADO MONITOR', key: 'estado', width: 20 },
-    { header: 'DETALLE CÁMARAS', key: 'detalle', width: 50 },
+    { header: 'ESTADO MONITOR', key: 'estado', width: 24 },
+    { header: 'DETALLE MONITOR', key: 'monitor_detalle', width: 40 },
+    { header: 'CAM DELANTERA', key: 'cam_delantera', width: 14 },
+    { header: 'CAM CABINA', key: 'cam_cabina', width: 12 },
+    { header: 'CAM INTERIORES', key: 'cam_interiores', width: 14 },
+    { header: 'CAM TRASERA', key: 'cam_trasera', width: 12 },
+    { header: 'VISIBLE EN MONITOR', key: 'visibles_monitor', width: 18 },
+    { header: 'ACTIVA REVERSA', key: 'activa_reversa', width: 14 },
+    { header: 'ACTIVA PUERTAS', key: 'activa_puertas', width: 14 },
+    { header: 'VISIBLE PUERTAS CERRADAS', key: 'visibles_puertas_cerradas', width: 24 },
     { header: 'OBSERVACIONES', key: 'observacion', width: 30 },
     { header: 'FECHA REV.', key: 'fecha', width: 15 },
   ]
@@ -308,13 +352,28 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   flota.forEach((bus) => {
     const { rev, isHistorical } = getRevisionData(bus.ppu)
     const cam = rev ? camaras.find(c => c.revision_id === rev.id) : null
+    const detalle = cam?.detalle ?? null
+    const monitorDetalle = getCameraDetailField(detalle, ['monitorDetalle', 'monitor_detalle'])
 
     const row = sheetCamaras.addRow({
       ppu: bus.ppu,
       interno: bus.numero_interno,
       terminal: bus.terminal,
-      estado: cam ? cam.monitor_estado : '-',
-      detalle: cam && cam.detalle ? JSON.stringify(cam.detalle) : '-',
+      estado: monitorStatusToLabel(cam?.monitor_estado),
+      monitor_detalle: typeof monitorDetalle === 'string' && monitorDetalle.trim()
+        ? monitorDetalle
+        : '-',
+      cam_delantera: getCameraDetailBoolean(detalle, ['camDelantera', 'cam_delantera']),
+      cam_cabina: getCameraDetailBoolean(detalle, ['camCabina', 'cam_cabina']),
+      cam_interiores: getCameraDetailBoolean(detalle, ['camInteriores', 'cam_interiores']),
+      cam_trasera: getCameraDetailBoolean(detalle, ['camTrasera', 'cam_trasera']),
+      visibles_monitor: getCameraDetailBoolean(detalle, ['visiblesMonitor', 'visibles_monitor']),
+      activa_reversa: getCameraDetailBoolean(detalle, ['activaReversa', 'activa_reversa']),
+      activa_puertas: getCameraDetailBoolean(detalle, ['activaPuertas', 'activa_puertas']),
+      visibles_puertas_cerradas: getCameraDetailBoolean(detalle, [
+        'visiblesPuertasCerradas',
+        'visibles_puertas_cerradas',
+      ]),
       observacion: cam ? cam.observacion : '-',
       fecha: rev ? dayjs(rev.created_at).format('DD/MM/YYYY') : '-',
     })
@@ -368,11 +427,6 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
     { header: 'FECHA REV.', key: 'fecha', width: 15 },
   ]
   setupHeader(sheetWifi)
-
-  const booleanToLabel = (value: boolean | null | undefined) => {
-    if (value === null || value === undefined) return '-'
-    return value ? 'SI' : 'NO'
-  }
 
   flota.forEach((bus) => {
     const { rev, isHistorical } = getRevisionData(bus.ppu)
