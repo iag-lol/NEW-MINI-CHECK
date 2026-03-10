@@ -10,9 +10,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
+// Prevent hard crash in development when env vars are missing.
+// The app can still render and show a warning instead of a blank page.
+const resolvedSupabaseUrl = supabaseUrl || 'https://example.supabase.co'
+const resolvedSupabaseAnonKey = supabaseAnonKey || 'public-anon-key-not-configured'
+
 export const supabase = createClient<Database>(
-  supabaseUrl ?? '',
-  supabaseAnonKey ?? '',
+  resolvedSupabaseUrl,
+  resolvedSupabaseAnonKey,
   {
     auth: {
       autoRefreshToken: true,

@@ -11,6 +11,7 @@ type CamarasRow = Tables<'camaras'>
 type ExtintoresRow = Tables<'extintores'>
 type OdometroRow = Tables<'odometro'>
 type PublicidadRow = Tables<'publicidad'>
+type WifiRow = Tables<'wifi'>
 type TicketRow = Tables<'tickets'>
 
 // ============================================
@@ -67,6 +68,7 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
       .from('revisiones')
       .select('*')
       .in('bus_ppu', ppusSinRevision)
+      .lte('created_at', end)
       .order('created_at', { ascending: false })
       .limit(10000)
 
@@ -99,6 +101,7 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   let extintores: ExtintoresRow[] = []
   let odometros: OdometroRow[] = []
   let publicidades: PublicidadRow[] = []
+  let wifis: WifiRow[] = []
 
   // Helper para batch fetching
   const fetchInBatches = async (table: string, ids: string[], batchSize = 200) => {
@@ -113,12 +116,13 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
 
   if (revisionIds.length > 0) {
     // Usar batching para evitar errores por URL muy larga o timeouts
-    const [resTags, resCamaras, resExtintores, resOdometros, resPublicidades] = await Promise.all([
+    const [resTags, resCamaras, resExtintores, resOdometros, resPublicidades, resWifi] = await Promise.all([
       fetchInBatches('tags', revisionIds),
       fetchInBatches('camaras', revisionIds),
       fetchInBatches('extintores', revisionIds),
       fetchInBatches('odometro', revisionIds),
       fetchInBatches('publicidad', revisionIds),
+      fetchInBatches('wifi', revisionIds),
     ])
 
     tags = (resTags as TagRow[]) || []
@@ -126,6 +130,7 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
     extintores = (resExtintores as ExtintoresRow[]) || []
     odometros = (resOdometros as OdometroRow[]) || []
     publicidades = (resPublicidades as PublicidadRow[]) || []
+    wifis = (resWifi as WifiRow[]) || []
   }
 
   // Helper para buscar datos de una revisión
@@ -349,7 +354,45 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   })
 
   // ==========================================
-  // HOJA 6: PUBLICIDAD
+  // HOJA 6: WIFI
+  // ==========================================
+  const sheetWifi = workbook.addWorksheet('WIFI')
+  sheetWifi.columns = [
+    { header: 'PPU', key: 'ppu', width: 12 },
+    { header: 'Nº INTERNO', key: 'interno', width: 12 },
+    { header: 'TERMINAL', key: 'terminal', width: 20 },
+    { header: 'PPU VISIBLE', key: 'ppu_visible', width: 15 },
+    { header: 'BUS ENCENDIDO', key: 'bus_encendido', width: 16 },
+    { header: 'CON INTERNET', key: 'tiene_internet', width: 15 },
+    { header: 'OBSERVACIONES', key: 'observacion', width: 30 },
+    { header: 'FECHA REV.', key: 'fecha', width: 15 },
+  ]
+  setupHeader(sheetWifi)
+
+  const booleanToLabel = (value: boolean | null | undefined) => {
+    if (value === null || value === undefined) return '-'
+    return value ? 'SI' : 'NO'
+  }
+
+  flota.forEach((bus) => {
+    const { rev, isHistorical } = getRevisionData(bus.ppu)
+    const wifi = rev ? wifis.find(w => w.revision_id === rev.id) : null
+
+    const row = sheetWifi.addRow({
+      ppu: bus.ppu,
+      interno: bus.numero_interno,
+      terminal: bus.terminal,
+      ppu_visible: booleanToLabel(wifi?.ppu_visible),
+      bus_encendido: booleanToLabel(wifi?.bus_encendido),
+      tiene_internet: booleanToLabel(wifi?.tiene_internet),
+      observacion: wifi?.observacion || '-',
+      fecha: rev ? dayjs(rev.created_at).format('DD/MM/YYYY') : '-',
+    })
+    applyCommonRowStyles(row, rev, isHistorical)
+  })
+
+  // ==========================================
+  // HOJA 7: PUBLICIDAD
   // ==========================================
   const sheetPublicidad = workbook.addWorksheet('PUBLICIDAD')
   sheetPublicidad.columns = [
