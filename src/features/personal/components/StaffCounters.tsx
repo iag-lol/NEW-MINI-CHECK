@@ -67,8 +67,7 @@ export const StaffCounters = ({ terminalContext }: Props) => {
 
     const showErLr =
         terminalContext.mode === 'ALL' ||
-        (terminalContext.mode === 'TERMINAL' &&
-            (terminalContext.value === 'EL_ROBLE' || terminalContext.value === 'LA_REINA'));
+        terminalContext.mode === 'GROUP';
 
     return (
         <div className="w-full min-w-0 space-y-5 mb-6">

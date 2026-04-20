@@ -36,12 +36,7 @@ export const resolveTerminalsForContext = (context: TerminalContext): TerminalCo
   }
 
   if (context.mode === 'TERMINAL') {
-    const selected = context.value as TerminalCode;
-    // Special case: El Roble sub-terminals always show the whole group
-    if (EL_ROBLE_SUBTERMINALS.includes(selected)) {
-      return EL_ROBLE_SUBTERMINALS;
-    }
-    return [selected];
+    return [context.value as TerminalCode];
   }
 
   const group = TERMINAL_GROUPS.find((g) => g.code === context.value);
