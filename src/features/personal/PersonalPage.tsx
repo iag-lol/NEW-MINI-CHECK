@@ -180,13 +180,13 @@ export const PersonalPage = () => {
         title="Personal"
         description="Gestión del equipo operativo por terminal."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               className="btn btn-primary"
               onClick={() => setModalState({ type: 'create' })}
             >
-              <Icon name="users" size={18} />
-              Nuevo Trabajador
+              <Icon name="users" size={16} />
+              <span>Nuevo Trabajador</span>
             </button>
             <ExportMenu onExportView={handleExportView} onExportAll={handleExportAll} />
           </div>

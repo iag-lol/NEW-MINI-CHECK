@@ -120,12 +120,14 @@ export const VacacionesPage = () => {
                 title="Vacaciones"
                 description="Gestión inteligente de vacaciones con detección de conflictos"
                 actions={
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <button className="btn btn-secondary" onClick={() => setShowCalendar(true)}>
-                            <Icon name="calendar" size={18} /> Calendario
+                            <Icon name="calendar" size={16} />
+                            <span>Calendario</span>
                         </button>
                         <button className="btn btn-primary" onClick={() => setModal({ type: 'create' })}>
-                            <Icon name="plus" size={18} /> Nueva Solicitud
+                            <Icon name="plus" size={16} />
+                            <span>Nueva Solicitud</span>
                         </button>
                         <ExportMenu
                             onExportView={() => exportToXlsx({ filename: 'vacaciones', sheetName: 'Datos', rows: query.data || [], columns: exportColumns })}
