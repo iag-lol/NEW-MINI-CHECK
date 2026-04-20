@@ -29,7 +29,7 @@ export const StaffCounters = ({ terminalContext }: Props) => {
     if (isLoading) {
         return (
             <div className="space-y-4 mb-6">
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
                     {[...Array(5)].map((_, i) => (
                         <div key={i} className="card p-4 animate-pulse">
                             <div className="flex items-center gap-2 mb-3">
@@ -46,7 +46,7 @@ export const StaffCounters = ({ terminalContext }: Props) => {
                         </div>
                     ))}
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
                     {[...Array(4)].map((_, i) => (
                         <div key={i} className="card px-4 py-3 animate-pulse">
                             <div className="flex items-center gap-3">
@@ -71,13 +71,13 @@ export const StaffCounters = ({ terminalContext }: Props) => {
             (terminalContext.value === 'EL_ROBLE' || terminalContext.value === 'LA_REINA'));
 
     return (
-        <div className="space-y-5 mb-6">
+        <div className="w-full min-w-0 space-y-5 mb-6">
             {/* Counters by Cargo */}
             <div>
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">
                     Personal por Cargo{showErLr ? ' · ER-LR' : ''}
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
                     {counts.byCargo.map((item) => {
                         const effective = item.effective_count;
                         const hasQuota = !!item.max_q;
@@ -173,7 +173,7 @@ export const StaffCounters = ({ terminalContext }: Props) => {
                 <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">
                     Personal por Terminal
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
                     {counts.byTerminal.map((item) => (
                         <div key={item.terminal_code} className="card px-4 py-3 flex items-center gap-3">
                             <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100">

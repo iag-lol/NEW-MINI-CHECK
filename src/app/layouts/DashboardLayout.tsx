@@ -33,7 +33,7 @@ export const DashboardLayout = () => {
         />
 
         {/* Main Content */}
-        <div className={`flex min-h-screen flex-1 flex-col transition-all duration-300 ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-72'}`}>
+        <div className={`flex min-h-screen min-w-0 flex-1 flex-col overflow-x-hidden transition-all duration-300 ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-72'}`}>
           {/* Header */}
           <AppHeader onMenuToggle={() => setSidebarOpen((prev) => !prev)} />
 
