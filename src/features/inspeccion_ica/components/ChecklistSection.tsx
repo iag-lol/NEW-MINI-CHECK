@@ -1,116 +1,131 @@
-import React, { useState } from 'react';
-import { Check, X, ChevronDown, ChevronUp, AlertCircle, MessageSquare } from 'lucide-react';
-import { GlassCard } from './ui/GlassCard';
-import { ICA_CHECKPOINTS, Checkpoint } from '../types';
+import { Icon } from '../../../shared/components/common/Icon';
+import { A18_CONDICIONES, CondicionesMap, CondicionId, DetalleCondicion } from '../types';
 
-interface ChecklistSectionProps {
-    detalles: any;
-    onChange: (id: number, cumple: boolean, obs?: string) => void;
+interface Props {
+    condiciones: CondicionesMap;
+    onChange: (id: CondicionId, cumple: boolean, obs: string) => void;
 }
 
-export const ChecklistSection: React.FC<ChecklistSectionProps> = ({ detalles, onChange }) => {
+export const ChecklistSection = ({ condiciones, onChange }: Props) => {
+    const evaluated = A18_CONDICIONES.filter((c) => condiciones[c.id]?.cumple !== null).length;
+
     return (
-        <div className="space-y-4">
-            <h2 className="text-xl font-bold text-slate-800 dark:text-white px-2">
-                Puntos de Control (Norma A18)
-            </h2>
-            <div className="grid grid-cols-1 gap-4">
-                {ICA_CHECKPOINTS.map((point) => (
-                    <CheckPointItem
-                        key={point.id}
-                        point={point}
-                        value={detalles[point.id]}
-                        onChange={onChange}
-                    />
-                ))}
+        <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+                <h3 className="text-base font-semibold text-slate-800">
+                    Puntos de Control — Norma A18
+                </h3>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700">
+                    {evaluated}/{A18_CONDICIONES.length} evaluadas
+                </span>
             </div>
+
+            {A18_CONDICIONES.map((condicion, idx) => (
+                <CondicionCard
+                    key={condicion.id}
+                    index={idx + 1}
+                    label={condicion.label}
+                    descripcion={condicion.descripcion}
+                    detalle={condiciones[condicion.id]}
+                    onChange={(cumple, obs) => onChange(condicion.id, cumple, obs)}
+                />
+            ))}
         </div>
     );
 };
 
-const CheckPointItem: React.FC<{
-    point: Checkpoint;
-    value: { cumple: boolean | null; observacion?: string };
-    onChange: (id: number, cumple: boolean, obs?: string) => void;
-}> = ({ point, value, onChange }) => {
-    const [showObs, setShowObs] = useState(false);
-    const isCumple = value?.cumple === true;
-    const isNoCumple = value?.cumple === false;
+interface CondicionCardProps {
+    index: number;
+    label: string;
+    descripcion: string;
+    detalle: DetalleCondicion;
+    onChange: (cumple: boolean, obs: string) => void;
+}
 
-    const handleSelection = (cumple: boolean) => {
-        onChange(point.id, cumple, value?.observacion);
-        if (!cumple) {
-            setShowObs(true);
-        }
-    };
+const CondicionCard = ({ index, label, descripcion, detalle, onChange }: CondicionCardProps) => {
+    const isCumple = detalle?.cumple === true;
+    const isNoCumple = detalle?.cumple === false;
+
+    const borderColor = isCumple
+        ? 'border-l-emerald-500'
+        : isNoCumple
+            ? 'border-l-red-500'
+            : 'border-l-slate-200';
+
+    const bgColor = isCumple
+        ? 'bg-emerald-50/40'
+        : isNoCumple
+            ? 'bg-red-50/40'
+            : 'bg-white';
 
     return (
-        <GlassCard className="!p-0 overflow-visible">
-            <div className={`
-        relative p-4 md:p-6 transition-all duration-300
-        ${isCumple ? 'bg-green-50/50' : ''}
-        ${isNoCumple ? 'bg-red-50/50' : ''}
-      `}>
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-
-                    {/* Label Section */}
-                    <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                            <span className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-600 font-bold text-sm">
-                                {point.id}
-                            </span>
-                            <h4 className="text-lg font-medium text-slate-800 dark:text-slate-100">
-                                {point.label}
-                            </h4>
+        <div
+            className={`rounded-2xl border border-slate-200 border-l-4 ${borderColor} ${bgColor} shadow-sm transition-all duration-300`}
+        >
+            <div className="p-4 sm:p-5">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                    {/* Number + Label */}
+                    <div className="flex-1 flex items-start gap-3">
+                        <span
+                            className={`flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-xs font-bold ${isCumple
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : isNoCumple
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-slate-100 text-slate-600'
+                                }`}
+                        >
+                            {index}
+                        </span>
+                        <div>
+                            <p className="text-sm font-semibold text-slate-800 leading-snug">{label}</p>
+                            {descripcion && (
+                                <p className="text-xs text-slate-500 mt-0.5">{descripcion}</p>
+                            )}
                         </div>
                     </div>
 
-                    {/* Actions Section */}
-                    <div className="flex gap-2 w-full md:w-auto">
+                    {/* Buttons */}
+                    <div className="flex gap-2 flex-shrink-0">
                         <button
-                            onClick={() => handleSelection(true)}
-                            className={`
-                flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium transition-all
-                ${isCumple
-                                    ? 'bg-green-500 text-white shadow-lg shadow-green-200 scale-105'
-                                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                                }
-              `}
+                            onClick={() => onChange(true, '')}
+                            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${isCumple
+                                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200 scale-105'
+                                : 'bg-white border border-slate-200 text-slate-600 hover:border-emerald-300 hover:text-emerald-700 hover:bg-emerald-50'
+                                }`}
                         >
-                            <Check className="w-5 h-5" />
-                            <span className="hidden md:inline">Cumple</span>
+                            <Icon name="check" size={14} />
+                            CUMPLE
                         </button>
                         <button
-                            onClick={() => handleSelection(false)}
-                            className={`
-                flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-medium transition-all
-                ${isNoCumple
-                                    ? 'bg-red-500 text-white shadow-lg shadow-red-200 scale-105'
-                                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                                }
-              `}
+                            onClick={() => onChange(false, detalle?.observacion ?? '')}
+                            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${isNoCumple
+                                ? 'bg-red-500 text-white shadow-md shadow-red-200 scale-105'
+                                : 'bg-white border border-slate-200 text-slate-600 hover:border-red-300 hover:text-red-700 hover:bg-red-50'
+                                }`}
                         >
-                            <X className="w-5 h-5" />
-                            <span className="hidden md:inline">No Cumple</span>
+                            <Icon name="x-circle" size={14} />
+                            NO CUMPLE
                         </button>
                     </div>
                 </div>
 
-                {/* Observation Section - Expands if No Cumple */}
-                {(isNoCumple || showObs) && (
-                    <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <div className="flex items-start gap-2">
-                            <MessageSquare className="w-4 h-4 text-slate-400 mt-2" />
-                            <textarea
-                                value={value?.observacion || ''}
-                                onChange={(e) => onChange(point.id, false, e.target.value)}
-                                placeholder="Detalle la observación aquí..."
-                                className="w-full min-h-[80px] p-3 rounded-xl border border-red-200 bg-white focus:ring-2 focus:ring-red-100 outline-none text-slate-700 placeholder:text-slate-400"
-                            />
-                        </div>
+                {/* Observation textarea */}
+                {isNoCumple && (
+                    <div className="mt-4 pt-4 border-t border-red-100">
+                        <label className="flex items-center gap-1.5 text-xs font-semibold text-red-700 mb-1.5">
+                            <Icon name="alert-circle" size={12} />
+                            Observación (requerida)
+                        </label>
+                        <textarea
+                            value={detalle?.observacion ?? ''}
+                            onChange={(e) => onChange(false, e.target.value)}
+                            placeholder="Describa el incumplimiento detectado..."
+                            rows={2}
+                            className="w-full px-3 py-2 text-sm rounded-xl border border-red-200 bg-white focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-400 placeholder:text-slate-400 text-slate-700 resize-none"
+                        />
                     </div>
                 )}
             </div>
-        </GlassCard>
+        </div>
     );
 };

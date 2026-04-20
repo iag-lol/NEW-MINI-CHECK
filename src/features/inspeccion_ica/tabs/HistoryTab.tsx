@@ -1,96 +1,173 @@
-import React, { useState } from 'react';
-import { Search, Filter, Eye, AlertCircle, CheckCircle } from 'lucide-react';
-import { GlassCard } from '../components/ui/GlassCard';
+import { useState } from 'react';
+import { Icon } from '../../../shared/components/common/Icon';
+import { TERMINALS } from '../../../shared/utils/terminal';
+import { TerminalCode } from '../../../shared/types/terminal';
+import { useInspecciones } from '../hooks';
 
-// Mock Data
-const MOCK_HISTORY = [
-    { id: '1', fecha: '2024-01-08 14:30', ppu: 'ABCD-12', fiscalizador: 'Juan Pérez', score: 10, status: 'APROBADO' },
-    { id: '2', fecha: '2024-01-08 11:15', ppu: 'WX-4567', fiscalizador: 'Maria Diaz', score: 7, status: 'RECHAZADO' },
-    { id: '3', fecha: '2024-01-07 09:00', ppu: 'ZZ-9988', fiscalizador: 'Juan Pérez', score: 9, status: 'APROBADO' },
-    { id: '4', fecha: '2024-01-07 08:30', ppu: 'TR-1122', fiscalizador: 'Pedro Soto', score: 6, status: 'RECHAZADO' },
-];
+export const HistoryTab = () => {
+    const [search, setSearch] = useState('');
+    const [terminalFilter, setTerminalFilter] = useState('');
 
-export const HistoryTab: React.FC = () => {
-    const [searchTerm, setSearchTerm] = useState('');
-
-    const filteredData = MOCK_HISTORY.filter(
-        item => item.ppu.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.fiscalizador.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const { data = [], isLoading, error } = useInspecciones({
+        ppu: search || undefined,
+        terminal_code: terminalFilter || undefined,
+    });
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
-
-            {/* Actions Bar */}
-            <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-                <div className="relative w-full md:w-96">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+        <div className="space-y-4">
+            {/* Filters */}
+            <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                    <Icon
+                        name="search"
+                        size={16}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
                     <input
                         type="text"
-                        placeholder="Buscar por Patente o Fiscalizador..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        placeholder="Buscar por PPU..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value.toUpperCase())}
+                        className="input pl-9 font-mono uppercase"
                     />
                 </div>
-                <button className="flex items-center gap-2 px-4 py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                    <Filter className="w-4 h-4" />
-                    <span>Filtros</span>
-                </button>
+                <select
+                    value={terminalFilter}
+                    onChange={(e) => setTerminalFilter(e.target.value)}
+                    className="input sm:w-56"
+                >
+                    <option value="">Todos los terminales</option>
+                    {Object.entries(TERMINALS).map(([code, name]) => (
+                        <option key={code} value={code}>
+                            {name}
+                        </option>
+                    ))}
+                </select>
             </div>
 
-            {/* Table */}
-            <GlassCard className="!p-0 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-                                <th className="p-4 text-xs font-semibold uppercase text-slate-500 tracking-wider">Fecha</th>
-                                <th className="p-4 text-xs font-semibold uppercase text-slate-500 tracking-wider">PPU</th>
-                                <th className="p-4 text-xs font-semibold uppercase text-slate-500 tracking-wider">Fiscalizador</th>
-                                <th className="p-4 text-xs font-semibold uppercase text-slate-500 tracking-wider text-center">Score</th>
-                                <th className="p-4 text-xs font-semibold uppercase text-slate-500 tracking-wider">Estado</th>
-                                <th className="p-4 text-xs font-semibold uppercase text-slate-500 tracking-wider text-right">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                            {filteredData.map((item) => (
-                                <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                                    <td className="p-4 text-sm text-slate-600 dark:text-slate-300">{item.fecha}</td>
-                                    <td className="p-4 text-sm font-bold text-slate-800 dark:text-white font-mono">{item.ppu}</td>
-                                    <td className="p-4 text-sm text-slate-600 dark:text-slate-300">{item.fiscalizador}</td>
-                                    <td className="p-4 text-center">
-                                        <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm ${item.score >= 8 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                                                'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                                            }`}>
-                                            {item.score}
-                                        </span>
-                                    </td>
-                                    <td className="p-4">
-                                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${item.status === 'APROBADO'
-                                                ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 border border-green-200 dark:border-green-800'
-                                                : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400 border border-red-200 dark:border-red-800'
-                                            }`}>
-                                            {item.status === 'APROBADO' ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-                                            {item.status}
-                                        </span>
-                                    </td>
-                                    <td className="p-4 text-right">
-                                        <button className="p-2 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all">
-                                            <Eye className="w-4 h-4" />
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-                {filteredData.length === 0 && (
-                    <div className="p-12 text-center text-slate-400">
-                        No se encontraron registros para tu búsqueda.
+            {/* Content */}
+            <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                {isLoading ? (
+                    <div className="flex flex-col items-center justify-center py-16 gap-3">
+                        <Icon name="loader" size={24} className="animate-spin text-blue-600" />
+                        <p className="text-sm text-slate-500">Cargando historial...</p>
                     </div>
+                ) : error ? (
+                    <div className="flex flex-col items-center justify-center py-16 gap-3">
+                        <Icon name="alert-circle" size={28} className="text-red-400" />
+                        <p className="text-sm text-red-600">Error al cargar el historial.</p>
+                    </div>
+                ) : data.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 gap-3">
+                        <Icon name="clipboard" size={36} className="text-slate-300" />
+                        <p className="text-sm text-slate-500">No hay registros para esta búsqueda.</p>
+                    </div>
+                ) : (
+                    <>
+                        {/* Desktop table */}
+                        <div className="hidden sm:block overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="bg-slate-50 border-b border-slate-200">
+                                        {['Fecha', 'PPU', 'Terminal', 'Fiscalizador', 'Score', 'Resultado'].map(
+                                            (h) => (
+                                                <th
+                                                    key={h}
+                                                    className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wide"
+                                                >
+                                                    {h}
+                                                </th>
+                                            )
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {data.map((row) => (
+                                        <tr
+                                            key={row.id}
+                                            className="hover:bg-slate-50 transition-colors"
+                                        >
+                                            <td className="px-5 py-3.5 text-sm text-slate-600">
+                                                {row.fecha}
+                                            </td>
+                                            <td className="px-5 py-3.5 text-sm font-bold font-mono text-slate-900">
+                                                {row.ppu}
+                                            </td>
+                                            <td className="px-5 py-3.5 text-sm text-slate-600">
+                                                {TERMINALS[row.terminal_code as TerminalCode] ??
+                                                    row.terminal_code}
+                                            </td>
+                                            <td className="px-5 py-3.5 text-sm text-slate-600">
+                                                {row.fiscalizador}
+                                            </td>
+                                            <td className="px-5 py-3.5">
+                                                <span
+                                                    className={`inline-flex items-center justify-center w-10 h-8 rounded-lg text-xs font-bold ${row.score === row.total
+                                                        ? 'bg-emerald-100 text-emerald-700'
+                                                        : 'bg-red-100 text-red-700'
+                                                        }`}
+                                                >
+                                                    {row.score}/{row.total}
+                                                </span>
+                                            </td>
+                                            <td className="px-5 py-3.5">
+                                                <ResultadoBadge resultado={row.resultado} />
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Mobile cards */}
+                        <div className="sm:hidden divide-y divide-slate-100">
+                            {data.map((row) => (
+                                <div key={row.id} className="p-4">
+                                    <div className="flex justify-between items-start mb-1.5">
+                                        <span className="font-mono font-bold text-slate-900 text-base">
+                                            {row.ppu}
+                                        </span>
+                                        <ResultadoBadge resultado={row.resultado} />
+                                    </div>
+                                    <div className="text-xs text-slate-500 space-y-0.5">
+                                        <div>
+                                            {row.fecha} ·{' '}
+                                            {TERMINALS[row.terminal_code as TerminalCode] ??
+                                                row.terminal_code}
+                                        </div>
+                                        <div>
+                                            {row.fiscalizador} · Score: {row.score}/{row.total}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </>
                 )}
-            </GlassCard>
+            </div>
+
+            {/* Record count */}
+            {!isLoading && !error && data.length > 0 && (
+                <p className="text-xs text-slate-400 text-right">
+                    {data.length} registro{data.length !== 1 ? 's' : ''}
+                </p>
+            )}
         </div>
     );
 };
+
+const ResultadoBadge = ({ resultado }: { resultado: 'CUMPLE' | 'NO_CUMPLE' }) => (
+    <span
+        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${resultado === 'CUMPLE'
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            : 'bg-red-50 text-red-700 border-red-200'
+            }`}
+    >
+        {resultado === 'CUMPLE' ? (
+            <Icon name="check-circle" size={11} />
+        ) : (
+            <Icon name="x-circle" size={11} />
+        )}
+        {resultado === 'CUMPLE' ? 'CUMPLE' : 'NO CUMPLE'}
+    </span>
+);
