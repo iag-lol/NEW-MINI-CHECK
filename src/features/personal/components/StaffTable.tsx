@@ -16,6 +16,21 @@ const getCargoLabel = (cargo: string): string => {
     return STAFF_CARGOS.find((c) => c.value === cargo)?.label || cargo;
 };
 
+const StatusBadge = ({ isOffboarded, isSuspended }: { isOffboarded: boolean; isSuspended: boolean }) => (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+        isOffboarded
+            ? 'bg-red-100 text-red-700'
+            : isSuspended
+            ? 'bg-amber-100 text-amber-700'
+            : 'bg-green-100 text-green-700'
+    }`}>
+        <span className={`h-1.5 w-1.5 rounded-full ${
+            isOffboarded ? 'bg-red-500' : isSuspended ? 'bg-amber-500' : 'bg-green-500'
+        }`} />
+        {isOffboarded ? 'Desvinculado' : isSuspended ? 'Suspendido' : 'Activo'}
+    </span>
+);
+
 export const StaffTable = ({ staff, onEdit, onOffboard, onAdmonish, onSuspend, onUnsuspend }: Props) => {
     if (!staff.length) {
         return (
@@ -33,113 +48,122 @@ export const StaffTable = ({ staff, onEdit, onOffboard, onAdmonish, onSuspend, o
 
     return (
         <>
-            {/* Mobile View - Cards */}
-            <div className="md:hidden space-y-4">
+            {/* ── MOBILE / TABLET — Cards (< 1024px) ─────────────────── */}
+            <div className="lg:hidden space-y-3">
                 {staff.map((row) => {
                     const isOffboarded = row.status === 'DESVINCULADO';
                     const isSuspended = row.suspended;
 
                     return (
-                        <div key={row.id} className={`card p-5 border-l-4 ${isOffboarded ? 'border-l-danger-500' : isSuspended ? 'border-l-warning-500' : 'border-l-success-500'}`}>
-                            {/* Header: Name & Status */}
-                            <div className="flex justify-between items-start gap-3 mb-4">
-                                <div>
-                                    <h3 className={`font-bold text-lg leading-tight ${isSuspended ? 'line-through decoration-slate-400 text-slate-500' : 'text-slate-900'}`}>
-                                        {row.nombre}
-                                    </h3>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        <span className="font-mono text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-                                            {formatRut(row.rut)}
-                                        </span>
-                                        {row.admonition_count > 0 && (
-                                            <span className="badge badge-warning text-[10px] px-1.5 py-0.5" title="Amonestaciones">
-                                                ⚠️ {row.admonition_count}
+                        <div
+                            key={row.id}
+                            className={`card overflow-hidden ${
+                                isOffboarded
+                                    ? 'border-red-200'
+                                    : isSuspended
+                                    ? 'border-amber-200'
+                                    : 'border-slate-200'
+                            }`}
+                        >
+                            {/* Coloured top bar */}
+                            <div className={`h-1 w-full ${
+                                isOffboarded ? 'bg-red-400' : isSuspended ? 'bg-amber-400' : 'bg-green-400'
+                            }`} />
+
+                            <div className="p-4">
+                                {/* Row 1: Name + Badge */}
+                                <div className="flex items-start justify-between gap-3 mb-3">
+                                    <div className="min-w-0">
+                                        <p className={`font-bold text-base leading-snug truncate ${
+                                            isSuspended ? 'line-through text-slate-400' : 'text-slate-900'
+                                        }`}>
+                                            {row.nombre}
+                                        </p>
+                                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                            <span className="font-mono text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                                                {formatRut(row.rut)}
                                             </span>
-                                        )}
+                                            {row.admonition_count > 0 && (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                                                    ⚠ {row.admonition_count} amones.
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
+                                    <StatusBadge isOffboarded={isOffboarded} isSuspended={isSuspended} />
                                 </div>
-                                <span className={`badge ${isOffboarded ? 'badge-danger' : isSuspended ? 'badge-warning' : 'badge-success'} shrink-0`}>
-                                    {isOffboarded ? 'DESVINCULADO' : isSuspended ? 'SUSPENDIDO' : 'ACTIVO'}
-                                </span>
-                            </div>
 
-                            {/* Info Grid */}
-                            <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-sm text-slate-600 mb-4">
-                                <div className="flex items-center gap-2">
-                                    <Icon name="briefcase" size={16} className="text-slate-400 shrink-0" />
-                                    <span className="font-medium">{getCargoLabel(row.cargo)}</span>
+                                {/* Row 2: Info fields */}
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-2 mb-3">
+                                    <InfoRow icon="briefcase" label="Cargo" value={getCargoLabel(row.cargo)} />
+                                    <InfoRow icon="building" label="Terminal" value={displayTerminal(row.terminal_code)} />
+                                    <InfoRow icon="clock" label="Horario" value={`${row.horario} · ${row.turno}`} />
+                                    <InfoRow
+                                        icon="phone"
+                                        label="Contacto"
+                                        value={
+                                            <a href={`tel:${row.contacto}`} className="hover:text-brand-600 hover:underline">
+                                                {row.contacto}
+                                            </a>
+                                        }
+                                    />
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <Icon name="building" size={16} className="text-slate-400 shrink-0" />
-                                    <span>{displayTerminal(row.terminal_code)}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Icon name="clock" size={16} className="text-slate-400 shrink-0" />
-                                    <span>{row.horario} ({row.turno})</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Icon name="phone" size={16} className="text-slate-400 shrink-0" />
-                                    <a href={`tel:${row.contacto}`} className="hover:text-brand-600 hover:underline">{row.contacto}</a>
-                                </div>
-                            </div>
 
-                            {/* Actions Grid */}
-                            {!isOffboarded && (
-                                <div className="grid grid-cols-4 gap-2 pt-4 border-t border-slate-100">
-                                    <button
-                                        onClick={() => onEdit(row)}
-                                        className="flex flex-col items-center justify-center gap-1 py-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-brand-50 hover:text-brand-600 transition-colors"
-                                    >
-                                        <Icon name="clipboard" size={18} />
-                                        <span className="text-[10px] font-semibold">Editar</span>
-                                    </button>
-                                    {!isSuspended ? (
-                                        <button
-                                            onClick={() => onSuspend(row)}
-                                            className="flex flex-col items-center justify-center gap-1 py-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-yellow-50 hover:text-yellow-600 transition-colors"
-                                        >
-                                            <Icon name="x-circle" size={18} />
-                                            <span className="text-[10px] font-semibold">Suspender</span>
-                                        </button>
-                                    ) : (
-                                        <button
-                                            onClick={() => onUnsuspend(row)}
-                                            className="flex flex-col items-center justify-center gap-1 py-2 rounded-lg bg-yellow-50 text-yellow-600 hover:bg-green-50 hover:text-green-600 transition-colors"
-                                        >
-                                            <Icon name="check-circle" size={18} />
-                                            <span className="text-[10px] font-semibold">Reactivar</span>
-                                        </button>
-                                    )}
-                                    <button
-                                        onClick={() => onAdmonish(row)}
-                                        className="flex flex-col items-center justify-center gap-1 py-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-orange-50 hover:text-orange-600 transition-colors"
-                                    >
-                                        <Icon name="megaphone" size={18} />
-                                        <span className="text-[10px] font-semibold">Alertar</span>
-                                    </button>
-                                    <button
-                                        onClick={() => onOffboard(row)}
-                                        className="flex flex-col items-center justify-center gap-1 py-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"
-                                    >
-                                        <Icon name="logout" size={18} />
-                                        <span className="text-[10px] font-semibold">Baja</span>
-                                    </button>
-                                </div>
-                            )}
-                            {isOffboarded && (
-                                <div className="pt-3 border-t border-slate-100 text-center">
-                                    <p className="text-xs text-danger-600 italic">
-                                        Desvinculado el {row.terminated_at ? new Date(row.terminated_at).toLocaleDateString('es-CL') : ''}
-                                    </p>
-                                </div>
-                            )}
+                                {/* Row 3: Actions */}
+                                {!isOffboarded ? (
+                                    <div className="grid grid-cols-4 gap-2 pt-3 border-t border-slate-100">
+                                        <ActionBtn
+                                            icon="clipboard"
+                                            label="Editar"
+                                            color="brand"
+                                            onClick={() => onEdit(row)}
+                                        />
+                                        {!isSuspended ? (
+                                            <ActionBtn
+                                                icon="x-circle"
+                                                label="Suspender"
+                                                color="amber"
+                                                onClick={() => onSuspend(row)}
+                                            />
+                                        ) : (
+                                            <ActionBtn
+                                                icon="check-circle"
+                                                label="Reactivar"
+                                                color="green"
+                                                onClick={() => onUnsuspend(row)}
+                                            />
+                                        )}
+                                        <ActionBtn
+                                            icon="megaphone"
+                                            label="Alertar"
+                                            color="orange"
+                                            onClick={() => onAdmonish(row)}
+                                        />
+                                        <ActionBtn
+                                            icon="logout"
+                                            label="Baja"
+                                            color="red"
+                                            onClick={() => onOffboard(row)}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="pt-3 border-t border-slate-100">
+                                        <p className="text-xs text-red-500 font-medium text-center">
+                                            Desvinculado el{' '}
+                                            {row.terminated_at
+                                                ? new Date(row.terminated_at).toLocaleDateString('es-CL')
+                                                : '—'}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     );
                 })}
             </div>
 
-            {/* Desktop View - Table */}
-            <div className="hidden md:block table-container">
+            {/* ── DESKTOP — Table (≥ 1024px) ──────────────────────────── */}
+            <div className="hidden lg:block table-container">
                 <table className="table">
                     <thead className="table-header">
                         <tr>
@@ -162,31 +186,33 @@ export const StaffTable = ({ staff, onEdit, onOffboard, onAdmonish, onSuspend, o
                             return (
                                 <tr
                                     key={row.id}
-                                    className={`table-row ${isOffboarded
-                                        ? 'bg-danger-50 hover:bg-danger-100'
-                                        : isSuspended
-                                            ? 'bg-yellow-50/50 text-slate-500'
+                                    className={`table-row ${
+                                        isOffboarded
+                                            ? 'bg-red-50 hover:bg-red-100'
+                                            : isSuspended
+                                            ? 'bg-amber-50/50 text-slate-500'
                                             : ''
-                                        }`}
+                                    }`}
                                 >
                                     <td className="table-cell font-mono text-sm">{formatRut(row.rut)}</td>
                                     <td className="table-cell">
                                         <div className="flex items-center gap-2">
-                                            <span className={`font-medium ${isSuspended ? 'line-through decoration-slate-400 text-slate-500' : 'text-slate-900'
-                                                }`}>
+                                            <span className={`font-medium ${
+                                                isSuspended ? 'line-through text-slate-400' : 'text-slate-900'
+                                            }`}>
                                                 {row.nombre}
                                             </span>
                                             {isSuspended && (
-                                                <span className="badge badge-warning text-xs" title="Trabajador suspendido temporalmente">
-                                                    ⏸️ Suspendido
+                                                <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                                                    ⏸ Suspendido
                                                 </span>
                                             )}
                                             {row.admonition_count > 0 && (
                                                 <span
-                                                    className="badge badge-warning text-xs"
+                                                    className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700"
                                                     title={`${row.admonition_count} amonestación(es)`}
                                                 >
-                                                    ⚠️ {row.admonition_count}
+                                                    ⚠ {row.admonition_count}
                                                 </span>
                                             )}
                                         </div>
@@ -197,11 +223,7 @@ export const StaffTable = ({ staff, onEdit, onOffboard, onAdmonish, onSuspend, o
                                     <td className="table-cell font-mono text-xs">{row.horario}</td>
                                     <td className="table-cell text-sm">{row.contacto}</td>
                                     <td className="table-cell">
-                                        <span
-                                            className={`badge ${isOffboarded ? 'badge-danger' : isSuspended ? 'badge-warning' : 'badge-success'}`}
-                                        >
-                                            {isOffboarded ? 'DESVINCULADO' : isSuspended ? 'SUSPENDIDO' : 'ACTIVO'}
-                                        </span>
+                                        <StatusBadge isOffboarded={isOffboarded} isSuspended={isSuspended} />
                                     </td>
                                     <td className="table-cell">
                                         <div className="flex items-center justify-end gap-1">
@@ -209,15 +231,15 @@ export const StaffTable = ({ staff, onEdit, onOffboard, onAdmonish, onSuspend, o
                                                 <>
                                                     <button
                                                         onClick={() => onEdit(row)}
-                                                        className="btn btn-ghost btn-icon text-slate-600 hover:text-brand-600"
-                                                        title="Modificar"
+                                                        className="btn btn-ghost btn-icon text-slate-500 hover:text-brand-600"
+                                                        title="Editar"
                                                     >
                                                         <Icon name="clipboard" size={16} />
                                                     </button>
                                                     {!isSuspended ? (
                                                         <button
                                                             onClick={() => onSuspend(row)}
-                                                            className="btn btn-ghost btn-icon text-slate-600 hover:text-yellow-600"
+                                                            className="btn btn-ghost btn-icon text-slate-500 hover:text-amber-600"
                                                             title="Suspender temporalmente"
                                                         >
                                                             <Icon name="x-circle" size={16} />
@@ -225,7 +247,7 @@ export const StaffTable = ({ staff, onEdit, onOffboard, onAdmonish, onSuspend, o
                                                     ) : (
                                                         <button
                                                             onClick={() => onUnsuspend(row)}
-                                                            className="btn btn-ghost btn-icon text-yellow-600 hover:text-green-600"
+                                                            className="btn btn-ghost btn-icon text-amber-600 hover:text-green-600"
                                                             title="Reactivar"
                                                         >
                                                             <Icon name="check-circle" size={16} />
@@ -233,14 +255,14 @@ export const StaffTable = ({ staff, onEdit, onOffboard, onAdmonish, onSuspend, o
                                                     )}
                                                     <button
                                                         onClick={() => onAdmonish(row)}
-                                                        className="btn btn-ghost btn-icon text-slate-600 hover:text-warning-600"
+                                                        className="btn btn-ghost btn-icon text-slate-500 hover:text-orange-600"
                                                         title="Amonestar"
                                                     >
                                                         <Icon name="megaphone" size={16} />
                                                     </button>
                                                     <button
                                                         onClick={() => onOffboard(row)}
-                                                        className="btn btn-ghost btn-icon text-slate-600 hover:text-danger-600"
+                                                        className="btn btn-ghost btn-icon text-slate-500 hover:text-red-600"
                                                         title="Desvincular"
                                                     >
                                                         <Icon name="logout" size={16} />
@@ -248,7 +270,7 @@ export const StaffTable = ({ staff, onEdit, onOffboard, onAdmonish, onSuspend, o
                                                 </>
                                             )}
                                             {isOffboarded && (
-                                                <span className="text-xs text-danger-600">
+                                                <span className="text-xs text-red-500 font-medium">
                                                     {row.terminated_at
                                                         ? new Date(row.terminated_at).toLocaleDateString('es-CL')
                                                         : 'Desvinculado'}
@@ -265,3 +287,45 @@ export const StaffTable = ({ staff, onEdit, onOffboard, onAdmonish, onSuspend, o
         </>
     );
 };
+
+// ── Small helpers ──────────────────────────────────────────────────────────────
+
+interface InfoRowProps {
+    icon: string;
+    label: string;
+    value: React.ReactNode;
+}
+
+const InfoRow = ({ icon, value }: InfoRowProps) => (
+    <div className="flex items-start gap-2 min-w-0">
+        <Icon name={icon as any} size={14} className="text-slate-400 shrink-0 mt-0.5" />
+        <span className="text-xs text-slate-600 leading-snug truncate">{value}</span>
+    </div>
+);
+
+type ActionColor = 'brand' | 'amber' | 'green' | 'orange' | 'red';
+
+interface ActionBtnProps {
+    icon: string;
+    label: string;
+    color: ActionColor;
+    onClick: () => void;
+}
+
+const colorMap: Record<ActionColor, string> = {
+    brand:  'bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600',
+    amber:  'bg-slate-50 text-slate-600 hover:bg-amber-50 hover:text-amber-600',
+    green:  'bg-amber-50 text-amber-600 hover:bg-green-50 hover:text-green-600',
+    orange: 'bg-slate-50 text-slate-600 hover:bg-orange-50 hover:text-orange-600',
+    red:    'bg-slate-50 text-slate-600 hover:bg-red-50 hover:text-red-600',
+};
+
+const ActionBtn = ({ icon, label, color, onClick }: ActionBtnProps) => (
+    <button
+        onClick={onClick}
+        className={`flex flex-col items-center justify-center gap-1 rounded-xl py-2.5 transition-colors ${colorMap[color]}`}
+    >
+        <Icon name={icon as any} size={17} />
+        <span className="text-[10px] font-semibold leading-none">{label}</span>
+    </button>
+);
