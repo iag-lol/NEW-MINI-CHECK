@@ -36,7 +36,6 @@ const NAVIGATION: NavSection[] = [
       { label: 'Fiscalización ICA', to: '/fiscalizacion-ica', icon: 'clipboard' },
       // { label: 'Solicitudes', to: '/solicitudes', icon: 'inbox' },
       { label: 'Amonestaciones', to: '/amonestaciones', icon: 'alert-triangle' },
-      { label: 'SRL', to: '/srl', icon: 'wrench' },
     ],
   },
   {

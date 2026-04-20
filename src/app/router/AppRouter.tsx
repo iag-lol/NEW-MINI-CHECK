@@ -2,7 +2,6 @@ import { HashRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { OnboardingPage } from '../../features/onboarding/OnboardingPage';
 import { DashboardLayout } from '../layouts/DashboardLayout';
-import { InspectorLayout } from '../layouts/InspectorLayout';
 import { useSessionStore } from '../../shared/state/sessionStore';
 import { LoadingState } from '../../shared/components/common/LoadingState';
 import { PersonalPage } from '../../features/personal/PersonalPage';
@@ -13,7 +12,6 @@ import { AsistenciaPage } from '../../features/asistencia/AsistenciaPage';
 import { CredencialesRespaldoPage } from '../../features/credenciales_respaldo/CredencialesRespaldoPage';
 import { SolicitudesPage } from '../../features/solicitudes/SolicitudesPage';
 import { SolicitudesInsumosPage } from '../../features/solicitudes_insumos/SolicitudesInsumosPage';
-import { SrlPage } from '../../features/srl/pages/SrlPage';
 import { MyInfoPage } from '../../features/asistencia2026/pages/MyInfoPage';
 import { AmonestacionesPage } from '../../features/amonestaciones/AmonestacionesPage';
 import { InspeccionICA } from '../../features/inspeccion_ica/InspeccionICA';
@@ -53,17 +51,10 @@ export const AppRouter = () => (
           <Route path="/credenciales" element={<CredencialesRespaldoPage />} />
           <Route path="/solicitudes" element={<SolicitudesPage />} />
           <Route path="/insumos" element={<SolicitudesInsumosPage />} />
-          <Route path="/srl" element={<SrlPage />} />
           <Route path="/amonestaciones" element={<AmonestacionesPage />} />
           <Route path="/fiscalizacion-ica" element={<InspeccionICA />} />
         </Route>
       </Route>
-      {/* Inspector-Only View */}
-      <Route element={<InspectorLayout />}>
-        <Route path="/inspector" element={<Navigate to="/inspector/srl" replace />} />
-        <Route path="/inspector/srl" element={<SrlPage />} />
-      </Route>
-
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   </HashRouter>
