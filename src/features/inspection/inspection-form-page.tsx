@@ -118,6 +118,14 @@ const inspectionSchema = z
       estado: z.enum(['OK', 'INCONSISTENTE', 'NO_FUNCIONA']),
       observacion: z.string().optional(),
     }),
+    rack: z.object({
+      tieneDiscoDuro: z.boolean().nullable(),
+      tieneSeguridadExtra: z.boolean().nullable(),
+      tieneCandado: z.boolean().nullable(),
+      cerradurasBuenEstado: z.boolean().nullable(),
+      cantidadCerradurasEsperada: z.coerce.number().min(2).max(4),
+      observacion: z.string().optional(),
+    }),
     publicidad: z.object({
       izquierda: publicidadAreaSchema,
       derecha: publicidadAreaSchema,
@@ -138,6 +146,7 @@ const steps = [
   { key: 'extintores', label: 'Extintores' },
   { key: 'odometro', label: 'Odómetro' },
   { key: 'mobileye', label: 'Mobileye' },
+  { key: 'rack', label: 'Rack' },
   { key: 'wifi', label: 'WiFi' },
   { key: 'publicidad', label: 'Publicidad' },
   { key: 'cierre', label: 'Cierre' },
@@ -353,6 +362,14 @@ export const InspectionFormPage = () => {
         observacion: '',
       },
       odometro: { estado: 'OK', lectura: undefined, observacion: '' },
+      rack: {
+        tieneDiscoDuro: null,
+        tieneSeguridadExtra: null,
+        tieneCandado: null,
+        cerradurasBuenEstado: null,
+        cantidadCerradurasEsperada: 2,
+        observacion: '',
+      },
       publicidad: {
         izquierda: { tiene: false, danio: null, residuos: null, observacion: '' },
         derecha: { tiene: false, danio: null, residuos: null, observacion: '' },
@@ -398,8 +415,13 @@ export const InspectionFormPage = () => {
   const estadoBus = methods.watch('estadoBus')
   const mobileyeAplica = methods.watch('mobileye.aplica')
   const mobileyeState = methods.watch('mobileye')
+  const rackState = methods.watch('rack')
   const publicityState = methods.watch('publicidad')
   const stepKey: StepKey = steps[step].key
+  const expectedRackLocks = useMemo(() => {
+    const marca = bus?.marca?.toLowerCase() ?? ''
+    return marca.includes('volvo') ? 4 : 2
+  }, [bus?.marca])
   const suggestions = useMemo(() => {
     const query = busQuery.trim().toUpperCase()
     if (!query || !flotaCatalog) return []
@@ -495,6 +517,11 @@ export const InspectionFormPage = () => {
       methods.setValue(
         'mobileye.aplica',
         busRecord.marca?.toLowerCase().includes('volvo') ?? false,
+        { shouldDirty: true }
+      )
+      methods.setValue(
+        'rack.cantidadCerradurasEsperada',
+        busRecord.marca?.toLowerCase().includes('volvo') ? 4 : 2,
         { shouldDirty: true }
       )
 
@@ -794,6 +821,19 @@ export const InspectionFormPage = () => {
         terminal: values.terminalReportado,
       })
 
+      await supabase.from('rack').insert({
+        revision_id: revisionData.id,
+        tiene_disco_duro: isEnPanne ? null : values.rack.tieneDiscoDuro,
+        tiene_seguridad_extra:
+          isEnPanne || values.rack.tieneDiscoDuro !== true ? null : values.rack.tieneSeguridadExtra,
+        tiene_candado: isEnPanne ? null : values.rack.tieneCandado,
+        cerraduras_buen_estado: isEnPanne ? null : values.rack.cerradurasBuenEstado,
+        cantidad_cerraduras_esperada: values.rack.cantidadCerradurasEsperada,
+        observacion: isEnPanne ? 'Bus en panne - no revisado' : (values.rack.observacion || null),
+        bus_ppu: bus.ppu,
+        terminal: values.terminalReportado,
+      })
+
       await supabase.from('wifi').insert({
         revision_id: revisionData.id,
         ppu_visible: isEnPanne ? null : (values.wifi.ppuVisible ?? null),
@@ -844,6 +884,15 @@ export const InspectionFormPage = () => {
         const tickets: Array<{ modulo: string; descripcion: string }> = []
         if (extintorCritico) {
           tickets.push({ modulo: 'Extintores', descripcion: 'Hallazgos críticos en extintores' })
+        }
+        if (values.rack.tieneDiscoDuro === false) {
+          tickets.push({ modulo: 'Rack', descripcion: 'Rack sin disco duro detectado' })
+        } else if (
+          values.rack.cerradurasBuenEstado === false ||
+          values.rack.tieneCandado === false ||
+          values.rack.tieneSeguridadExtra === false
+        ) {
+          tickets.push({ modulo: 'Rack', descripcion: 'Rack con seguridad comprometida' })
         }
         if (publicidadDanio || publicidadResiduos) {
           tickets.push({ modulo: 'Publicidad', descripcion: 'Publicidad con daño o residuos' })
@@ -976,6 +1025,22 @@ export const InspectionFormPage = () => {
           mobileyeQuestionList.forEach((item) =>
             requireBoolean(snapshot.mobileye[item.field], `Mobileye · ${item.label}`)
           )
+        }
+        break
+      }
+      case 'rack': {
+        const rack = snapshot.rack
+        requireBoolean(rack.cerradurasBuenEstado, 'Rack · Estado de cerraduras')
+        requireBoolean(rack.tieneCandado, 'Rack · Candado instalado')
+        requireBoolean(rack.tieneDiscoDuro, 'Rack · Presencia de disco duro')
+        if (rack.tieneDiscoDuro === true) {
+          requireBoolean(rack.tieneSeguridadExtra, 'Rack · Seguridad extra del disco')
+        }
+        if (
+          (rack.tieneDiscoDuro === false || rack.cerradurasBuenEstado === false) &&
+          !rack.observacion?.trim()
+        ) {
+          missing.push('Rack · Agrega observación del hallazgo')
         }
         break
       }
@@ -1388,6 +1453,75 @@ export const InspectionFormPage = () => {
     </SectionCard>
   )
 
+  const renderRack = () => (
+    <SectionCard
+      title="Rack"
+      description="Control de cerraduras y seguridad del disco duro para prevenir robos"
+    >
+      <div className="rounded-2xl border border-blue-200/70 bg-blue-50/60 p-4 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
+        <p className="font-semibold">
+          {bus?.marca?.toLowerCase().includes('volvo') ? 'Volvo' : 'Scania/Otros'}: se esperan{' '}
+          {expectedRackLocks} cerraduras en el rack.
+        </p>
+        <p className="mt-1 text-xs text-blue-800/80 dark:text-blue-200/80">
+          Este valor se registra automáticamente según la marca del bus.
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <BinaryQuestion
+          label="¿Las cerraduras están en buen estado?"
+          value={rackState.cerradurasBuenEstado}
+          positiveLabel="Buen estado"
+          negativeLabel="Con falla"
+          onChange={(value) => methods.setValue('rack.cerradurasBuenEstado', value, { shouldDirty: true })}
+        />
+        <BinaryQuestion
+          label="¿Tiene candado instalado?"
+          value={rackState.tieneCandado}
+          positiveLabel="Con candado"
+          negativeLabel="Sin candado"
+          onChange={(value) => methods.setValue('rack.tieneCandado', value, { shouldDirty: true })}
+        />
+        <BinaryQuestion
+          label="¿Tiene disco duro principal?"
+          value={rackState.tieneDiscoDuro}
+          positiveLabel="Sí tiene disco"
+          negativeLabel="No tiene disco"
+          onChange={(value) => {
+            methods.setValue('rack.tieneDiscoDuro', value, { shouldDirty: true })
+            if (value === false) {
+              methods.setValue('rack.tieneSeguridadExtra', null, { shouldDirty: true })
+            }
+          }}
+        />
+        {rackState.tieneDiscoDuro === true ? (
+          <BinaryQuestion
+            label="¿El disco tiene seguridad extra?"
+            value={rackState.tieneSeguridadExtra}
+            positiveLabel="Con seguridad extra"
+            negativeLabel="Sin seguridad extra"
+            onChange={(value) => methods.setValue('rack.tieneSeguridadExtra', value, { shouldDirty: true })}
+          />
+        ) : (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+            Disco duro no encontrado. Registra observaciones para seguimiento semanal.
+          </div>
+        )}
+      </div>
+
+      <div>
+        <Label>Observación de rack</Label>
+        <Textarea
+          className="mt-2"
+          placeholder="Ej: Disco ausente, cerradura forzada, sin candado, etc."
+          value={rackState.observacion ?? ''}
+          onChange={(event) => methods.setValue('rack.observacion', event.target.value, { shouldDirty: true })}
+        />
+      </div>
+    </SectionCard>
+  )
+
   const renderOdometro = () => (
     <SectionCard title="Odómetro" description="Captura lectura real">
       <div className="grid gap-4 md:grid-cols-2">
@@ -1729,6 +1863,8 @@ export const InspectionFormPage = () => {
         return renderExtintores()
       case 'mobileye':
         return renderMobileye()
+      case 'rack':
+        return renderRack()
       case 'odometro':
         return renderOdometro()
       case 'wifi':

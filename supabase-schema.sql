@@ -146,7 +146,26 @@ CREATE TABLE IF NOT EXISTS odometro (
 CREATE INDEX IF NOT EXISTS idx_odometro_revision_id ON odometro(revision_id);
 CREATE INDEX IF NOT EXISTS idx_odometro_bus_ppu ON odometro(bus_ppu);
 
--- 9. TABLA: publicidad
+-- 9. TABLA: rack
+-- Registro de seguridad del rack y disco duro
+CREATE TABLE IF NOT EXISTS rack (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  revision_id UUID NOT NULL REFERENCES revisiones(id) ON DELETE CASCADE,
+  tiene_disco_duro BOOLEAN,
+  tiene_seguridad_extra BOOLEAN,
+  tiene_candado BOOLEAN,
+  cerraduras_buen_estado BOOLEAN,
+  cantidad_cerraduras_esperada INTEGER NOT NULL CHECK (cantidad_cerraduras_esperada IN (2, 4)),
+  observacion TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  bus_ppu TEXT NOT NULL,
+  terminal TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_rack_revision_id ON rack(revision_id);
+CREATE INDEX IF NOT EXISTS idx_rack_bus_ppu ON rack(bus_ppu);
+
+-- 10. TABLA: publicidad
 -- Registro de publicidad por lateral
 CREATE TABLE IF NOT EXISTS publicidad (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -164,7 +183,7 @@ CREATE TABLE IF NOT EXISTS publicidad (
 
 CREATE INDEX IF NOT EXISTS idx_publicidad_revision_id ON publicidad(revision_id);
 
--- 10. TABLA: tickets
+-- 11. TABLA: tickets
 -- Sistema de tickets automáticos y manuales
 CREATE TABLE IF NOT EXISTS tickets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -182,7 +201,7 @@ CREATE INDEX IF NOT EXISTS idx_tickets_estado ON tickets(estado);
 CREATE INDEX IF NOT EXISTS idx_tickets_created_at ON tickets(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tickets_terminal ON tickets(terminal);
 
--- 11. TABLA: personal
+-- 12. TABLA: personal
 -- Gestión de personal del terminal
 CREATE TABLE IF NOT EXISTS personal (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -211,6 +230,7 @@ ALTER TABLE camaras ENABLE ROW LEVEL SECURITY;
 ALTER TABLE extintores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mobileye ENABLE ROW LEVEL SECURITY;
 ALTER TABLE odometro ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rack ENABLE ROW LEVEL SECURITY;
 ALTER TABLE publicidad ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE personal ENABLE ROW LEVEL SECURITY;
@@ -256,6 +276,9 @@ CREATE POLICY "Permitir todo en mobileye" ON mobileye
   FOR ALL USING (true);
 
 CREATE POLICY "Permitir todo en odometro" ON odometro
+  FOR ALL USING (true);
+
+CREATE POLICY "Permitir todo en rack" ON rack
   FOR ALL USING (true);
 
 CREATE POLICY "Permitir todo en publicidad" ON publicidad

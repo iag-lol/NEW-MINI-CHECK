@@ -112,6 +112,20 @@ create table if not exists public.odometro (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.rack (
+  id uuid primary key default uuid_generate_v4(),
+  revision_id uuid not null references public.revisiones(id) on delete cascade,
+  tiene_disco_duro boolean,
+  tiene_seguridad_extra boolean,
+  tiene_candado boolean,
+  cerraduras_buen_estado boolean,
+  cantidad_cerraduras_esperada int not null check (cantidad_cerraduras_esperada in (2, 4)),
+  observacion text,
+  bus_ppu text not null,
+  terminal text not null,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.publicidad (
   id uuid primary key default uuid_generate_v4(),
   revision_id uuid not null references public.revisiones(id) on delete cascade,
@@ -154,6 +168,7 @@ create table if not exists public.personal (
 create index if not exists idx_revisiones_bus on public.revisiones(bus_ppu);
 create index if not exists idx_tickets_estado on public.tickets(estado);
 create index if not exists idx_tags_revision on public.tags(revision_id);
+create index if not exists idx_rack_revision on public.rack(revision_id);
 
 -- ---------- ROW LEVEL SECURITY ----------
 
@@ -165,6 +180,7 @@ alter table public.camaras enable row level security;
 alter table public.extintores enable row level security;
 alter table public.mobileye enable row level security;
 alter table public.odometro enable row level security;
+alter table public.rack enable row level security;
 alter table public.publicidad enable row level security;
 alter table public.tickets enable row level security;
 alter table public.personal enable row level security;
@@ -177,6 +193,7 @@ create policy if not exists "crud_camaras" on public.camaras for all using (true
 create policy if not exists "crud_extintores" on public.extintores for all using (true) with check (true);
 create policy if not exists "crud_mobileye" on public.mobileye for all using (true) with check (true);
 create policy if not exists "crud_odometro" on public.odometro for all using (true) with check (true);
+create policy if not exists "crud_rack" on public.rack for all using (true) with check (true);
 create policy if not exists "crud_publicidad" on public.publicidad for all using (true) with check (true);
 create policy if not exists "crud_tickets" on public.tickets for all using (true) with check (true);
 create policy if not exists "public_read_personal" on public.personal for select using (true);

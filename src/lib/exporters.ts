@@ -10,6 +10,7 @@ type TagRow = Tables<'tags'>
 type CamarasRow = Tables<'camaras'>
 type ExtintoresRow = Tables<'extintores'>
 type OdometroRow = Tables<'odometro'>
+type RackRow = Tables<'rack'>
 type PublicidadRow = Tables<'publicidad'>
 type WifiRow = Tables<'wifi'>
 type TicketRow = Tables<'tickets'>
@@ -100,6 +101,7 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   let camaras: CamarasRow[] = []
   let extintores: ExtintoresRow[] = []
   let odometros: OdometroRow[] = []
+  let racks: RackRow[] = []
   let publicidades: PublicidadRow[] = []
   let wifis: WifiRow[] = []
 
@@ -116,11 +118,12 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
 
   if (revisionIds.length > 0) {
     // Usar batching para evitar errores por URL muy larga o timeouts
-    const [resTags, resCamaras, resExtintores, resOdometros, resPublicidades, resWifi] = await Promise.all([
+    const [resTags, resCamaras, resExtintores, resOdometros, resRacks, resPublicidades, resWifi] = await Promise.all([
       fetchInBatches('tags', revisionIds),
       fetchInBatches('camaras', revisionIds),
       fetchInBatches('extintores', revisionIds),
       fetchInBatches('odometro', revisionIds),
+      fetchInBatches('rack', revisionIds),
       fetchInBatches('publicidad', revisionIds),
       fetchInBatches('wifi', revisionIds),
     ])
@@ -129,6 +132,7 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
     camaras = (resCamaras as CamarasRow[]) || []
     extintores = (resExtintores as ExtintoresRow[]) || []
     odometros = (resOdometros as OdometroRow[]) || []
+    racks = (resRacks as RackRow[]) || []
     publicidades = (resPublicidades as PublicidadRow[]) || []
     wifis = (resWifi as WifiRow[]) || []
   }
@@ -413,7 +417,44 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   })
 
   // ==========================================
-  // HOJA 6: WIFI
+  // HOJA 6: RACK
+  // ==========================================
+  const sheetRack = workbook.addWorksheet('RACK')
+  sheetRack.columns = [
+    { header: 'PPU', key: 'ppu', width: 12 },
+    { header: 'Nº INTERNO', key: 'interno', width: 12 },
+    { header: 'TERMINAL', key: 'terminal', width: 20 },
+    { header: 'TIENE DISCO DURO', key: 'tiene_disco_duro', width: 18 },
+    { header: 'SEGURIDAD EXTRA', key: 'tiene_seguridad_extra', width: 16 },
+    { header: 'TIENE CANDADO', key: 'tiene_candado', width: 15 },
+    { header: 'CERRADURAS OK', key: 'cerraduras_ok', width: 15 },
+    { header: 'CERRADURAS ESPERADAS', key: 'cerraduras_esperadas', width: 20 },
+    { header: 'OBSERVACIONES', key: 'observacion', width: 34 },
+    { header: 'FECHA REV.', key: 'fecha', width: 15 },
+  ]
+  setupHeader(sheetRack)
+
+  flota.forEach((bus) => {
+    const { rev, isHistorical } = getRevisionData(bus.ppu)
+    const rack = rev ? racks.find((r) => r.revision_id === rev.id) : null
+
+    const row = sheetRack.addRow({
+      ppu: bus.ppu,
+      interno: bus.numero_interno,
+      terminal: bus.terminal,
+      tiene_disco_duro: booleanToLabel(rack?.tiene_disco_duro),
+      tiene_seguridad_extra: booleanToLabel(rack?.tiene_seguridad_extra),
+      tiene_candado: booleanToLabel(rack?.tiene_candado),
+      cerraduras_ok: booleanToLabel(rack?.cerraduras_buen_estado),
+      cerraduras_esperadas: rack?.cantidad_cerraduras_esperada ?? '-',
+      observacion: rack?.observacion || '-',
+      fecha: rev ? dayjs(rev.created_at).format('DD/MM/YYYY') : '-',
+    })
+    applyCommonRowStyles(row, rev, isHistorical)
+  })
+
+  // ==========================================
+  // HOJA 7: WIFI
   // ==========================================
   const sheetWifi = workbook.addWorksheet('WIFI')
   sheetWifi.columns = [
@@ -446,7 +487,7 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   })
 
   // ==========================================
-  // HOJA 7: PUBLICIDAD
+  // HOJA 8: PUBLICIDAD
   // ==========================================
   const sheetPublicidad = workbook.addWorksheet('PUBLICIDAD')
   sheetPublicidad.columns = [

@@ -61,7 +61,7 @@ export const RecordsPage = () => {
     if (!window.confirm('¿Eliminar este registro y todos sus datos asociados?')) return
     setDeletingId(revisionId)
     try {
-      const childTables = ['tickets', 'tags', 'camaras', 'extintores', 'mobileye', 'odometro', 'publicidad']
+      const childTables = ['tickets', 'tags', 'camaras', 'extintores', 'mobileye', 'odometro', 'rack', 'publicidad']
       for (const table of childTables) {
         await supabase.from(table).delete().eq('revision_id', revisionId)
       }
@@ -319,6 +319,7 @@ type RevisionDetails = {
   extintores: Tables<'extintores'> | null
   mobileye: Tables<'mobileye'> | null
   odometro: Tables<'odometro'> | null
+  rack: Tables<'rack'> | null
   publicidad: Tables<'publicidad'> | null
 }
 
@@ -355,12 +356,13 @@ const RevisionDetailSheet = ({ revisionId, onSaved }: RevisionDetailSheetProps) 
       }
       const revisionRecord = revision as Tables<'revisiones'>
 
-      const [tag, camaras, extintores, mobileye, odometro, publicidad] = await Promise.all([
+      const [tag, camaras, extintores, mobileye, odometro, rack, publicidad] = await Promise.all([
         supabase.from('tags').select('*').eq('revision_id', revisionId).maybeSingle(),
         supabase.from('camaras').select('*').eq('revision_id', revisionId).maybeSingle(),
         supabase.from('extintores').select('*').eq('revision_id', revisionId).maybeSingle(),
         supabase.from('mobileye').select('*').eq('revision_id', revisionId).maybeSingle(),
         supabase.from('odometro').select('*').eq('revision_id', revisionId).maybeSingle(),
+        supabase.from('rack').select('*').eq('revision_id', revisionId).maybeSingle(),
         supabase.from('publicidad').select('*').eq('revision_id', revisionId).maybeSingle(),
       ])
 
@@ -369,6 +371,7 @@ const RevisionDetailSheet = ({ revisionId, onSaved }: RevisionDetailSheetProps) 
       const extintoresData = (extintores.data ?? null) as Tables<'extintores'> | null
       const mobileyeData = (mobileye.data ?? null) as Tables<'mobileye'> | null
       const odometroData = (odometro.data ?? null) as Tables<'odometro'> | null
+      const rackData = (rack.data ?? null) as Tables<'rack'> | null
       const publicidadData = (publicidad.data ?? null) as Tables<'publicidad'> | null
 
       setDetails({
@@ -378,6 +381,7 @@ const RevisionDetailSheet = ({ revisionId, onSaved }: RevisionDetailSheetProps) 
         extintores: extintoresData,
         mobileye: mobileyeData,
         odometro: odometroData,
+        rack: rackData,
         publicidad: publicidadData,
       })
 
@@ -696,6 +700,16 @@ const RevisionDetailSheet = ({ revisionId, onSaved }: RevisionDetailSheetProps) 
             </p>
           </div>
         )}
+        {details.rack && (
+          <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400">Rack</p>
+            <p className="text-slate-600 dark:text-slate-300">
+              Disco duro: {formatBool(details.rack.tiene_disco_duro)} · Candado:{' '}
+              {formatBool(details.rack.tiene_candado)} · Cerraduras OK:{' '}
+              {formatBool(details.rack.cerraduras_buen_estado)}
+            </p>
+          </div>
+        )}
       </div>
 
       {details.tag && (
@@ -757,6 +771,23 @@ const RevisionDetailSheet = ({ revisionId, onSaved }: RevisionDetailSheetProps) 
             { label: 'Sensor frontal', value: formatBool(details.mobileye.sensor_frontal) },
             { label: 'Sensor izquierdo', value: formatBool(details.mobileye.sensor_izq) },
             { label: 'Sensor derecho', value: formatBool(details.mobileye.sensor_der) },
+          ])}
+        </div>
+      )}
+
+      {details.rack && (
+        <div className="space-y-3 rounded-2xl border border-slate-100/80 p-4 text-sm dark:border-slate-800">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Rack</h3>
+          {formatDetailList([
+            { label: 'Disco duro', value: formatBool(details.rack.tiene_disco_duro) },
+            { label: 'Seguridad extra', value: formatBool(details.rack.tiene_seguridad_extra) },
+            { label: 'Candado', value: formatBool(details.rack.tiene_candado) },
+            { label: 'Cerraduras buen estado', value: formatBool(details.rack.cerraduras_buen_estado) },
+            {
+              label: 'Cerraduras esperadas',
+              value: details.rack.cantidad_cerraduras_esperada?.toString() ?? '—',
+            },
+            { label: 'Observación', value: details.rack.observacion ?? '—' },
           ])}
         </div>
       )}

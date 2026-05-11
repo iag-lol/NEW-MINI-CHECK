@@ -98,6 +98,20 @@ type OdometroRow = {
   terminal: string
 }
 
+type RackRow = {
+  id: string
+  revision_id: string
+  tiene_disco_duro: boolean | null
+  tiene_seguridad_extra: boolean | null
+  tiene_candado: boolean | null
+  cerraduras_buen_estado: boolean | null
+  cantidad_cerraduras_esperada: number
+  observacion: string | null
+  created_at: string
+  bus_ppu: string
+  terminal: string
+}
+
 type PublicidadRow = {
   id: string
   revision_id: string
@@ -236,6 +250,7 @@ export type Database = {
       extintores: TableRecord<ExtintoresRow, Omit<ExtintoresRow, 'id' | 'created_at'>>
       mobileye: TableRecord<MobileyeRow, Omit<MobileyeRow, 'id' | 'created_at'>>
       odometro: TableRecord<OdometroRow, Omit<OdometroRow, 'id' | 'created_at'>>
+      rack: TableRecord<RackRow, Omit<RackRow, 'id' | 'created_at'>>
       publicidad: TableRecord<PublicidadRow, Omit<PublicidadRow, 'id' | 'created_at'>>
       wifi: TableRecord<WifiRow, Omit<WifiRow, 'id' | 'created_at'>>
       tickets: TableRecord<TicketRow, Omit<TicketRow, 'id' | 'created_at' | 'actualizado_en'>>

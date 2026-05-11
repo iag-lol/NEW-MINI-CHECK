@@ -8,6 +8,7 @@ import { CamarasModulePage } from '@/features/modules/camaras-page'
 import { ExtintoresModulePage } from '@/features/modules/extintores-page'
 import { MobileyeModulePage } from '@/features/modules/mobileye-page'
 import { OdometroModulePage } from '@/features/modules/odometro-page'
+import { RackModulePage } from '@/features/modules/rack-page'
 import { WifiModulePage } from '@/features/modules/wifi-page'
 import { PublicidadModulePage } from '@/features/modules/publicidad-page'
 import { FlotaPage } from '@/features/flota/flota-page'
@@ -41,6 +42,7 @@ export const router = createBrowserRouter([
       { path: 'extintores', element: <ExtintoresModulePage /> },
       { path: 'mobileye', element: <MobileyeModulePage /> },
       { path: 'odometro', element: <OdometroModulePage /> },
+      { path: 'rack', element: <RackModulePage /> },
       { path: 'wifi', element: <WifiModulePage /> },
       { path: 'publicidad', element: <PublicidadModulePage /> },
       { path: 'flota', element: <FlotaPage /> },
