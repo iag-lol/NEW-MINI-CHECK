@@ -195,7 +195,7 @@ export const Sidebar = () => {
       </ScrollArea>
 
       {/* User profile con glassmorphism mejorado */}
-      <div className="border-t border-slate-200/60 p-4 dark:border-slate-800">
+      <div className="flex flex-col gap-3 border-t border-slate-200/60 p-4 dark:border-slate-800">
         <div className="group relative overflow-hidden rounded-2xl border border-slate-200/70 bg-gradient-to-br from-white/80 to-slate-50/60 p-4 backdrop-blur-sm transition-all hover:shadow-lg dark:border-slate-700/50 dark:from-slate-800/80 dark:to-slate-900/60">
           <div className="absolute inset-0 bg-gradient-to-br from-brand-500/5 to-purple-500/5 opacity-0 transition-opacity group-hover:opacity-100" />
           <div className="relative flex items-center gap-3">
@@ -226,6 +226,17 @@ export const Sidebar = () => {
             <LogOut className="h-4 w-4" />
             Cerrar sesión
           </Button>
+        </div>
+
+        <div className="text-center">
+          <a
+            href="https://www.zyteron.cl"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] font-medium text-slate-400 hover:text-brand-500 transition-colors dark:text-slate-500 dark:hover:text-brand-400"
+          >
+            Creado por Zyteron
+          </a>
         </div>
       </div>
     </aside>
