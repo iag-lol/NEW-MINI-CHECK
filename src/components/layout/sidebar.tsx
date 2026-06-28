@@ -235,7 +235,7 @@ export const Sidebar = () => {
             rel="noopener noreferrer"
             className="text-[11px] font-medium text-slate-400 hover:text-brand-500 transition-colors dark:text-slate-500 dark:hover:text-brand-400"
           >
-            Creado por Zyteron
+            Desarrollado por Zyteron
           </a>
         </div>
       </div>
