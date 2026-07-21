@@ -141,60 +141,14 @@ function aplicarTema(temaId: TemaId) {
   root.style.setProperty('--color-theme-card', tema.colors.cardBg)
   root.style.setProperty('--color-theme-text', tema.colors.textPrimary)
 
-  // Aplicar a elementos del body
-  document.body.style.backgroundColor = tema.colors.bg
+  // NO pintar el body con estilo inline: eso pisaba el modo noche.
+  // El fondo lo maneja index.css vía var(--color-theme-bg) y :root.dark body.
+  document.body.style.removeProperty('background-color')
 
-  // IMPORTANTE: Mantener colores vibrantes en modo oscuro
-  // Sobrescribir variables dark de Tailwind para que no interfieran
-  const isDarkMode = root.classList.contains('dark')
-  if (isDarkMode && temaId !== 'original') {
-    // Si está en modo oscuro Y tiene un tema personalizado,
-    // forzar los colores del tema sobre el modo oscuro
-    root.style.setProperty('--tw-bg-opacity', '1')
-    root.style.setProperty('--tw-text-opacity', '1')
-
-    // Hacer que los botones y elementos mantengan los colores vibrantes
-    const style = document.createElement('style')
-    style.id = 'custom-theme-override'
-
-    // Eliminar estilo anterior si existe
-    const oldStyle = document.getElementById('custom-theme-override')
-    if (oldStyle) oldStyle.remove()
-
-    style.textContent = `
-      /* Forzar colores del tema en modo oscuro */
-      .dark button[class*="bg-brand"],
-      .dark [class*="bg-brand"],
-      .dark [class*="from-brand"],
-      .dark [class*="to-brand"] {
-        background-color: var(--color-brand-500) !important;
-        color: white !important;
-      }
-
-      .dark button[class*="bg-brand"]:hover,
-      .dark [class*="bg-brand"]:hover {
-        background-color: var(--color-brand-600) !important;
-      }
-
-      .dark [class*="text-brand"] {
-        color: var(--color-brand-500) !important;
-      }
-
-      .dark [class*="border-brand"] {
-        border-color: var(--color-brand-500) !important;
-      }
-
-      /* Mantener fondos claros en modo oscuro cuando hay tema personalizado */
-      .dark .bg-theme {
-        background-color: var(--color-theme-bg) !important;
-      }
-    `
-    document.head.appendChild(style)
-  } else {
-    // Si no hay tema personalizado o no está en dark mode, limpiar overrides
-    const oldStyle = document.getElementById('custom-theme-override')
-    if (oldStyle) oldStyle.remove()
-  }
+  // Limpiar cualquier override antiguo que forzaba fondos claros en modo oscuro
+  // (corrompía el modo noche completo)
+  const oldStyle = document.getElementById('custom-theme-override')
+  if (oldStyle) oldStyle.remove()
 
   // Guardar en localStorage para persistencia
   localStorage.setItem('theme', temaId)

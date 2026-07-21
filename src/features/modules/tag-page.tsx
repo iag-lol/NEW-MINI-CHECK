@@ -71,7 +71,7 @@ export const TagModulePage = () => {
             { label: 'El Roble', value: 'El Roble' },
             { label: 'La Reina', value: 'La Reina' },
             { label: 'María Angélica', value: 'María Angélica' },
-            { label: 'El Descanso', value: 'El Descanso' },
+            { label: 'Los Agricultores', value: 'Los Agricultores' },
           ],
         },
       ]}

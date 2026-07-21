@@ -41,6 +41,12 @@ body {
   transition: background-color 0.3s ease;
 }
 
+/* En modo noche el fondo del body SIEMPRE es oscuro,
+   por encima de cualquier tema de color personalizado */
+:root.dark body {
+  background-color: #020617 !important;
+}
+
 #root {
   min-height: 100vh;
 }
@@ -72,16 +78,19 @@ body {
 
 /* ===================================
    Temas Dinámicos - Override Cards
+   SOLO en modo claro: estas reglas con !important pisaban
+   los estilos dark: y corrompían el modo noche completo.
+   Se excluyen las utilidades con opacidad (bg-white/10, etc.)
    =================================== */
-[class*="bg-white"] {
+:root:not(.dark) [class*="bg-white"]:not([class*="bg-white/"]) {
   background-color: var(--color-theme-card) !important;
 }
 
-[class*="bg-slate-50"] {
+:root:not(.dark) [class*="bg-slate-50"]:not([class*="bg-slate-50/"]) {
   background-color: var(--color-theme-bg) !important;
 }
 
-[class*="bg-slate-100"] {
+:root:not(.dark) [class*="bg-slate-100"]:not([class*="bg-slate-100/"]) {
   background-color: var(--color-theme-bg-dark) !important;
 }
 
@@ -179,4 +188,20 @@ body {
 
 .marker-bus {
   animation: bus-bounce-in 0.35s ease-out;
+}
+
+/* Tooltip flotante de la PPU sobre el ícono del bus */
+.bus-tooltip {
+  background: rgba(15, 23, 42, 0.92) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 10px !important;
+  padding: 4px 10px !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.35) !important;
+}
+
+.bus-tooltip::before {
+  border-top-color: rgba(15, 23, 42, 0.92) !important;
 }

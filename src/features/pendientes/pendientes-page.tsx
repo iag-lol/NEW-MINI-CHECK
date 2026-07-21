@@ -329,7 +329,7 @@ export const PendientesPage = () => {
                 <SelectItem value="El Roble">El Roble</SelectItem>
                 <SelectItem value="La Reina">La Reina</SelectItem>
                 <SelectItem value="María Angélica">María Angélica</SelectItem>
-                <SelectItem value="El Descanso">El Descanso</SelectItem>
+                <SelectItem value="Los Agricultores">Los Agricultores</SelectItem>
               </SelectContent>
             </Select>
           </div>

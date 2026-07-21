@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { MapContainer, TileLayer, CircleMarker, Popup, Circle, LayerGroup, Marker } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, Popup, Circle, LayerGroup, Marker, Tooltip as LeafletTooltip } from 'react-leaflet'
 import { divIcon, type Map as LeafletMap } from 'leaflet'
 import {
   AlertTriangle,
@@ -40,6 +40,7 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { Tables } from '@/types/database'
 import { TERMINAL_GEOFENCES, type TerminalSlug } from '@/constants/geofences'
+import { detectTerminal } from '@/lib/geofence'
 import { useActiveInspectors } from '@/hooks/use-active-inspectors'
 import { useAuthStore } from '@/store/auth-store'
 import { useWeekFilter } from '@/hooks/use-week-filter'
@@ -52,6 +53,12 @@ const escapeHtml = (value: string) =>
 
 /** Segundos máximos desde el último pulso GPS para considerar a un inspector "EN VIVO" */
 const ONLINE_THRESHOLD_SEC = 60
+
+/** Horas máximas de inactividad antes de sacar a un inspector del mapa */
+const MAX_INACTIVITY_HOURS = 24
+
+/** Usuarios ocultos del centro geoespacial */
+const HIDDEN_RUTS = ['15.839.906-7', '18.866.264-1']
 
 const createInspectorIcon = (label: string, name: string, color: string, online: boolean) =>
   divIcon({
@@ -180,7 +187,7 @@ export const DashboardPage = () => {
   const [reportPpu, setReportPpu] = useState<string | null>(null)
 
   // Tick cada 5 s para re-evaluar en vivo el estado de los pulsos GPS
-  const [, setPulseTick] = useState(0)
+  const [pulseTick, setPulseTick] = useState(0)
   useEffect(() => {
     const interval = window.setInterval(() => setPulseTick((tick) => tick + 1), 5000)
     return () => window.clearInterval(interval)
@@ -217,6 +224,21 @@ export const DashboardPage = () => {
       .slice(0, 8)
   }, [busSearch, flotaList])
   const { inspectors: liveInspectors } = useActiveInspectors()
+
+  // Inspectores visibles: sin ocultos, con actividad en las últimas 24 h
+  // y únicamente dentro de las geocercas de los terminales
+  const visibleInspectors = useMemo(
+    () =>
+      liveInspectors.filter((inspector) => {
+        if (HIDDEN_RUTS.includes(inspector.usuario_rut)) return false
+        if (dayjs().diff(dayjs(inspector.last_heartbeat), 'hour') >= MAX_INACTIVITY_HOURS)
+          return false
+        if (typeof inspector.lat !== 'number' || typeof inspector.lon !== 'number') return false
+        return detectTerminal(inspector.lat, inspector.lon) !== null
+      }),
+    // pulseTick fuerza la re-evaluación periódica de la ventana de 24 h
+    [liveInspectors, pulseTick] // eslint-disable-line react-hooks/exhaustive-deps
+  )
   const mapToken = import.meta.env.VITE_MAPBOX_TOKEN
   const mapRef = useRef<LeafletMap | null>(null)
   const [mapLayer, setMapLayer] = useState<BaseLayerKey>('satellite')
@@ -692,13 +714,23 @@ export const DashboardPage = () => {
                     eventHandlers={{
                       click: () => setReportPpu(revision.bus_ppu),
                     }}
-                  />
+                  >
+                    <LeafletTooltip
+                      direction="top"
+                      offset={[0, -14]}
+                      opacity={1}
+                      className="bus-tooltip"
+                    >
+                      <span className="font-bold">{revision.bus_ppu}</span>
+                      <span className="ml-1.5 opacity-75">
+                        {revision.estado_bus === 'EN_PANNE' ? '· En panne' : '· Operativo'}
+                      </span>
+                    </LeafletTooltip>
+                  </Marker>
                 ))}
               </LayerGroup>
               <LayerGroup>
-                {liveInspectors
-                  .filter(inspector => !['15.839.906-7', '18.866.264-1'].includes(inspector.usuario_rut))
-                  .map((inspector) => {
+                {visibleInspectors.map((inspector) => {
                   const isSelf = user?.rut === inspector.usuario_rut
                   const online = isInspectorOnline(inspector.last_heartbeat)
                   const firstName = inspector.nombre.split(' ').filter(Boolean).slice(0, 2).join(' ')
@@ -764,15 +796,15 @@ export const DashboardPage = () => {
           <div className="space-y-4">
             <div className="rounded-2xl border border-slate-100/80 p-4 dark:border-slate-900">
               <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                Inspectores activos en vivo ({liveInspectors.filter(inspector => !['15.839.906-7', '18.866.264-1'].includes(inspector.usuario_rut)).length})
+                Inspectores activos en vivo ({visibleInspectors.length})
               </p>
               <ScrollArea className="mt-3 h-40 pr-3">
-                {liveInspectors.filter(inspector => !['15.839.906-7', '18.866.264-1'].includes(inspector.usuario_rut)).length === 0 && (
-                  <p className="text-xs text-slate-400">Sin inspectores conectados en las últimas horas.</p>
+                {visibleInspectors.length === 0 && (
+                  <p className="text-xs text-slate-400">
+                    Sin inspectores dentro de terminales en las últimas 24 horas.
+                  </p>
                 )}
-                {liveInspectors
-                  .filter(inspector => !['15.839.906-7', '18.866.264-1'].includes(inspector.usuario_rut))
-                  .map((inspector) => {
+                {visibleInspectors.map((inspector) => {
                   const online = isInspectorOnline(inspector.last_heartbeat)
                   return (
                   <div key={inspector.usuario_rut} className="mb-3 text-xs last:mb-0">
