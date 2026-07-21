@@ -258,7 +258,7 @@ const buildMobileyeWorkbook = (flota: FlotaRow[], mobileyes: Map<string, Mobiley
 
   const etiqueta = (value: boolean | null | undefined) => {
     if (value === true) return 'TIENE'
-    if (value === false) return 'NO TIENE'
+    if (value === false) return 'DAÑADO'
     return 'SIN DATO'
   }
 
@@ -289,7 +289,7 @@ const buildMobileyeWorkbook = (flota: FlotaRow[], mobileyes: Map<string, Mobiley
     for (let col = 7; col <= 14; col += 1) {
       const cell = row.getCell(col)
       cell.alignment = { horizontal: 'center', vertical: 'middle' }
-      if (cell.value === 'NO TIENE') {
+      if (cell.value === 'DAÑADO') {
         cell.font = { size: 10, name: 'Calibri', bold: true, color: { argb: 'FFB91C1C' } }
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_RED_SOFT } }
       } else if (cell.value === 'NO APLICA' || cell.value === 'SIN DATO') {
@@ -653,14 +653,14 @@ export interface ConsolidadosOptions {
 export const exportConsolidadosSemanales = async (
   options: ConsolidadosOptions
 ): Promise<MergeStats> => {
-  const { startISO, endISO, weekNumber, pastedText } = options
+  const { endISO, weekNumber, pastedText } = options
 
   const flota = await fetchFlota()
 
+  // Siempre se rescata el último registro histórico de cada bus:
+  // SIN DATO / 0 solo cuando no existe ningún registro en la base
   const [camaras, mobileyes, tags] = await Promise.all([
-    // Cámaras: solo datos de la semana consultada (sin dato → 0)
-    fetchLatestPorBus<CamarasRow>('camaras', endISO, startISO),
-    // Mobileye y TAG: último dato conocido hasta el fin de la semana
+    fetchLatestPorBus<CamarasRow>('camaras', endISO),
     fetchLatestPorBus<MobileyeRow>('mobileye', endISO),
     fetchLatestPorBus<TagRow>('tags', endISO),
   ])
