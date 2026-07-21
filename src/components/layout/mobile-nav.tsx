@@ -1,16 +1,22 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { MOBILE_ITEMS } from '@/constants/navigation'
 import { useUIStore } from '@/store/ui-store'
+import { useAuthStore } from '@/store/auth-store'
 import { cn } from '@/lib/utils'
 
 export const MobileNav = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { setMobileRoute } = useUIStore()
+  const { user } = useAuthStore()
+
+  const visibleItems = MOBILE_ITEMS.filter(
+    (item) => !item.roles || (user && item.roles.includes(user.cargo))
+  )
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-center justify-around border-t border-slate-200/60 bg-white/95 px-4 shadow-2xl backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-950/90">
-      {MOBILE_ITEMS.map((item) => {
+      {visibleItems.map((item) => {
         const Icon = item.icon
         const isActive = location.pathname.startsWith(item.path)
         return (

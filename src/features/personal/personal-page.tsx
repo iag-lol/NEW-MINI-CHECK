@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import bcrypt from 'bcryptjs'
-import { UserPlus, Users, ShieldCheck, Phone, Mail, RefreshCw, MapPin } from 'lucide-react'
+import { UserPlus, Users, ShieldCheck, Phone, Mail, RefreshCw, MapPin, Trash2, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/store/auth-store'
 import { Card, CardTitle } from '@/components/ui/card'
 import { StatCard } from '@/components/ui/stat-card'
 import { Button } from '@/components/ui/button'
@@ -36,6 +37,8 @@ export const PersonalPage = () => {
     password: '',
   })
   const [saving, setSaving] = useState(false)
+  const [deletingRut, setDeletingRut] = useState<string | null>(null)
+  const { user: currentUser } = useAuthStore()
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
     null
   )
@@ -139,6 +142,47 @@ export const PersonalPage = () => {
     }
   }
 
+  const eliminarUsuario = async (usuario: Tables<'usuarios'>) => {
+    resetFeedback()
+
+    if (currentUser?.rut === usuario.rut) {
+      alert('No puedes eliminar tu propio acceso mientras tienes la sesión iniciada.')
+      return
+    }
+
+    const confirmado = confirm(
+      `¿Eliminar el acceso de ${usuario.nombre} (${usuario.rut})?\n\n` +
+        'Se borrará definitivamente de la base de datos y no podrá volver a ingresar a la web.\n' +
+        'Esta acción NO se puede deshacer.'
+    )
+    if (!confirmado) return
+
+    setDeletingRut(usuario.rut)
+    try {
+      // 1. Eliminar el acceso a la web
+      const { error } = await supabase.from('usuarios').delete().eq('rut', usuario.rut)
+      if (error) throw error
+
+      // 2. Limpiar su presencia en vivo (mapa) y su ficha de contacto
+      await supabase.from('usuarios_activos').delete().eq('usuario_rut', usuario.rut)
+      await supabase.from('personal').delete().eq('nombre', usuario.nombre)
+
+      setFeedback({
+        type: 'success',
+        message: `Acceso de ${usuario.nombre} eliminado definitivamente de la base de datos.`,
+      })
+      await Promise.all([refetchUsuarios(), refetchPersonal()])
+    } catch (error: any) {
+      console.error('Error eliminando usuario', error)
+      setFeedback({
+        type: 'error',
+        message: error?.message ?? 'No se pudo eliminar el acceso. Intenta nuevamente.',
+      })
+    } finally {
+      setDeletingRut(null)
+    }
+  }
+
   const resetPassword = async (rut: string) => {
     const nueva = prompt('Ingresa la nueva contraseña para este usuario:')
     if (!nueva || nueva.length < 6) {
@@ -198,6 +242,17 @@ export const PersonalPage = () => {
             Actualizar
           </Button>
         </div>
+        {feedback && (
+          <div
+            className={`mt-3 rounded-xl px-4 py-2.5 text-sm font-medium ${
+              feedback.type === 'success'
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                : 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300'
+            }`}
+          >
+            {feedback.message}
+          </div>
+        )}
         <div className="mt-4 max-h-[360px] overflow-auto">
           <table className="min-w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
@@ -247,14 +302,35 @@ export const PersonalPage = () => {
                     <td className="py-3 whitespace-nowrap">{usuario.terminal}</td>
                     <td className="py-3 whitespace-nowrap">{dayjs(usuario.created_at).format('DD MMM HH:mm')}</td>
                     <td className="py-3 text-right whitespace-nowrap">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-2xl text-xs"
-                        onClick={() => resetPassword(usuario.rut)}
-                      >
-                        Resetear contraseña
-                      </Button>
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-2xl text-xs"
+                          onClick={() => resetPassword(usuario.rut)}
+                        >
+                          Resetear contraseña
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="gap-1.5 rounded-2xl text-xs"
+                          disabled={deletingRut === usuario.rut || currentUser?.rut === usuario.rut}
+                          title={
+                            currentUser?.rut === usuario.rut
+                              ? 'No puedes eliminar tu propio acceso'
+                              : `Eliminar acceso de ${usuario.nombre}`
+                          }
+                          onClick={() => eliminarUsuario(usuario)}
+                        >
+                          {deletingRut === usuario.rut ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          Eliminar
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}

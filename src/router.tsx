@@ -23,6 +23,7 @@ import { PendientesPage } from '@/features/pendientes/pendientes-page'
 import { TicketsPage } from '@/features/tickets/tickets-page'
 import { ProfilePage } from '@/features/profile/profile-page'
 import { ProtectedRoute } from '@/routes/protected-route'
+import { RequireRole } from '@/routes/require-role'
 import { RootRedirect } from '@/routes/root-redirect'
 import { NotFoundPage } from '@/routes/not-found'
 
@@ -34,7 +35,14 @@ export const router = createBrowserRouter([
     element: <ProtectedRoute />,
     children: [
       { index: true, element: <Navigate to="/app/formulario" replace /> },
-      { path: 'dashboard', element: <DashboardPage /> },
+      {
+        path: 'dashboard',
+        element: (
+          <RequireRole roles={['SUPERVISOR', 'JEFE DE TERMINAL']}>
+            <DashboardPage />
+          </RequireRole>
+        ),
+      },
       { path: 'formulario', element: <InspectionFormPage /> },
       { path: 'registros', element: <RecordsPage /> },
       { path: 'tag', element: <TagModulePage /> },

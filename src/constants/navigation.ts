@@ -50,7 +50,7 @@ export const SIDEBAR_GROUPS: NavGroup[] = [
     icon: LayoutDashboard,
     defaultOpen: true,
     items: [
-      { label: 'Dashboard', path: '/app/dashboard', icon: LayoutDashboard },
+      { label: 'Dashboard', path: '/app/dashboard', icon: LayoutDashboard, roles: ['SUPERVISOR', 'JEFE DE TERMINAL'] },
       { label: 'Nueva Inspección', path: '/app/formulario', icon: ClipboardList },
       { label: 'Pendientes', path: '/app/pendientes', icon: ClipboardCheck },
       { label: 'Tickets', path: '/app/tickets', icon: Ticket, roles: ['SUPERVISOR', 'JEFE DE TERMINAL'] },
@@ -109,11 +109,12 @@ export interface MobileNavItem {
   path: string
   key: 'formulario' | 'dashboard' | 'comunicacion' | 'pendientes' | 'perfil'
   icon: ComponentType<{ className?: string }>
+  roles?: Array<'INSPECTOR' | 'SUPERVISOR' | 'JEFE DE TERMINAL'>
 }
 
 export const MOBILE_ITEMS: MobileNavItem[] = [
   { label: 'Inicio', path: '/app/formulario', key: 'formulario', icon: ClipboardList },
-  { label: 'Dashboard', path: '/app/dashboard', key: 'dashboard', icon: LayoutDashboard },
+  { label: 'Dashboard', path: '/app/dashboard', key: 'dashboard', icon: LayoutDashboard, roles: ['SUPERVISOR', 'JEFE DE TERMINAL'] },
   { label: 'Chat', path: '/app/chat', key: 'comunicacion', icon: MessageSquare },
   { label: 'Pendientes', path: '/app/pendientes', key: 'pendientes', icon: Map },
   { label: 'Perfil', path: '/app/perfil', key: 'perfil', icon: Users2 },
