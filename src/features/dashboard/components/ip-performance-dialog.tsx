@@ -18,14 +18,16 @@ import {
   AlertTriangle,
   ArrowLeft,
   Bus,
+  CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Crosshair,
   Globe,
   MapPin,
   Medal,
   Moon,
   Route,
-  ShieldCheck,
   Sun,
   User,
   X,
@@ -42,14 +44,7 @@ import { useInspeccionesEnCurso } from '@/hooks/use-inspeccion-presence'
 
 type RevisionRow = Tables<'revisiones'>
 type Rango = '1m' | '2m' | 'all'
-
-interface IpUso {
-  ip: string
-  usos: number
-  ciudad: string
-  primeraVez: string
-  ultimaVez: string
-}
+type ModoDetalle = 'semana' | '1m' | '2m' | 'all'
 
 interface ColaboradorStats {
   rut: string
@@ -61,15 +56,15 @@ interface ColaboradorStats {
   dentroGeocerca: number
   conGps: number
   distanciaPromedio: number
-  precision: number // % de revisiones dentro de geocerca
-  ips: IpUso[]
+  precision: number
+  busesDistintos: number
+  ipsDistintas: number
   terminales: string[]
   diasActivos: number
-  primeraActividad: string
   ultimaActividad: string
 }
 
-const fetchRevisiones = async (rango: Rango): Promise<RevisionRow[]> => {
+const fetchRevisionesRango = async (rango: Rango): Promise<RevisionRow[]> => {
   let query = supabase
     .from('revisiones')
     .select('*')
@@ -85,6 +80,9 @@ const fetchRevisiones = async (rango: Rango): Promise<RevisionRow[]> => {
   return (data as RevisionRow[]) ?? []
 }
 
+const conGpsValido = (rev: RevisionRow) =>
+  typeof rev.lat === 'number' && typeof rev.lon === 'number' && rev.lat !== 0
+
 const construirStats = (revisiones: RevisionRow[]): ColaboradorStats[] => {
   const porInspector = new Map<string, RevisionRow[]>()
   revisiones.forEach((rev) => {
@@ -96,40 +94,9 @@ const construirStats = (revisiones: RevisionRow[]): ColaboradorStats[] => {
 
   const stats: ColaboradorStats[] = []
   porInspector.forEach((revs) => {
-    const conGpsList = revs.filter(
-      (rev) => typeof rev.lat === 'number' && typeof rev.lon === 'number' && rev.lat !== 0
-    )
-    const medidas = conGpsList.map((rev) => closestTerminalDistance(rev.lat, rev.lon))
+    const gps = revs.filter(conGpsValido)
+    const medidas = gps.map((rev) => closestTerminalDistance(rev.lat, rev.lon))
     const dentro = medidas.filter((m) => m.inside).length
-    const distanciaPromedio =
-      medidas.length > 0
-        ? Math.round(medidas.reduce((acc, m) => acc + m.distance, 0) / medidas.length)
-        : 0
-
-    const ipsMap = new Map<string, { usos: number; ciudad: string; fechas: string[] }>()
-    revs.forEach((rev) => {
-      const ip = rev.ip_address ?? 'Sin IP'
-      const entry = ipsMap.get(ip) ?? {
-        usos: 0,
-        ciudad: rev.ip_info
-          ? [rev.ip_info.city, rev.ip_info.isp].filter(Boolean).join(' · ') || '—'
-          : '—',
-        fechas: [],
-      }
-      entry.usos += 1
-      entry.fechas.push(rev.created_at)
-      ipsMap.set(ip, entry)
-    })
-    const ips: IpUso[] = [...ipsMap.entries()]
-      .map(([ip, entry]) => ({
-        ip,
-        usos: entry.usos,
-        ciudad: entry.ciudad,
-        primeraVez: entry.fechas[entry.fechas.length - 1],
-        ultimaVez: entry.fechas[0],
-      }))
-      .sort((a, b) => b.usos - a.usos)
-
     const dias = new Set(revs.map((rev) => dayjs(rev.created_at).format('YYYY-MM-DD')))
 
     stats.push({
@@ -140,13 +107,16 @@ const construirStats = (revisiones: RevisionRow[]): ColaboradorStats[] => {
       operativos: revs.filter((rev) => rev.estado_bus === 'OPERATIVO').length,
       panne: revs.filter((rev) => rev.estado_bus === 'EN_PANNE').length,
       dentroGeocerca: dentro,
-      conGps: conGpsList.length,
-      distanciaPromedio,
-      precision: conGpsList.length > 0 ? (dentro / conGpsList.length) * 100 : 0,
-      ips,
+      conGps: gps.length,
+      distanciaPromedio:
+        medidas.length > 0
+          ? Math.round(medidas.reduce((acc, m) => acc + m.distance, 0) / medidas.length)
+          : 0,
+      precision: gps.length > 0 ? (dentro / gps.length) * 100 : 0,
+      busesDistintos: new Set(revs.map((rev) => rev.bus_ppu)).size,
+      ipsDistintas: new Set(revs.map((rev) => rev.ip_address).filter(Boolean)).size,
       terminales: [...new Set(revs.map((rev) => rev.terminal_detectado || rev.terminal_reportado))],
       diasActivos: dias.size,
-      primeraActividad: revs[revs.length - 1].created_at,
       ultimaActividad: revs[0].created_at,
     })
   })
@@ -169,9 +139,8 @@ const medalla = (index: number) => {
 }
 
 // ============================================================
-// MAPA OPERATIVO DEL COLABORADOR
-// Ubicación en vivo, buses revisados en la semana, bus en
-// revisión AHORA (verde) y trayectoria por turno día/noche.
+// MAPA OPERATIVO: ubicación en vivo, buses del período,
+// "revisando ahora" en verde y trayectoria por turno.
 // ============================================================
 
 type Turno = 'todo' | 'dia' | 'noche'
@@ -243,38 +212,32 @@ const FitBounds = ({ points }: { points: [number, number][] }) => {
 }
 
 const MapaOperativo = ({
-  colaborador,
+  nombre,
+  revisiones,
+  periodoLabel,
   live,
   revisando,
 }: {
-  colaborador: ColaboradorStats
+  nombre: string
+  revisiones: RevisionRow[]
+  periodoLabel: string
   live?: Tables<'usuarios_activos'>
-  revisando?: { ppu: string; interno: string; startedAt: string }
+  revisando?: { ppu: string; startedAt: string }
 }) => {
   const [verTrayectoria, setVerTrayectoria] = useState(false)
   const [turno, setTurno] = useState<Turno>('todo')
 
-  const puntosGps = useMemo(
-    () =>
-      colaborador.revisiones.filter(
-        (rev) => typeof rev.lat === 'number' && typeof rev.lon === 'number' && rev.lat !== 0
-      ),
-    [colaborador]
-  )
+  const puntosGps = useMemo(() => revisiones.filter(conGpsValido), [revisiones])
 
-  // Buses revisados dentro de la semana actual (último punto por PPU)
-  const busesSemana = useMemo(() => {
-    const inicioSemana = dayjs().isoWeekday(1).startOf('day')
+  // Último punto por PPU dentro del período seleccionado
+  const busesPeriodo = useMemo(() => {
     const porPpu = new Map<string, RevisionRow>()
-    puntosGps
-      .filter((rev) => !dayjs(rev.created_at).isBefore(inicioSemana))
-      .forEach((rev) => {
-        if (!porPpu.has(rev.bus_ppu)) porPpu.set(rev.bus_ppu, rev)
-      })
+    puntosGps.forEach((rev) => {
+      if (!porPpu.has(rev.bus_ppu)) porPpu.set(rev.bus_ppu, rev)
+    })
     return [...porPpu.values()]
   }, [puntosGps])
 
-  // Trayectoria del rango completo, filtrada por turno y en orden cronológico
   const trayectoria = useMemo(() => {
     const filtrados = puntosGps.filter((rev) => {
       if (turno === 'dia') return esTurnoDia(rev.created_at)
@@ -301,15 +264,15 @@ const MapaOperativo = ({
     if (verTrayectoria && trayectoria.length > 0) {
       return trayectoria.map((rev) => [rev.lat, rev.lon])
     }
-    const puntos: [number, number][] = busesSemana.map((rev) => [rev.lat, rev.lon])
+    const puntos: [number, number][] = busesPeriodo.map((rev) => [rev.lat, rev.lon])
     if (live) puntos.push([live.lat, live.lon])
     return puntos
-  }, [verTrayectoria, trayectoria, busesSemana, live])
+  }, [verTrayectoria, trayectoria, busesPeriodo, live])
 
   const colorTrayectoria = turno === 'dia' ? '#f59e0b' : turno === 'noche' ? '#312e81' : '#6366f1'
 
   return (
-    <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800">
+    <div className="overflow-hidden rounded-2xl border border-slate-200/70 dark:border-slate-800">
       <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/70 px-4 py-3 dark:border-slate-800">
         <MapPin className="h-4 w-4 text-indigo-500" />
         <p className="text-sm font-bold text-slate-800 dark:text-slate-100">Mapa operativo</p>
@@ -369,11 +332,11 @@ const MapaOperativo = ({
 
       {puntosGps.length === 0 && !live ? (
         <div className="flex h-40 items-center justify-center text-xs text-slate-400">
-          Este colaborador no tiene revisiones con GPS en el rango seleccionado.
+          Sin revisiones con GPS ni señal en vivo en este período.
         </div>
       ) : (
         <>
-          <div className="h-[360px] w-full overflow-hidden">
+          <div className="h-[340px] w-full">
             <MapContainer
               center={[-33.46, -70.65]}
               zoom={11}
@@ -386,7 +349,6 @@ const MapaOperativo = ({
               />
               <FitBounds points={boundsPoints} />
 
-              {/* Geocercas de terminales */}
               {TERMINAL_GEOFENCES.map((fence) => (
                 <Circle
                   key={fence.name}
@@ -396,7 +358,6 @@ const MapaOperativo = ({
                 />
               ))}
 
-              {/* Trayectoria por turno */}
               {verTrayectoria && trayectoria.length > 1 && (
                 <Polyline
                   positions={trayectoria.map((rev) => [rev.lat, rev.lon])}
@@ -433,11 +394,10 @@ const MapaOperativo = ({
                   </CircleMarker>
                 ))}
 
-              {/* Buses revisados esta semana */}
               {!verTrayectoria &&
-                busesSemana.map((rev) => (
+                busesPeriodo.map((rev) => (
                   <Marker
-                    key={`sem-${rev.id}`}
+                    key={`per-${rev.id}`}
                     position={[rev.lat, rev.lon]}
                     icon={busPuntoIcon(rev.estado_bus === 'EN_PANNE')}
                   >
@@ -451,18 +411,16 @@ const MapaOperativo = ({
                   </Marker>
                 ))}
 
-              {/* Ubicación en vivo del colaborador */}
               {live && (
                 <Marker
                   position={[live.lat, live.lon]}
-                  icon={liveInspectorIcon(colaborador.nombre, revisando?.ppu ?? null)}
+                  icon={liveInspectorIcon(nombre, revisando?.ppu ?? null)}
                   zIndexOffset={1000}
                 />
               )}
             </MapContainer>
           </div>
 
-          {/* Estadísticas de la vista */}
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-slate-200/70 px-4 py-2.5 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
             {verTrayectoria ? (
               <>
@@ -489,8 +447,8 @@ const MapaOperativo = ({
             ) : (
               <>
                 <span className="font-semibold text-slate-700 dark:text-slate-200">
-                  🚌 {busesSemana.length} bus{busesSemana.length !== 1 ? 'es' : ''} revisado
-                  {busesSemana.length !== 1 ? 's' : ''} esta semana
+                  🚌 {busesPeriodo.length} bus{busesPeriodo.length !== 1 ? 'es' : ''} revisado
+                  {busesPeriodo.length !== 1 ? 's' : ''} · {periodoLabel}
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" /> Operativo
@@ -511,6 +469,10 @@ const MapaOperativo = ({
   )
 }
 
+// ============================================================
+// DIALOGO PRINCIPAL
+// ============================================================
+
 interface IpPerformanceDialogProps {
   open: boolean
   onClose: () => void
@@ -518,7 +480,9 @@ interface IpPerformanceDialogProps {
 
 export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps) => {
   const [rango, setRango] = useState<Rango>('1m')
-  const [selectedRut, setSelectedRut] = useState<string | null>(null)
+  const [seleccion, setSeleccion] = useState<{ rut: string; nombre: string } | null>(null)
+  const [modoDetalle, setModoDetalle] = useState<ModoDetalle>('semana')
+  const [semanaOffset, setSemanaOffset] = useState(0)
 
   useEffect(() => {
     if (!open) return
@@ -529,39 +493,131 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
     }
   }, [open])
 
+  // Ranking global (según rango del encabezado)
   const { data: revisiones, isLoading } = useQuery({
     queryKey: ['ip-performance', rango],
-    queryFn: () => fetchRevisiones(rango),
+    queryFn: () => fetchRevisionesRango(rango),
     enabled: open,
+  })
+
+  // Historial COMPLETO del colaborador seleccionado (independiente del rango)
+  const { data: detalleRevs, isLoading: loadingDetalle } = useQuery({
+    queryKey: ['ip-detalle', seleccion?.rut],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('revisiones')
+        .select('*')
+        .eq('inspector_rut', seleccion?.rut as string)
+        .order('created_at', { ascending: false })
+        .limit(5000)
+      return (data as RevisionRow[]) ?? []
+    },
+    enabled: open && Boolean(seleccion),
   })
 
   const stats = useMemo(() => construirStats(revisiones ?? []), [revisiones])
   const maxTotal = stats[0]?.total ?? 1
-  const seleccionado = stats.find((s) => s.rut === selectedRut) ?? null
 
-  // Datos en vivo: ubicación GPS e inspecciones en curso (Presence)
+  // Semana seleccionada en el detalle
+  const semanaInicio = useMemo(
+    () => dayjs().isoWeekday(1).startOf('day').add(semanaOffset, 'week'),
+    [semanaOffset]
+  )
+  const semanaFin = useMemo(() => semanaInicio.add(7, 'day'), [semanaInicio])
+
+  const periodoLabel = useMemo(() => {
+    if (modoDetalle === 'semana')
+      return `Semana ${semanaInicio.isoWeek()} · ${semanaInicio.format('DD MMM')} – ${semanaFin
+        .subtract(1, 'day')
+        .format('DD MMM')}`
+    if (modoDetalle === '1m') return 'Último mes'
+    if (modoDetalle === '2m') return 'Últimos 2 meses'
+    return 'Historial completo'
+  }, [modoDetalle, semanaInicio, semanaFin])
+
+  const detalleFiltradas = useMemo(() => {
+    if (!detalleRevs) return []
+    if (modoDetalle === 'semana') {
+      return detalleRevs.filter((rev) => {
+        const fecha = dayjs(rev.created_at)
+        return !fecha.isBefore(semanaInicio) && fecha.isBefore(semanaFin)
+      })
+    }
+    if (modoDetalle === 'all') return detalleRevs
+    const desde = dayjs().subtract(modoDetalle === '1m' ? 1 : 2, 'month')
+    return detalleRevs.filter((rev) => dayjs(rev.created_at).isAfter(desde))
+  }, [detalleRevs, modoDetalle, semanaInicio, semanaFin])
+
+  const detalleStats = useMemo(
+    () => construirStats(detalleFiltradas)[0] ?? null,
+    [detalleFiltradas]
+  )
+
+  // Buses revisados agrupados por día (más reciente primero)
+  const busesPorDia = useMemo(() => {
+    const grupos = new Map<string, RevisionRow[]>()
+    detalleFiltradas.forEach((rev) => {
+      const key = dayjs(rev.created_at).format('YYYY-MM-DD')
+      const list = grupos.get(key)
+      if (list) list.push(rev)
+      else grupos.set(key, [rev])
+    })
+    return [...grupos.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+  }, [detalleFiltradas])
+
+  // Datos en vivo
   const { inspectors: activeInspectors } = useActiveInspectors()
   const inspeccionesEnCurso = useInspeccionesEnCurso()
-  const liveInspector = seleccionado
-    ? activeInspectors.find((inspector) => inspector.usuario_rut === seleccionado.rut)
+  const liveInspector = seleccion
+    ? activeInspectors.find((inspector) => inspector.usuario_rut === seleccion.rut)
     : undefined
-  const revisandoAhora = seleccionado
-    ? inspeccionesEnCurso.find((item) => item.rut === seleccionado.rut)
+  const revisandoAhora = seleccion
+    ? inspeccionesEnCurso.find((item) => item.rut === seleccion.rut)
     : undefined
+
+  const abrirDetalle = (rut: string, nombre: string) => {
+    setSeleccion({ rut, nombre })
+    setModoDetalle('semana')
+    setSemanaOffset(0)
+  }
 
   const globales = useMemo(() => {
     const totalRevs = stats.reduce((acc, s) => acc + s.total, 0)
-    const ipsUnicas = new Set(stats.flatMap((s) => s.ips.map((ip) => ip.ip)))
-    ipsUnicas.delete('Sin IP')
     const conGps = stats.reduce((acc, s) => acc + s.conGps, 0)
     const dentro = stats.reduce((acc, s) => acc + s.dentroGeocerca, 0)
     return {
       totalRevs,
       colaboradores: stats.length,
-      ipsUnicas: ipsUnicas.size,
+      buses: new Set((revisiones ?? []).map((rev) => rev.bus_ppu)).size,
       precisionGlobal: conGps > 0 ? (dentro / conGps) * 100 : 0,
     }
-  }, [stats])
+  }, [stats, revisiones])
+
+  const kpisHeader = seleccion
+    ? [
+        { label: periodoLabel, value: detalleStats?.total ?? 0, icon: Activity },
+        { label: 'Buses distintos', value: detalleStats?.busesDistintos ?? 0, icon: Bus },
+        {
+          label: 'Precisión GPS',
+          value: detalleStats && detalleStats.conGps > 0 ? `${detalleStats.precision.toFixed(0)}%` : '—',
+          icon: Crosshair,
+        },
+        {
+          label: 'Dist. prom. a terminal',
+          value: detalleStats && detalleStats.conGps > 0 ? `${detalleStats.distanciaPromedio} m` : '—',
+          icon: MapPin,
+        },
+      ]
+    : [
+        { label: 'Revisiones totales', value: globales.totalRevs, icon: Activity },
+        { label: 'Colaboradores', value: globales.colaboradores, icon: User },
+        { label: 'Buses distintos', value: globales.buses, icon: Bus },
+        {
+          label: 'Precisión global',
+          value: `${globales.precisionGlobal.toFixed(0)}%`,
+          icon: Crosshair,
+        },
+      ]
 
   return createPortal(
     <AnimatePresence>
@@ -591,86 +647,70 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
                 <X className="h-5 w-5" />
               </button>
               <div className="flex flex-wrap items-center gap-4">
-                {seleccionado && (
+                {seleccion && (
                   <button
                     type="button"
-                    onClick={() => setSelectedRut(null)}
+                    onClick={() => setSeleccion(null)}
                     className="rounded-full border border-white/20 bg-slate-950/30 p-2 transition hover:bg-white/15"
                   >
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                 )}
                 <div className="rounded-2xl bg-white/15 p-3">
-                  {seleccionado ? <User className="h-7 w-7" /> : <Globe className="h-7 w-7" />}
+                  {seleccion ? <User className="h-7 w-7" /> : <Globe className="h-7 w-7" />}
                 </div>
                 <div className="min-w-0">
-                  <h2 className="truncate text-xl font-black">
-                    {seleccionado ? seleccionado.nombre : 'Rendimiento por IP y colaborador'}
-                  </h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="truncate text-xl font-black">
+                      {seleccion ? seleccion.nombre : 'Rendimiento por colaborador'}
+                    </h2>
+                    {seleccion && revisandoAhora && (
+                      <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-500/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide">
+                        <span className="marker-live-dot inline-block h-2 w-2 rounded-full bg-white" />
+                        Revisando {revisandoAhora.ppu}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-white/80">
-                    {seleccionado
-                      ? `${seleccionado.rut} · Ranking #${stats.findIndex((s) => s.rut === seleccionado.rut) + 1} de ${stats.length}`
-                      : 'Ranking de revisiones, precisión GPS y trazabilidad de IPs'}
+                    {seleccion
+                      ? `${seleccion.rut} · Informe semanal de actividad`
+                      : 'Ranking de revisiones, precisión GPS y trazabilidad'}
                   </p>
                 </div>
-                <div className="ml-auto flex gap-1 rounded-2xl border border-white/15 bg-slate-950/30 p-1">
-                  {(
-                    [
-                      ['1m', '1 mes'],
-                      ['2m', '2 meses'],
-                      ['all', 'Todo'],
-                    ] as [Rango, string][]
-                  ).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setRango(value)}
-                      className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
-                        rango === value
-                          ? 'bg-white text-indigo-700 shadow'
-                          : 'text-white/80 hover:bg-white/10'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+                {!seleccion && (
+                  <div className="ml-auto flex gap-1 rounded-2xl border border-white/15 bg-slate-950/30 p-1">
+                    {(
+                      [
+                        ['1m', '1 mes'],
+                        ['2m', '2 meses'],
+                        ['all', 'Todo'],
+                      ] as [Rango, string][]
+                    ).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setRango(value)}
+                        className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+                          rango === value
+                            ? 'bg-white text-indigo-700 shadow'
+                            : 'text-white/80 hover:bg-white/10'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* KPIs globales o del colaborador */}
               <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {(seleccionado
-                  ? [
-                      { label: 'Revisiones', value: seleccionado.total, icon: Activity },
-                      {
-                        label: 'Precisión GPS',
-                        value: `${seleccionado.precision.toFixed(0)}%`,
-                        icon: Crosshair,
-                      },
-                      {
-                        label: 'Dist. promedio a terminal',
-                        value: `${seleccionado.distanciaPromedio} m`,
-                        icon: MapPin,
-                      },
-                      { label: 'IPs distintas', value: seleccionado.ips.length, icon: Globe },
-                    ]
-                  : [
-                      { label: 'Revisiones totales', value: globales.totalRevs, icon: Activity },
-                      { label: 'Colaboradores', value: globales.colaboradores, icon: User },
-                      { label: 'IPs distintas', value: globales.ipsUnicas, icon: Globe },
-                      {
-                        label: 'Precisión global',
-                        value: `${globales.precisionGlobal.toFixed(0)}%`,
-                        icon: Crosshair,
-                      },
-                    ]
-                ).map((kpi) => (
+                {kpisHeader.map((kpi) => (
                   <div
                     key={kpi.label}
                     className="rounded-xl border border-white/15 bg-slate-950/30 px-3 py-2"
                   >
-                    <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-white/70">
-                      <kpi.icon className="h-3 w-3" /> {kpi.label}
+                    <div className="flex items-center gap-1.5 truncate text-[10px] uppercase tracking-wide text-white/70">
+                      <kpi.icon className="h-3 w-3 shrink-0" /> {kpi.label}
                     </div>
                     <p className="mt-0.5 text-lg font-bold text-white">{kpi.value}</p>
                   </div>
@@ -680,9 +720,201 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
 
             {/* Cuerpo */}
             <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-4">
-              {isLoading ? (
+              {seleccion ? (
+                /* ================= DETALLE ================= */
+                <div className="space-y-4">
+                  {/* Barra de período: semanas navegables + rangos */}
+                  <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200/70 bg-slate-50/60 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/40">
+                    <CalendarDays className="h-4 w-4 text-indigo-500" />
+                    <div className="flex gap-1 rounded-xl bg-white p-1 shadow-sm dark:bg-slate-950">
+                      {(
+                        [
+                          ['semana', 'Semanal'],
+                          ['1m', '1 mes'],
+                          ['2m', '2 meses'],
+                          ['all', 'Todo'],
+                        ] as [ModoDetalle, string][]
+                      ).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setModoDetalle(value)}
+                          className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
+                            modoDetalle === value
+                              ? 'bg-indigo-600 text-white shadow'
+                              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {modoDetalle === 'semana' && (
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8 rounded-xl"
+                          onClick={() => setSemanaOffset((prev) => prev - 1)}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="min-w-[190px] rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-center text-xs font-bold text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300">
+                          {periodoLabel}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8 rounded-xl"
+                          disabled={semanaOffset >= 0}
+                          onClick={() => setSemanaOffset((prev) => Math.min(prev + 1, 0))}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                        {semanaOffset !== 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs"
+                            onClick={() => setSemanaOffset(0)}
+                          >
+                            Hoy
+                          </Button>
+                        )}
+                      </div>
+                    )}
+
+                    <span className="ml-auto text-[11px] text-slate-400">
+                      {detalleStats
+                        ? `${detalleStats.operativos} operativos · ${detalleStats.panne} en panne · ${detalleStats.diasActivos} día${detalleStats.diasActivos !== 1 ? 's' : ''} activo${detalleStats.diasActivos !== 1 ? 's' : ''}`
+                        : 'Sin actividad en el período'}
+                    </span>
+                  </div>
+
+                  {loadingDetalle ? (
+                    <div className="flex h-56 items-center justify-center text-sm text-slate-400">
+                      Cargando historial del colaborador…
+                    </div>
+                  ) : (
+                    <>
+                      {/* Mapa en vivo del período */}
+                      <MapaOperativo
+                        nombre={seleccion.nombre}
+                        revisiones={detalleFiltradas}
+                        periodoLabel={periodoLabel}
+                        live={liveInspector}
+                        revisando={revisandoAhora}
+                      />
+
+                      {/* Buses revisados: qué y cuándo */}
+                      <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800">
+                        <div className="flex items-center gap-2 border-b border-slate-200/70 px-4 py-3 dark:border-slate-800">
+                          <Bus className="h-4 w-4 text-indigo-500" />
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                            Buses revisados · {periodoLabel}
+                          </p>
+                          <span className="ml-auto rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-bold text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
+                            {detalleFiltradas.length} revisión
+                            {detalleFiltradas.length !== 1 ? 'es' : ''}
+                          </span>
+                        </div>
+
+                        {busesPorDia.length === 0 ? (
+                          <div className="flex h-32 flex-col items-center justify-center gap-1 text-center">
+                            <Bus className="h-7 w-7 text-slate-300" />
+                            <p className="text-xs text-slate-400">
+                              Sin revisiones en este período. Usa las flechas para cambiar de semana.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="max-h-[380px] overflow-y-auto overscroll-contain">
+                            {busesPorDia.map(([dia, revs]) => (
+                              <div key={dia}>
+                                <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-slate-200/60 bg-slate-50 px-4 py-1.5 dark:border-slate-800 dark:bg-slate-900">
+                                  <p className="text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                    {dayjs(dia).format('dddd DD MMMM YYYY')}
+                                  </p>
+                                  <span className="text-[10px] text-slate-400">
+                                    {revs.length} bus{revs.length !== 1 ? 'es' : ''}
+                                  </span>
+                                </div>
+                                {revs.map((rev) => {
+                                  const gps = conGpsValido(rev)
+                                  const medida = gps ? closestTerminalDistance(rev.lat, rev.lon) : null
+                                  return (
+                                    <div
+                                      key={rev.id}
+                                      className="flex items-center gap-3 border-b border-slate-100 px-4 py-2.5 last:border-b-0 dark:border-slate-800/50"
+                                    >
+                                      <span className="w-12 shrink-0 font-mono text-xs font-bold text-slate-500 dark:text-slate-400">
+                                        {dayjs(rev.created_at).format('HH:mm')}
+                                      </span>
+                                      <span
+                                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm ${
+                                          rev.estado_bus === 'EN_PANNE'
+                                            ? 'bg-orange-100 dark:bg-orange-950/50'
+                                            : 'bg-emerald-100 dark:bg-emerald-950/50'
+                                        }`}
+                                      >
+                                        🚌
+                                      </span>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                                          {rev.bus_ppu}
+                                          <span className="ml-1.5 text-xs font-normal text-slate-400">
+                                            N° {rev.bus_interno}
+                                          </span>
+                                        </p>
+                                        <p className="truncate text-[11px] text-slate-500">
+                                          {rev.terminal_detectado || rev.terminal_reportado} · Semana{' '}
+                                          {rev.semana_iso}
+                                          {rev.observaciones ? ` · "${rev.observaciones}"` : ''}
+                                        </p>
+                                      </div>
+                                      {rev.estado_bus === 'EN_PANNE' ? (
+                                        <Badge variant="danger" className="shrink-0 px-1.5 py-0 text-[9px]">
+                                          EN PANNE
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="success" className="shrink-0 px-1.5 py-0 text-[9px]">
+                                          OPERATIVO
+                                        </Badge>
+                                      )}
+                                      <span className="hidden w-40 shrink-0 text-right sm:block">
+                                        {medida ? (
+                                          medida.inside ? (
+                                            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                              <CheckCircle2 className="mr-0.5 inline h-3 w-3" />
+                                              {medida.terminal} · {medida.distance} m
+                                            </span>
+                                          ) : (
+                                            <span className="text-[11px] font-semibold text-red-600 dark:text-red-400">
+                                              <AlertTriangle className="mr-0.5 inline h-3 w-3" />
+                                              Fuera ·{' '}
+                                              {medida.distance >= 1000
+                                                ? `${(medida.distance / 1000).toFixed(1)} km`
+                                                : `${medida.distance} m`}
+                                            </span>
+                                          )
+                                        ) : (
+                                          <span className="text-[11px] text-slate-400">Sin GPS</span>
+                                        )}
+                                      </span>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : isLoading ? (
                 <div className="flex h-64 items-center justify-center text-sm text-slate-400">
-                  Analizando revisiones, IPs y precisión GPS…
+                  Analizando revisiones y precisión GPS…
                 </div>
               ) : stats.length === 0 ? (
                 <div className="flex h-64 flex-col items-center justify-center gap-2 text-center">
@@ -691,260 +923,82 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
                     Sin revisiones en el rango seleccionado
                   </p>
                 </div>
-              ) : seleccionado ? (
-                /* ---------- DETALLE POR COLABORADOR ---------- */
-                <div className="space-y-5">
-                  {/* Resumen operativo */}
-                  <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
-                    {[
-                      {
-                        label: 'Buses operativos',
-                        value: seleccionado.operativos,
-                        cls: 'text-emerald-600 dark:text-emerald-400',
-                      },
-                      {
-                        label: 'Buses en panne',
-                        value: seleccionado.panne,
-                        cls: 'text-orange-600 dark:text-orange-400',
-                      },
-                      { label: 'Días activos', value: seleccionado.diasActivos, cls: '' },
-                      {
-                        label: 'Prom. por día activo',
-                        value: (seleccionado.total / Math.max(seleccionado.diasActivos, 1)).toFixed(1),
-                        cls: '',
-                      },
-                      {
-                        label: 'Terminales cubiertos',
-                        value: seleccionado.terminales.length,
-                        cls: '',
-                      },
-                    ].map((item) => (
-                      <div
-                        key={item.label}
-                        className="rounded-xl border border-slate-200/70 px-3 py-2.5 dark:border-slate-800"
-                      >
-                        <p className="text-[10px] uppercase tracking-wide text-slate-400">
-                          {item.label}
-                        </p>
-                        <p className={`text-lg font-bold text-slate-800 dark:text-slate-100 ${item.cls}`}>
-                          {item.value}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Mapa operativo en vivo */}
-                  <MapaOperativo
-                    colaborador={seleccionado}
-                    live={liveInspector}
-                    revisando={revisandoAhora}
-                  />
-
-                  {/* IPs utilizadas */}
-                  <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800">
-                    <div className="flex items-center gap-2 border-b border-slate-200/70 px-4 py-3 dark:border-slate-800">
-                      <ShieldCheck className="h-4 w-4 text-indigo-500" />
-                      <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                        IPs utilizadas ({seleccionado.ips.length})
-                      </p>
-                      <span className="ml-auto text-[11px] text-slate-400">
-                        Activo del {dayjs(seleccionado.primeraActividad).format('DD/MM/YY')} al{' '}
-                        {dayjs(seleccionado.ultimaActividad).format('DD/MM/YY')}
-                      </span>
-                    </div>
-                    <div className="max-h-52 overflow-auto overscroll-contain">
-                      <table className="w-full text-left text-xs">
-                        <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900">
-                          <tr className="text-[10px] uppercase tracking-wide text-slate-400">
-                            <th className="px-4 py-2">Dirección IP</th>
-                            <th className="px-4 py-2">Revisiones</th>
-                            <th className="px-4 py-2">Red / Ciudad</th>
-                            <th className="px-4 py-2">Primera vez</th>
-                            <th className="px-4 py-2">Última vez</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {seleccionado.ips.map((ip) => (
-                            <tr key={ip.ip} className="border-t border-slate-100 dark:border-slate-800/60">
-                              <td className="px-4 py-2.5">
-                                <span className="rounded-lg bg-slate-100 px-2 py-0.5 font-mono text-[11px] text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                                  {ip.ip}
-                                </span>
-                              </td>
-                              <td className="px-4 py-2.5 font-bold text-slate-800 dark:text-slate-100">
-                                {ip.usos}
-                              </td>
-                              <td className="px-4 py-2.5 text-slate-500">{ip.ciudad}</td>
-                              <td className="px-4 py-2.5 text-slate-500">
-                                {dayjs(ip.primeraVez).format('DD/MM/YY HH:mm')}
-                              </td>
-                              <td className="px-4 py-2.5 text-slate-500">
-                                {dayjs(ip.ultimaVez).format('DD/MM/YY HH:mm')}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* Revisiones con precisión */}
-                  <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800">
-                    <div className="flex items-center gap-2 border-b border-slate-200/70 px-4 py-3 dark:border-slate-800">
-                      <Bus className="h-4 w-4 text-indigo-500" />
-                      <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                        Revisiones y precisión de ubicación ({seleccionado.total})
-                      </p>
-                    </div>
-                    <div className="max-h-72 overflow-auto overscroll-contain">
-                      <table className="w-full text-left text-xs">
-                        <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900">
-                          <tr className="text-[10px] uppercase tracking-wide text-slate-400">
-                            <th className="px-4 py-2">Fecha y hora</th>
-                            <th className="px-4 py-2">Bus</th>
-                            <th className="px-4 py-2">Estado</th>
-                            <th className="px-4 py-2">Terminal</th>
-                            <th className="px-4 py-2">Precisión GPS</th>
-                            <th className="px-4 py-2">IP</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {seleccionado.revisiones.map((rev) => {
-                            const conGps =
-                              typeof rev.lat === 'number' && typeof rev.lon === 'number' && rev.lat !== 0
-                            const medida = conGps ? closestTerminalDistance(rev.lat, rev.lon) : null
-                            return (
-                              <tr key={rev.id} className="border-t border-slate-100 dark:border-slate-800/60">
-                                <td className="px-4 py-2.5 font-semibold text-slate-800 dark:text-slate-100">
-                                  {dayjs(rev.created_at).format('DD/MM/YY HH:mm')}
-                                </td>
-                                <td className="px-4 py-2.5 font-bold text-slate-800 dark:text-slate-100">
-                                  {rev.bus_ppu}
-                                  <span className="ml-1 font-normal text-slate-400">
-                                    ({rev.bus_interno})
-                                  </span>
-                                </td>
-                                <td className="px-4 py-2.5">
-                                  {rev.estado_bus === 'EN_PANNE' ? (
-                                    <Badge variant="danger" className="px-1.5 py-0 text-[9px]">
-                                      EN PANNE
-                                    </Badge>
-                                  ) : (
-                                    <Badge variant="success" className="px-1.5 py-0 text-[9px]">
-                                      OPERATIVO
-                                    </Badge>
-                                  )}
-                                </td>
-                                <td className="px-4 py-2.5 text-slate-500">
-                                  {rev.terminal_detectado || rev.terminal_reportado}
-                                </td>
-                                <td className="px-4 py-2.5">
-                                  {medida ? (
-                                    medida.inside ? (
-                                      <span className="flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400">
-                                        <CheckCircle2 className="h-3 w-3" /> En {medida.terminal} (
-                                        {medida.distance} m)
-                                      </span>
-                                    ) : (
-                                      <span className="flex items-center gap-1 font-semibold text-red-600 dark:text-red-400">
-                                        <AlertTriangle className="h-3 w-3" /> Fuera de geocerca (
-                                        {medida.distance >= 1000
-                                          ? `${(medida.distance / 1000).toFixed(1)} km`
-                                          : `${medida.distance} m`}
-                                        )
-                                      </span>
-                                    )
-                                  ) : (
-                                    <span className="text-slate-400">Sin GPS</span>
-                                  )}
-                                </td>
-                                <td className="px-4 py-2.5 font-mono text-[11px] text-slate-500">
-                                  {rev.ip_address ?? '—'}
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
               ) : (
-                /* ---------- RANKING ---------- */
+                /* ================= RANKING ================= */
                 <div className="space-y-2">
                   <p className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100">
                     <Medal className="h-4 w-4 text-amber-500" /> Ranking de colaboradores · clic para
                     ver el informe individual
                   </p>
-                  {stats.map((colaborador, index) => (
-                    <button
-                      key={colaborador.rut}
-                      type="button"
-                      onClick={() => setSelectedRut(colaborador.rut)}
-                      className="flex w-full items-center gap-4 rounded-2xl border border-slate-200/70 px-4 py-3 text-left transition hover:border-indigo-400 hover:bg-indigo-50/40 dark:border-slate-800 dark:hover:border-indigo-600 dark:hover:bg-indigo-950/20"
-                    >
-                      <span className="w-10 shrink-0 text-center text-lg font-black text-slate-500">
-                        {medalla(index)}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="flex min-w-0 items-center gap-2 truncate text-sm font-bold text-slate-800 dark:text-slate-100">
-                            <span className="truncate">{colaborador.nombre}</span>
-                            <span className="shrink-0 text-xs font-normal text-slate-400">
-                              {colaborador.rut}
-                            </span>
-                            {(() => {
-                              const enCurso = inspeccionesEnCurso.find(
-                                (item) => item.rut === colaborador.rut
-                              )
-                              return enCurso ? (
+                  {stats.map((colaborador, index) => {
+                    const enCurso = inspeccionesEnCurso.find((item) => item.rut === colaborador.rut)
+                    return (
+                      <button
+                        key={colaborador.rut}
+                        type="button"
+                        onClick={() => abrirDetalle(colaborador.rut, colaborador.nombre)}
+                        className="flex w-full items-center gap-4 rounded-2xl border border-slate-200/70 px-4 py-3 text-left transition hover:border-indigo-400 hover:bg-indigo-50/40 dark:border-slate-800 dark:hover:border-indigo-600 dark:hover:bg-indigo-950/20"
+                      >
+                        <span className="w-10 shrink-0 text-center text-lg font-black text-slate-500">
+                          {medalla(index)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="flex min-w-0 items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100">
+                              <span className="truncate">{colaborador.nombre}</span>
+                              <span className="shrink-0 text-xs font-normal text-slate-400">
+                                {colaborador.rut}
+                              </span>
+                              {enCurso && (
                                 <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold uppercase text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
                                   <span className="marker-live-dot inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
                                   Revisando {enCurso.ppu}
                                 </span>
-                              ) : null
-                            })()}
-                          </p>
-                          <p className="shrink-0 text-sm font-black text-slate-800 dark:text-slate-100">
-                            {colaborador.total}
-                            <span className="ml-1 text-[10px] font-normal uppercase text-slate-400">
-                              rev.
+                              )}
+                            </p>
+                            <p className="shrink-0 text-sm font-black text-slate-800 dark:text-slate-100">
+                              {colaborador.total}
+                              <span className="ml-1 text-[10px] font-normal uppercase text-slate-400">
+                                rev.
+                              </span>
+                            </p>
+                          </div>
+                          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-indigo-400"
+                              style={{ width: `${Math.max((colaborador.total / maxTotal) * 100, 4)}%` }}
+                            />
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                            <span
+                              className={`flex items-center gap-1 font-semibold ${precisionColor(colaborador.precision)}`}
+                            >
+                              <Crosshair className="h-3 w-3" />
+                              {colaborador.conGps > 0
+                                ? `${colaborador.precision.toFixed(0)}% precisión`
+                                : 'Sin GPS'}
                             </span>
-                          </p>
-                        </div>
-                        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-indigo-400"
-                            style={{ width: `${Math.max((colaborador.total / maxTotal) * 100, 4)}%` }}
-                          />
-                        </div>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
-                          <span className={`flex items-center gap-1 font-semibold ${precisionColor(colaborador.precision)}`}>
-                            <Crosshair className="h-3 w-3" />
-                            {colaborador.conGps > 0
-                              ? `${colaborador.precision.toFixed(0)}% precisión`
-                              : 'Sin GPS'}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Globe className="h-3 w-3" /> {colaborador.ips.length} IP
-                            {colaborador.ips.length !== 1 ? 's' : ''}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" /> {colaborador.terminales.length} terminal
-                            {colaborador.terminales.length !== 1 ? 'es' : ''}
-                          </span>
-                          {colaborador.panne > 0 && (
-                            <span className="flex items-center gap-1 text-orange-600 dark:text-orange-400">
-                              <AlertTriangle className="h-3 w-3" /> {colaborador.panne} en panne
+                            <span className="flex items-center gap-1">
+                              <Bus className="h-3 w-3" /> {colaborador.busesDistintos} bus
+                              {colaborador.busesDistintos !== 1 ? 'es' : ''}
                             </span>
-                          )}
-                          <span className="ml-auto">
-                            Última: {dayjs(colaborador.ultimaActividad).format('DD/MM HH:mm')}
-                          </span>
+                            <span className="flex items-center gap-1">
+                              <MapPin className="h-3 w-3" /> {colaborador.terminales.length} terminal
+                              {colaborador.terminales.length !== 1 ? 'es' : ''}
+                            </span>
+                            {colaborador.panne > 0 && (
+                              <span className="flex items-center gap-1 text-orange-600 dark:text-orange-400">
+                                <AlertTriangle className="h-3 w-3" /> {colaborador.panne} en panne
+                              </span>
+                            )}
+                            <span className="ml-auto">
+                              Última: {dayjs(colaborador.ultimaActividad).format('DD/MM HH:mm')}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>

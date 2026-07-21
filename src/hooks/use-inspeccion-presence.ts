@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 
 // ============================================================
 // Presencia en tiempo real de inspecciones en curso.
-// El formulario "anuncia" qué bus está revisando vía Supabase
-// Realtime Presence: el aviso desaparece automáticamente cuando
-// el inspector termina, cambia de bus o pierde la conexión.
+//
+// IMPORTANTE: supabase-js solo admite UN canal por topic por
+// cliente. Si el header (observador) y el formulario (anunciante)
+// crean cada uno su canal con el mismo topic, el segundo join
+// anula al primero y nada funciona. Por eso este módulo mantiene
+// UN ÚNICO canal compartido (singleton) para toda la app.
 // ============================================================
 
 const CHANNEL_TOPIC = 'inspecciones-en-curso'
@@ -19,10 +23,98 @@ export interface InspeccionEnCurso {
   startedAt: string
 }
 
+type Listener = (items: InspeccionEnCurso[]) => void
+
+let channel: RealtimeChannel | null = null
+let isSubscribed = false
+let pendingTrack: InspeccionEnCurso | null = null
+const listeners = new Set<Listener>()
+
+// Clave de presencia única por pestaña del navegador
+const clientKey = `client-${Math.random().toString(36).slice(2)}`
+
+const parseState = (): InspeccionEnCurso[] => {
+  if (!channel) return []
+  const state = channel.presenceState<InspeccionEnCurso>()
+  const porRut = new Map<string, InspeccionEnCurso>()
+  Object.values(state)
+    .flat()
+    .filter((meta) => typeof meta.ppu === 'string' && meta.ppu.length > 0)
+    .forEach((meta) => {
+      const item: InspeccionEnCurso = {
+        rut: meta.rut,
+        nombre: meta.nombre,
+        ppu: meta.ppu,
+        interno: meta.interno,
+        terminal: meta.terminal,
+        startedAt: meta.startedAt,
+      }
+      const existente = porRut.get(item.rut)
+      if (!existente || item.startedAt > existente.startedAt) porRut.set(item.rut, item)
+    })
+  return [...porRut.values()].sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+}
+
+const notify = () => {
+  const items = parseState()
+  listeners.forEach((listener) => listener(items))
+}
+
+const ensureChannel = (): RealtimeChannel => {
+  if (channel) return channel
+
+  channel = supabase.channel(CHANNEL_TOPIC, {
+    config: { presence: { key: clientKey } },
+  })
+
+  channel.on('presence', { event: 'sync' }, notify)
+
+  channel.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') {
+      isSubscribed = true
+      // Si alguien intentó anunciar antes de que el canal conectara
+      // (o el socket se reconectó), re-publicar la presencia pendiente
+      if (pendingTrack && channel) {
+        await channel.track({ ...pendingTrack })
+      }
+      notify()
+    } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+      isSubscribed = false
+    }
+  })
+
+  return channel
+}
+
+const trackInspeccion = async (payload: InspeccionEnCurso) => {
+  pendingTrack = payload
+  const ch = ensureChannel()
+  if (isSubscribed) {
+    await ch.track({ ...payload })
+  }
+}
+
+const untrackInspeccion = async () => {
+  pendingTrack = null
+  if (channel && isSubscribed) {
+    await channel.untrack()
+  }
+}
+
+const subscribeInspecciones = (listener: Listener) => {
+  listeners.add(listener)
+  ensureChannel()
+  listener(parseState())
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
 /**
  * Anuncia que el usuario está revisando un bus.
- * Se usa en el formulario de inspección: mientras haya un bus
- * seleccionado, el resto de la app ve la alerta en vivo.
+ * Mientras haya un bus seleccionado en el formulario, el resto
+ * de la app ve la alerta en vivo; al terminar (o desconectarse)
+ * desaparece automáticamente.
  */
 export const useAnunciarInspeccion = (
   bus: { ppu: string; numero_interno: string; terminal: string } | null,
@@ -31,71 +123,24 @@ export const useAnunciarInspeccion = (
   useEffect(() => {
     if (!bus || !user) return
 
-    const payload: InspeccionEnCurso = {
+    trackInspeccion({
       rut: user.rut,
       nombre: user.nombre,
       ppu: bus.ppu,
       interno: bus.numero_interno,
       terminal: bus.terminal,
       startedAt: new Date().toISOString(),
-    }
-
-    const channel = supabase.channel(CHANNEL_TOPIC, {
-      config: { presence: { key: user.rut } },
-    })
-
-    channel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await channel.track(payload)
-      }
     })
 
     return () => {
-      channel.untrack()
-      supabase.removeChannel(channel)
+      untrackInspeccion()
     }
   }, [bus?.ppu, user?.rut]) // eslint-disable-line react-hooks/exhaustive-deps
 }
 
-/**
- * Escucha en vivo todas las inspecciones en curso.
- * Se usa en el header para mostrar las alertas.
- */
+/** Escucha en vivo todas las inspecciones en curso (para el header y los informes). */
 export const useInspeccionesEnCurso = (): InspeccionEnCurso[] => {
   const [items, setItems] = useState<InspeccionEnCurso[]>([])
-
-  useEffect(() => {
-    const channel = supabase.channel(CHANNEL_TOPIC, {
-      config: { presence: { key: `observer-${Math.random().toString(36).slice(2)}` } },
-    })
-
-    const sync = () => {
-      const state = channel.presenceState<InspeccionEnCurso>()
-      const list = Object.values(state)
-        .flat()
-        .filter((meta) => typeof meta.ppu === 'string' && meta.ppu.length > 0)
-        .map((meta) => ({
-          rut: meta.rut,
-          nombre: meta.nombre,
-          ppu: meta.ppu,
-          interno: meta.interno,
-          terminal: meta.terminal,
-          startedAt: meta.startedAt,
-        }))
-        .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
-      setItems(list)
-    }
-
-    channel
-      .on('presence', { event: 'sync' }, sync)
-      .on('presence', { event: 'join' }, sync)
-      .on('presence', { event: 'leave' }, sync)
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [])
-
+  useEffect(() => subscribeInspecciones(setItems), [])
   return items
 }
