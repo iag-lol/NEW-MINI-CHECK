@@ -168,6 +168,349 @@ const medalla = (index: number) => {
   return `${index + 1}°`
 }
 
+// ============================================================
+// MAPA OPERATIVO DEL COLABORADOR
+// Ubicación en vivo, buses revisados en la semana, bus en
+// revisión AHORA (verde) y trayectoria por turno día/noche.
+// ============================================================
+
+type Turno = 'todo' | 'dia' | 'noche'
+
+const esTurnoDia = (fecha: string) => {
+  const hora = dayjs(fecha).hour()
+  return hora >= 8 && hora < 20
+}
+
+const escapeHtml = (value: string) => value.replace(/[<>&"']/g, '')
+
+const liveInspectorIcon = (nombre: string, revisandoPpu: string | null) =>
+  divIcon({
+    className: '',
+    html: `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+      <div style="position:relative;">
+        <div style="
+          display:flex;align-items:center;justify-content:center;
+          width:36px;height:36px;border-radius:50%;
+          background:${revisandoPpu ? 'linear-gradient(135deg,#22c55e,#15803d)' : 'linear-gradient(135deg,#0284c7,#0369a1)'};
+          color:#fff;font-size:15px;
+          border:3px solid rgba(255,255,255,0.95);
+          box-shadow:0 6px 16px rgba(15,23,42,0.4);
+        ">👤</div>
+        <span class="marker-live-dot" style="
+          position:absolute;top:-2px;right:-2px;width:12px;height:12px;
+          border-radius:50%;background:#22c55e;border:2px solid #fff;
+        "></span>
+      </div>
+      <span style="
+        background:${revisandoPpu ? 'rgba(21,128,61,0.95)' : 'rgba(15,23,42,0.88)'};
+        color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:9px;
+        white-space:nowrap;box-shadow:0 2px 6px rgba(15,23,42,0.3);
+      ">${
+        revisandoPpu
+          ? `🟢 REVISANDO ${escapeHtml(revisandoPpu)} AHORA`
+          : escapeHtml(nombre.split(' ').filter(Boolean).slice(0, 2).join(' '))
+      }</span>
+    </div>`,
+    iconSize: [150, 60],
+    iconAnchor: [75, 22],
+  })
+
+const busPuntoIcon = (enPanne: boolean) =>
+  divIcon({
+    className: '',
+    html: `<div class="marker-bus" style="
+      display:flex;align-items:center;justify-content:center;
+      width:26px;height:26px;border-radius:9px;
+      background:${enPanne ? 'linear-gradient(135deg,#f97316,#ea580c)' : 'linear-gradient(135deg,#22c55e,#16a34a)'};
+      border:2px solid rgba(255,255,255,0.95);
+      box-shadow:0 4px 10px rgba(15,23,42,0.35);font-size:13px;
+    ">🚌</div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+  })
+
+const FitBounds = ({ points }: { points: [number, number][] }) => {
+  const map = useMap()
+  const key = useMemo(() => JSON.stringify(points), [points])
+  useEffect(() => {
+    if (points.length === 1) {
+      map.setView(points[0], 15)
+    } else if (points.length > 1) {
+      map.fitBounds(points, { padding: [40, 40], maxZoom: 15 })
+    }
+  }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+  return null
+}
+
+const MapaOperativo = ({
+  colaborador,
+  live,
+  revisando,
+}: {
+  colaborador: ColaboradorStats
+  live?: Tables<'usuarios_activos'>
+  revisando?: { ppu: string; interno: string; startedAt: string }
+}) => {
+  const [verTrayectoria, setVerTrayectoria] = useState(false)
+  const [turno, setTurno] = useState<Turno>('todo')
+
+  const puntosGps = useMemo(
+    () =>
+      colaborador.revisiones.filter(
+        (rev) => typeof rev.lat === 'number' && typeof rev.lon === 'number' && rev.lat !== 0
+      ),
+    [colaborador]
+  )
+
+  // Buses revisados dentro de la semana actual (último punto por PPU)
+  const busesSemana = useMemo(() => {
+    const inicioSemana = dayjs().isoWeekday(1).startOf('day')
+    const porPpu = new Map<string, RevisionRow>()
+    puntosGps
+      .filter((rev) => !dayjs(rev.created_at).isBefore(inicioSemana))
+      .forEach((rev) => {
+        if (!porPpu.has(rev.bus_ppu)) porPpu.set(rev.bus_ppu, rev)
+      })
+    return [...porPpu.values()]
+  }, [puntosGps])
+
+  // Trayectoria del rango completo, filtrada por turno y en orden cronológico
+  const trayectoria = useMemo(() => {
+    const filtrados = puntosGps.filter((rev) => {
+      if (turno === 'dia') return esTurnoDia(rev.created_at)
+      if (turno === 'noche') return !esTurnoDia(rev.created_at)
+      return true
+    })
+    return [...filtrados].sort((a, b) => a.created_at.localeCompare(b.created_at))
+  }, [puntosGps, turno])
+
+  const distanciaTotal = useMemo(() => {
+    let metros = 0
+    for (let i = 1; i < trayectoria.length; i += 1) {
+      metros += haversineMeters(
+        trayectoria[i - 1].lat,
+        trayectoria[i - 1].lon,
+        trayectoria[i].lat,
+        trayectoria[i].lon
+      )
+    }
+    return metros
+  }, [trayectoria])
+
+  const boundsPoints = useMemo<[number, number][]>(() => {
+    if (verTrayectoria && trayectoria.length > 0) {
+      return trayectoria.map((rev) => [rev.lat, rev.lon])
+    }
+    const puntos: [number, number][] = busesSemana.map((rev) => [rev.lat, rev.lon])
+    if (live) puntos.push([live.lat, live.lon])
+    return puntos
+  }, [verTrayectoria, trayectoria, busesSemana, live])
+
+  const colorTrayectoria = turno === 'dia' ? '#f59e0b' : turno === 'noche' ? '#312e81' : '#6366f1'
+
+  return (
+    <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800">
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/70 px-4 py-3 dark:border-slate-800">
+        <MapPin className="h-4 w-4 text-indigo-500" />
+        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">Mapa operativo</p>
+
+        {revisando ? (
+          <span className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+            <span className="marker-live-dot inline-block h-2 w-2 rounded-full bg-emerald-500" />
+            Revisando {revisando.ppu} ahora · desde {dayjs(revisando.startedAt).format('HH:mm')}
+          </span>
+        ) : live ? (
+          <span className="rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-semibold text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+            En línea · sin revisión activa
+          </span>
+        ) : (
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            Sin señal GPS en vivo
+          </span>
+        )}
+
+        <div className="ml-auto flex items-center gap-1.5">
+          {verTrayectoria && (
+            <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+              {(
+                [
+                  ['todo', 'Todo', null],
+                  ['dia', '08–20', Sun],
+                  ['noche', '20–08', Moon],
+                ] as [Turno, string, typeof Sun | null][]
+              ).map(([value, label, Icon]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTurno(value)}
+                  className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${
+                    turno === value
+                      ? 'bg-white text-indigo-700 shadow dark:bg-slate-950 dark:text-indigo-300'
+                      : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                  }`}
+                >
+                  {Icon && <Icon className="h-3 w-3" />}
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          <Button
+            size="sm"
+            variant={verTrayectoria ? 'default' : 'outline'}
+            className="gap-1.5 rounded-xl text-xs"
+            onClick={() => setVerTrayectoria((prev) => !prev)}
+          >
+            <Route className="h-3.5 w-3.5" />
+            Trayectoria
+          </Button>
+        </div>
+      </div>
+
+      {puntosGps.length === 0 && !live ? (
+        <div className="flex h-40 items-center justify-center text-xs text-slate-400">
+          Este colaborador no tiene revisiones con GPS en el rango seleccionado.
+        </div>
+      ) : (
+        <>
+          <div className="h-[360px] w-full overflow-hidden">
+            <MapContainer
+              center={[-33.46, -70.65]}
+              zoom={11}
+              scrollWheelZoom
+              className="h-full w-full"
+            >
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution="© OpenStreetMap contributors"
+              />
+              <FitBounds points={boundsPoints} />
+
+              {/* Geocercas de terminales */}
+              {TERMINAL_GEOFENCES.map((fence) => (
+                <Circle
+                  key={fence.name}
+                  center={[fence.lat, fence.lon]}
+                  radius={fence.radius}
+                  pathOptions={{ color: '#0ea5e9', fillOpacity: 0.06, weight: 1.5 }}
+                />
+              ))}
+
+              {/* Trayectoria por turno */}
+              {verTrayectoria && trayectoria.length > 1 && (
+                <Polyline
+                  positions={trayectoria.map((rev) => [rev.lat, rev.lon])}
+                  pathOptions={{ color: colorTrayectoria, weight: 3.5, opacity: 0.85, dashArray: '2 8' }}
+                />
+              )}
+              {verTrayectoria &&
+                trayectoria.map((rev, index) => (
+                  <CircleMarker
+                    key={`tray-${rev.id}`}
+                    center={[rev.lat, rev.lon]}
+                    radius={index === 0 || index === trayectoria.length - 1 ? 7 : 4}
+                    pathOptions={{
+                      color: '#ffffff',
+                      weight: 1.5,
+                      fillColor:
+                        index === 0
+                          ? '#22c55e'
+                          : index === trayectoria.length - 1
+                          ? '#ef4444'
+                          : colorTrayectoria,
+                      fillOpacity: 1,
+                    }}
+                  >
+                    <LeafletTooltip direction="top" offset={[0, -6]} className="bus-tooltip">
+                      <span className="font-bold">
+                        {index === 0 ? '▶ Inicio · ' : index === trayectoria.length - 1 ? '⏹ Fin · ' : `${index + 1}. `}
+                        {rev.bus_ppu}
+                      </span>
+                      <span className="ml-1 opacity-75">
+                        {dayjs(rev.created_at).format('DD/MM HH:mm')}
+                      </span>
+                    </LeafletTooltip>
+                  </CircleMarker>
+                ))}
+
+              {/* Buses revisados esta semana */}
+              {!verTrayectoria &&
+                busesSemana.map((rev) => (
+                  <Marker
+                    key={`sem-${rev.id}`}
+                    position={[rev.lat, rev.lon]}
+                    icon={busPuntoIcon(rev.estado_bus === 'EN_PANNE')}
+                  >
+                    <LeafletTooltip direction="top" offset={[0, -10]} className="bus-tooltip">
+                      <span className="font-bold">{rev.bus_ppu}</span>
+                      <span className="ml-1 opacity-75">
+                        · {dayjs(rev.created_at).format('ddd DD HH:mm')} ·{' '}
+                        {rev.estado_bus === 'EN_PANNE' ? 'En panne' : 'Operativo'}
+                      </span>
+                    </LeafletTooltip>
+                  </Marker>
+                ))}
+
+              {/* Ubicación en vivo del colaborador */}
+              {live && (
+                <Marker
+                  position={[live.lat, live.lon]}
+                  icon={liveInspectorIcon(colaborador.nombre, revisando?.ppu ?? null)}
+                  zIndexOffset={1000}
+                />
+              )}
+            </MapContainer>
+          </div>
+
+          {/* Estadísticas de la vista */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-slate-200/70 px-4 py-2.5 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            {verTrayectoria ? (
+              <>
+                <span className="font-semibold text-slate-700 dark:text-slate-200">
+                  <Route className="mr-1 inline h-3 w-3 text-indigo-500" />
+                  {trayectoria.length} puntos ·{' '}
+                  {distanciaTotal >= 1000
+                    ? `${(distanciaTotal / 1000).toFixed(1)} km recorridos`
+                    : `${Math.round(distanciaTotal)} m recorridos`}
+                </span>
+                <span>
+                  Turno:{' '}
+                  {turno === 'dia'
+                    ? '☀️ Día (08:00–20:00)'
+                    : turno === 'noche'
+                    ? '🌙 Noche (20:00–08:00)'
+                    : 'Completo (24 h)'}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" /> Inicio
+                  <span className="ml-2 inline-block h-2 w-2 rounded-full bg-red-500" /> Fin
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-slate-700 dark:text-slate-200">
+                  🚌 {busesSemana.length} bus{busesSemana.length !== 1 ? 'es' : ''} revisado
+                  {busesSemana.length !== 1 ? 's' : ''} esta semana
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" /> Operativo
+                  <span className="ml-2 inline-block h-2 w-2 rounded-full bg-orange-500" /> En panne
+                </span>
+                {live && (
+                  <span>
+                    Señal GPS: {dayjs(live.last_heartbeat).format('HH:mm:ss')} · ±
+                    {Math.round(live.accuracy ?? 0)} m
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 interface IpPerformanceDialogProps {
   open: boolean
   onClose: () => void
@@ -195,6 +538,16 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
   const stats = useMemo(() => construirStats(revisiones ?? []), [revisiones])
   const maxTotal = stats[0]?.total ?? 1
   const seleccionado = stats.find((s) => s.rut === selectedRut) ?? null
+
+  // Datos en vivo: ubicación GPS e inspecciones en curso (Presence)
+  const { inspectors: activeInspectors } = useActiveInspectors()
+  const inspeccionesEnCurso = useInspeccionesEnCurso()
+  const liveInspector = seleccionado
+    ? activeInspectors.find((inspector) => inspector.usuario_rut === seleccionado.rut)
+    : undefined
+  const revisandoAhora = seleccionado
+    ? inspeccionesEnCurso.find((item) => item.rut === seleccionado.rut)
+    : undefined
 
   const globales = useMemo(() => {
     const totalRevs = stats.reduce((acc, s) => acc + s.total, 0)
@@ -380,6 +733,13 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
                     ))}
                   </div>
 
+                  {/* Mapa operativo en vivo */}
+                  <MapaOperativo
+                    colaborador={seleccionado}
+                    live={liveInspector}
+                    revisando={revisandoAhora}
+                  />
+
                   {/* IPs utilizadas */}
                   <div className="rounded-2xl border border-slate-200/70 dark:border-slate-800">
                     <div className="flex items-center gap-2 border-b border-slate-200/70 px-4 py-3 dark:border-slate-800">
@@ -528,11 +888,22 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="truncate text-sm font-bold text-slate-800 dark:text-slate-100">
-                            {colaborador.nombre}
-                            <span className="ml-2 text-xs font-normal text-slate-400">
+                          <p className="flex min-w-0 items-center gap-2 truncate text-sm font-bold text-slate-800 dark:text-slate-100">
+                            <span className="truncate">{colaborador.nombre}</span>
+                            <span className="shrink-0 text-xs font-normal text-slate-400">
                               {colaborador.rut}
                             </span>
+                            {(() => {
+                              const enCurso = inspeccionesEnCurso.find(
+                                (item) => item.rut === colaborador.rut
+                              )
+                              return enCurso ? (
+                                <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold uppercase text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                                  <span className="marker-live-dot inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                  Revisando {enCurso.ppu}
+                                </span>
+                              ) : null
+                            })()}
                           </p>
                           <p className="shrink-0 text-sm font-black text-slate-800 dark:text-slate-100">
                             {colaborador.total}
