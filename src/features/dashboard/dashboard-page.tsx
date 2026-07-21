@@ -26,12 +26,14 @@ import {
   Clock,
   FileSpreadsheet,
   Search,
+  Globe,
 } from 'lucide-react'
 import dayjs from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
 import { exportAllModulesToXlsx, exportExecutivePdf } from '@/lib/exporters'
 import { ConsolidadosDialog } from '@/features/dashboard/components/consolidados-dialog'
 import { BusReportDialog } from '@/features/dashboard/components/bus-report-dialog'
+import { IpPerformanceDialog } from '@/features/dashboard/components/ip-performance-dialog'
 import { Card, CardTitle } from '@/components/ui/card'
 import { StatCard } from '@/components/ui/stat-card'
 import { Skeleton, SkeletonCard, SkeletonChart } from '@/components/ui/skeleton'
@@ -185,6 +187,7 @@ export const DashboardPage = () => {
   const [consolidadosOpen, setConsolidadosOpen] = useState(false)
   const [busSearch, setBusSearch] = useState('')
   const [reportPpu, setReportPpu] = useState<string | null>(null)
+  const [ipPerformanceOpen, setIpPerformanceOpen] = useState(false)
 
   // Tick cada 5 s para re-evaluar en vivo el estado de los pulsos GPS
   const [pulseTick, setPulseTick] = useState(0)
@@ -456,6 +459,15 @@ export const DashboardPage = () => {
                 </div>
               )}
             </div>
+
+            {/* Rendimiento por IP y colaborador */}
+            <Button
+              className="gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 shadow-lg shadow-indigo-500/25 hover:from-indigo-500 hover:to-indigo-400"
+              onClick={() => setIpPerformanceOpen(true)}
+            >
+              <Globe className="h-4 w-4" />
+              Rendimiento IP
+            </Button>
 
             {/* Selector de Semana Global */}
             <WeekSelector />
@@ -949,6 +961,8 @@ export const DashboardPage = () => {
       />
 
       <BusReportDialog ppu={reportPpu} onClose={() => setReportPpu(null)} />
+
+      <IpPerformanceDialog open={ipPerformanceOpen} onClose={() => setIpPerformanceOpen(false)} />
     </div>
   )
 }

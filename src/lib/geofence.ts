@@ -31,6 +31,27 @@ export const detectTerminal = (lat: number, lon: number) => {
   }
 }
 
+/** Distancia en metros entre dos coordenadas (para medir trayectorias) */
+export const haversineMeters = haversineDistance
+
+/**
+ * Distancia (en metros) al terminal más cercano y si el punto
+ * está dentro de su geocerca. Útil para medir la precisión de
+ * una revisión respecto del terminal.
+ */
+export const closestTerminalDistance = (lat: number, lon: number) => {
+  const best = TERMINAL_GEOFENCES.map((fence) => ({
+    fence,
+    distance: haversineDistance(lat, lon, fence.lat, fence.lon),
+  })).sort((a, b) => a.distance - b.distance)[0]
+
+  return {
+    terminal: best.fence.name,
+    distance: Math.round(best.distance),
+    inside: best.distance <= best.fence.radius,
+  }
+}
+
 export const getClosestTerminal = (lat: number, lon: number): Geofence =>
   TERMINAL_GEOFENCES.map((fence) => ({
     fence,

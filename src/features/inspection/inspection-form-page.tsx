@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAuthStore } from '@/store/auth-store'
+import { useAnunciarInspeccion } from '@/hooks/use-inspeccion-presence'
 import type { Tables, Database } from '@/types/database'
 import { useNotificationStore } from '@/store/notification-store'
 import { useTracking } from '@/context/tracking-context'
@@ -387,6 +388,10 @@ export const InspectionFormPage = () => {
   const [busQuery, setBusQuery] = useState('')
   const [bus, setBus] = useState<Tables<'flota'> | null>(null)
   const [busAlert, setBusAlert] = useState<string | null>(null)
+
+  // Anunciar en tiempo real qué bus se está revisando (visible en el header
+  // de supervisores hasta que se termina la revisión o se cierra el formulario)
+  useAnunciarInspeccion(bus, user)
   const [saving, setSaving] = useState(false)
   const [terminalDetected, setTerminalDetected] = useState<{ name: string; distance: number } | null>(null)
   const [refreshingGPS, setRefreshingGPS] = useState(false)
