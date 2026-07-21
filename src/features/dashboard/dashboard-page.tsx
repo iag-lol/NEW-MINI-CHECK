@@ -24,10 +24,12 @@ import {
   Bus,
   AlertCircle,
   Clock,
+  FileSpreadsheet,
 } from 'lucide-react'
 import dayjs from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
 import { exportAllModulesToXlsx, exportExecutivePdf } from '@/lib/exporters'
+import { ConsolidadosDialog } from '@/features/dashboard/components/consolidados-dialog'
 import { Card, CardTitle } from '@/components/ui/card'
 import { StatCard } from '@/components/ui/stat-card'
 import { Skeleton, SkeletonCard, SkeletonChart } from '@/components/ui/skeleton'
@@ -108,6 +110,7 @@ const useTickets = (start: string, end: string) =>
 
 export const DashboardPage = () => {
   const [exporting, setExporting] = useState(false)
+  const [consolidadosOpen, setConsolidadosOpen] = useState(false)
   const { user } = useAuthStore()
   const { weekInfo } = useWeekFilter()
   const { data: revisions, isLoading: revisionsLoading } = useWeeklyRevisions(
@@ -388,7 +391,14 @@ export const DashboardPage = () => {
           <CardTitle>Exportar</CardTitle>
           <p className="text-sm text-slate-500">Descarga inmediata</p>
           <Button
-            className="mt-6 w-full gap-2 rounded-2xl"
+            className="mt-6 w-full gap-2 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 shadow-lg shadow-brand-500/25 hover:from-brand-500 hover:to-brand-400"
+            onClick={() => setConsolidadosOpen(true)}
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            Consolidados semanales
+          </Button>
+          <Button
+            className="mt-3 w-full gap-2 rounded-2xl"
             variant="outline"
             disabled={exporting}
             onClick={async () => {
@@ -418,7 +428,8 @@ export const DashboardPage = () => {
             PDF semana {weekInfo.weekNumber}
           </Button>
           <p className="mt-4 text-xs text-slate-400">
-            También puedes descargar reportes granulares desde la sección Reportes.
+            Consolidados semanales descarga los 4 archivos oficiales (Cámaras, Mobileye, TAG y
+            Revisión Semanal). También puedes descargar reportes granulares desde Reportes.
           </p>
         </Card>
       </div>
@@ -698,6 +709,15 @@ export const DashboardPage = () => {
           </ScrollArea>
         </Card>
       </div>
+
+      <ConsolidadosDialog
+        open={consolidadosOpen}
+        onClose={() => setConsolidadosOpen(false)}
+        startISO={weekInfo.startISO}
+        endISO={weekInfo.endISO}
+        weekNumber={weekInfo.weekNumber}
+        year={weekInfo.year}
+      />
     </div>
   )
 }
