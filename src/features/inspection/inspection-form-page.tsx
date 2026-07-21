@@ -862,7 +862,15 @@ export const InspectionFormPage = () => {
           derecha: values.publicidad.derecha,
           luneta: values.publicidad.luneta,
         },
-        nombre_publicidad: null,
+        // El nombre de la campaña se captura en la observación de cada lado con publicidad
+        nombre_publicidad: (() => {
+          if (isEnPanne) return null
+          const nombres = publicityAreas
+            .map((area) => values.publicidad[area.key])
+            .filter((lado) => lado.tiene && lado.observacion?.trim())
+            .map((lado) => (lado.observacion as string).trim())
+          return nombres.length > 0 ? [...new Set(nombres)].join(' · ') : null
+        })(),
         observacion: isEnPanne ? 'Bus en panne - no revisado' : null,
         bus_ppu: bus.ppu,
         terminal: values.terminalReportado,

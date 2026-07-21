@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   CheckCircle2,
@@ -53,6 +54,16 @@ export const ConsolidadosDialog = ({
 
   const storedCount = useMemo(() => loadRevisionSemanal().length, [open, result])
 
+  // Bloquear el scroll de la página mientras el modal está abierto
+  useEffect(() => {
+    if (!open) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [open])
+
   const handleDownload = async () => {
     setDownloading(true)
     setError(null)
@@ -75,14 +86,14 @@ export const ConsolidadosDialog = ({
     }
   }
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[1200] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md"
           onClick={onClose}
         >
           <motion.div
@@ -246,6 +257,7 @@ export const ConsolidadosDialog = ({
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }

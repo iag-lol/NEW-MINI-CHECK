@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
@@ -50,8 +50,8 @@ type BaseLayerKey = 'street' | 'satellite'
 const escapeHtml = (value: string) =>
   value.replace(/[<>&"']/g, '')
 
-/** Minutos máximos desde el último pulso para considerar a un inspector "en vivo" */
-const ONLINE_THRESHOLD_MIN = 10
+/** Segundos máximos desde el último pulso GPS para considerar a un inspector "EN VIVO" */
+const ONLINE_THRESHOLD_SEC = 60
 
 const createInspectorIcon = (label: string, name: string, color: string, online: boolean) =>
   divIcon({
@@ -120,7 +120,16 @@ const createBusIcon = (enPanne: boolean) =>
   })
 
 const isInspectorOnline = (lastHeartbeat: string) =>
-  dayjs().diff(dayjs(lastHeartbeat), 'minute') <= ONLINE_THRESHOLD_MIN
+  dayjs().diff(dayjs(lastHeartbeat), 'second') <= ONLINE_THRESHOLD_SEC
+
+/** Formatea el tiempo desde el último pulso con precisión de segundos */
+const formatPulse = (lastHeartbeat: string) => {
+  const seconds = dayjs().diff(dayjs(lastHeartbeat), 'second')
+  if (seconds < 60) return `hace ${seconds} s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `hace ${minutes} min ${seconds % 60} s`
+  return dayjs(lastHeartbeat).fromNow()
+}
 
 const getInitials = (name: string) =>
   name
@@ -169,6 +178,13 @@ export const DashboardPage = () => {
   const [consolidadosOpen, setConsolidadosOpen] = useState(false)
   const [busSearch, setBusSearch] = useState('')
   const [reportPpu, setReportPpu] = useState<string | null>(null)
+
+  // Tick cada 5 s para re-evaluar en vivo el estado de los pulsos GPS
+  const [, setPulseTick] = useState(0)
+  useEffect(() => {
+    const interval = window.setInterval(() => setPulseTick((tick) => tick + 1), 5000)
+    return () => window.clearInterval(interval)
+  }, [])
   const { user } = useAuthStore()
   const { weekInfo } = useWeekFilter()
   const { data: revisions, isLoading: revisionsLoading } = useWeeklyRevisions(
@@ -631,7 +647,7 @@ export const DashboardPage = () => {
           </span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
-            Inspector en vivo (pulso &lt; {ONLINE_THRESHOLD_MIN} min)
+            Inspector EN VIVO (pulso GPS &lt; {ONLINE_THRESHOLD_SEC} s)
           </span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-400" />
@@ -702,12 +718,14 @@ export const DashboardPage = () => {
                       <Popup>
                         <p className="text-sm font-semibold">{inspector.nombre}</p>
                         <p className="text-xs text-slate-500">
-                          {online ? '🟢 En vivo ahora' : `⚪ Inactivo · último pulso ${dayjs(inspector.last_heartbeat).fromNow()}`}
+                          {online
+                            ? `🟢 EN VIVO · pulso ${formatPulse(inspector.last_heartbeat)}`
+                            : `⚪ Inactivo · último pulso ${formatPulse(inspector.last_heartbeat)}`}
                           <br />
-                          {inspector.terminal} · Precisión ±
+                          {inspector.terminal} · Precisión GPS ±
                           {Math.round(inspector.accuracy ?? 0)} m
                           <br />
-                          Último pulso {dayjs(inspector.last_heartbeat).format('HH:mm:ss')} hrs
+                          Última señal {dayjs(inspector.last_heartbeat).format('HH:mm:ss')} hrs
                         </p>
                       </Popup>
                     </Marker>
@@ -772,10 +790,9 @@ export const DashboardPage = () => {
                       )}
                     </p>
                     <p className="text-slate-500">
-                      {inspector.terminal} · Precisión ±{Math.round(inspector.accuracy ?? 0)} m ·{' '}
-                      {online
-                        ? `pulso ${dayjs(inspector.last_heartbeat).format('HH:mm:ss')}`
-                        : dayjs(inspector.last_heartbeat).fromNow()}
+                      {inspector.terminal} · ±{Math.round(inspector.accuracy ?? 0)} m · pulso{' '}
+                      {formatPulse(inspector.last_heartbeat)} (
+                      {dayjs(inspector.last_heartbeat).format('HH:mm:ss')})
                     </p>
                   </div>
                   )

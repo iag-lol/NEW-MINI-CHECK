@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -33,7 +34,6 @@ import { supabase } from '@/lib/supabase'
 import type { Tables } from '@/types/database'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 type FlotaRow = Tables<'flota'>
@@ -215,7 +215,7 @@ const ModuleCard = ({
   rows: ModuleRowItem[]
 }) => (
   <div
-    className={`rounded-2xl border p-4 ${
+    className={`rounded-xl border p-3 ${
       status === 'problema'
         ? 'border-red-200 bg-red-50/60 dark:border-red-900/60 dark:bg-red-950/20'
         : status === 'ok'
@@ -223,31 +223,32 @@ const ModuleCard = ({
         : 'border-slate-200/70 bg-slate-50/60 dark:border-slate-800 dark:bg-slate-900/40'
     }`}
   >
-    <div className="mb-3 flex items-center justify-between gap-2">
-      <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{title}</p>
+    <div className="mb-2 flex items-center justify-between gap-2">
+      <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{title}</p>
       {status === 'problema' ? (
-        <Badge variant="danger" className="gap-1 text-[10px]">
-          <XCircle className="h-3 w-3" /> Problema
+        <Badge variant="danger" className="gap-1 px-1.5 py-0 text-[9px]">
+          <XCircle className="h-2.5 w-2.5" /> Problema
         </Badge>
       ) : status === 'ok' ? (
-        <Badge variant="success" className="gap-1 text-[10px]">
-          <CheckCircle2 className="h-3 w-3" /> OK
+        <Badge variant="success" className="gap-1 px-1.5 py-0 text-[9px]">
+          <CheckCircle2 className="h-2.5 w-2.5" /> OK
         </Badge>
       ) : (
-        <Badge variant="default" className="text-[10px]">Sin registro</Badge>
+        <Badge variant="default" className="px-1.5 py-0 text-[9px]">Sin registro</Badge>
       )}
     </div>
     {status === 'sin-dato' ? (
-      <p className="text-xs text-slate-400">No se inspeccionó este módulo en la revisión seleccionada.</p>
+      <p className="text-[11px] text-slate-400">Módulo no inspeccionado en esta revisión.</p>
     ) : (
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-3 text-xs">
-            <span className="text-slate-500 dark:text-slate-400">{row.label}</span>
+          <div key={row.label} className="flex items-center justify-between gap-2 text-[11px] leading-tight">
+            <span className="shrink-0 text-slate-500 dark:text-slate-400">{row.label}</span>
             <span
-              className={`text-right font-semibold ${
+              className={`truncate text-right font-semibold ${
                 row.bad ? 'text-red-600 dark:text-red-400' : 'text-slate-800 dark:text-slate-100'
               }`}
+              title={row.value}
             >
               {row.value}
             </span>
@@ -263,6 +264,21 @@ const siNo = (value: boolean | null | undefined, positivo = 'SI', negativo = 'NO
   return value ? positivo : negativo
 }
 
+// El nombre de la campaña histórico quedó guardado en la observación de cada lado
+const nombrePublicidadDe = (pub: PublicidadRow): string => {
+  if (pub.nombre_publicidad?.trim()) return pub.nombre_publicidad
+  const lados = pub.detalle_lados as Record<
+    string,
+    { tiene?: boolean; observacion?: string }
+  > | null
+  if (!lados) return '—'
+  const nombres = (['izquierda', 'derecha', 'luneta'] as const)
+    .map((key) => lados[key])
+    .filter((lado) => lado?.tiene && typeof lado.observacion === 'string' && lado.observacion.trim())
+    .map((lado) => (lado?.observacion as string).trim())
+  return [...new Set(nombres)].join(' · ') || '—'
+}
+
 // ============================================================
 // DIALOGO PRINCIPAL
 // ============================================================
@@ -275,6 +291,16 @@ interface BusReportDialogProps {
 export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
   const [rango, setRango] = useState<Rango>('1m')
   const [revisionId, setRevisionId] = useState<string | null>(null)
+
+  // Bloquear el scroll de la página mientras el informe está abierto
+  useEffect(() => {
+    if (!ppu) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [ppu])
 
   const { data: report, isLoading } = useQuery({
     queryKey: ['bus-report', ppu, rango],
@@ -500,7 +526,7 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
       rows: pub
         ? [
             { label: 'Tiene', value: siNo(pub.tiene) },
-            { label: 'Nombre', value: pub.nombre_publicidad || '—' },
+            { label: 'Nombre campaña', value: nombrePublicidadDe(pub) },
             { label: 'Con daño', value: siNo(pub.danio), bad: pub.danio === true },
             { label: 'Residuos', value: siNo(pub.residuos), bad: pub.residuos === true },
             { label: 'Observación', value: pub.observacion || '—' },
@@ -515,14 +541,14 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
   const ticketsAbiertos = report?.tickets.filter((t) => t.estado !== 'RESUELTO') ?? []
   const ticketsResueltos = report?.tickets.filter((t) => t.estado === 'RESUELTO') ?? []
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[1300] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-md sm:p-5"
           onClick={onClose}
         >
           <motion.div
@@ -530,7 +556,7 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.97 }}
             transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-            className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-200/60 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+            className="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200/60 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950"
             onClick={(event) => event.stopPropagation()}
           >
             {/* Encabezado */}
@@ -564,7 +590,7 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
                       : 'Informe completo de inspecciones'}
                   </p>
                 </div>
-                <div className="ml-auto flex gap-1 rounded-2xl bg-white/10 p-1">
+                <div className="ml-auto flex gap-1 rounded-2xl border border-white/15 bg-slate-950/30 p-1">
                   {(
                     [
                       ['1m', '1 mes'],
@@ -603,11 +629,14 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
                       icon: Calendar,
                     },
                   ].map((kpi) => (
-                    <div key={kpi.label} className="rounded-xl bg-white/10 px-3 py-2 backdrop-blur">
+                    <div
+                      key={kpi.label}
+                      className="rounded-xl border border-white/15 bg-slate-950/30 px-3 py-2"
+                    >
                       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-white/70">
                         <kpi.icon className="h-3 w-3" /> {kpi.label}
                       </div>
-                      <p className="mt-0.5 text-lg font-bold">{kpi.value}</p>
+                      <p className="mt-0.5 text-lg font-bold text-white">{kpi.value}</p>
                     </div>
                   ))}
                 </div>
@@ -615,7 +644,7 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
             </div>
 
             {/* Cuerpo */}
-            <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-4">
               {isLoading ? (
                 <div className="flex h-64 items-center justify-center text-sm text-slate-400">
                   Cargando historial completo del bus…
@@ -715,7 +744,7 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
                       <p className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100">
                         <Activity className="h-4 w-4 text-brand-500" /> Línea de tiempo de revisiones
                       </p>
-                      <ScrollArea className="mt-3 max-h-64 pr-3">
+                      <div className="mt-3 max-h-60 overflow-y-auto overscroll-contain pr-2">
                         <div className="space-y-2">
                           {report.revisiones.map((rev) => {
                             const problemas = contarProblemasRevision(report, rev.id)
@@ -760,7 +789,7 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
                             )
                           })}
                         </div>
-                      </ScrollArea>
+                      </div>
                     </div>
                   </TabsContent>
 
@@ -801,7 +830,7 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
                       </div>
                     )}
 
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                       {moduleCards.map((card) => (
                         <ModuleCard key={card.title} {...card} />
                       ))}
@@ -817,7 +846,7 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
                           Trazabilidad de accesos · quién, cuándo y desde dónde
                         </p>
                       </div>
-                      <ScrollArea className="max-h-96">
+                      <div className="max-h-[52vh] overflow-auto overscroll-contain">
                         <table className="w-full text-left text-xs">
                           <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900">
                             <tr className="text-[10px] uppercase tracking-wide text-slate-400">
@@ -868,7 +897,7 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
                             ))}
                           </tbody>
                         </table>
-                      </ScrollArea>
+                      </div>
                     </div>
                     <p className="text-[11px] text-slate-400">
                       {kpis?.inspectores ?? 0} inspector(es) distintos han revisado este bus en el rango
@@ -930,7 +959,8 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }
 

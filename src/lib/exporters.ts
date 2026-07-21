@@ -971,6 +971,21 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   // ==========================================================
   // HOJA 10 · PUBLICIDAD (incluye nombre de publicidad y lados)
   // ==========================================================
+  // El nombre de campaña histórico quedó guardado en la observación de cada lado
+  const nombrePublicidadDe = (pub: PublicidadRow): string => {
+    if (pub.nombre_publicidad?.trim()) return pub.nombre_publicidad
+    const lados = pub.detalle_lados as Record<
+      string,
+      { tiene?: boolean; observacion?: string }
+    > | null
+    if (!lados) return '-'
+    const nombres = (['izquierda', 'derecha', 'luneta'] as const)
+      .map((key) => lados[key])
+      .filter((lado) => lado?.tiene && typeof lado.observacion === 'string' && lado.observacion.trim())
+      .map((lado) => (lado?.observacion as string).trim())
+    return [...new Set(nombres)].join(' · ') || '-'
+  }
+
   const ladoLabel = (
     lados: PublicidadRow['detalle_lados'],
     key: 'izquierda' | 'derecha' | 'luneta'
@@ -1004,7 +1019,7 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
     (_bus, pub) => ({
       tiene: pub ? si(pub.tiene) : '-',
       // Se rescata SIEMPRE el nombre registrado, tenga o no publicidad vigente
-      nombre: pub?.nombre_publicidad?.trim() ? pub.nombre_publicidad : '-',
+      nombre: pub ? nombrePublicidadDe(pub) : '-',
       danio: si(pub?.danio),
       residuos: si(pub?.residuos),
       lado_izq: ladoLabel(pub?.detalle_lados ?? null, 'izquierda'),
