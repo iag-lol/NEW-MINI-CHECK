@@ -226,10 +226,12 @@ const buildCamarasWorkbook = (flota: FlotaRow[], camaras: Map<string, CamarasRow
 
 // ============================================================
 // 2) MOBILEYES para CONSOLIDADO
+//    SOLO flota Volvo (los Scania no llevan Mobileye)
 //    Sensores traseros (ART) solo aplican a buses articulados
 // ============================================================
 
 const buildMobileyeWorkbook = (flota: FlotaRow[], mobileyes: Map<string, MobileyeRow>) => {
+  const flotaVolvo = flota.filter((bus) => (bus.marca ?? '').toUpperCase().includes('VOLVO'))
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet('MOBILEYE', {
     properties: { defaultRowHeight: 20 },
@@ -262,7 +264,7 @@ const buildMobileyeWorkbook = (flota: FlotaRow[], mobileyes: Map<string, Mobiley
     return 'SIN DATO'
   }
 
-  flota.forEach((bus, index) => {
+  flotaVolvo.forEach((bus, index) => {
     const mob = mobileyes.get(bus.ppu)
     const articulado = esArticulado(bus.modelo)
 

@@ -28,7 +28,7 @@ interface ConsolidadosDialogProps {
 
 const FILES = [
   { name: 'CAMARAS para CONSOLIDADO.xlsx', detail: '0 = sin dato · 1 = con problema', color: 'bg-blue-500' },
-  { name: 'MOBILEYES para CONSOLIDADO.xlsx', detail: 'Sensores ART solo articulados', color: 'bg-amber-600' },
+  { name: 'MOBILEYES para CONSOLIDADO.xlsx', detail: 'Solo flota Volvo · TIENE / DAÑADO', color: 'bg-amber-600' },
   { name: 'TAG para CONSOLIDADO.xlsx', detail: 'TAG y serie por patente', color: 'bg-yellow-400' },
   { name: 'Revision Semanal Recursos.xlsx', detail: 'Se actualiza con la tabla pegada', color: 'bg-emerald-500' },
 ]

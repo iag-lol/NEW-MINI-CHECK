@@ -25,11 +25,13 @@ import {
   AlertCircle,
   Clock,
   FileSpreadsheet,
+  Search,
 } from 'lucide-react'
 import dayjs from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
 import { exportAllModulesToXlsx, exportExecutivePdf } from '@/lib/exporters'
 import { ConsolidadosDialog } from '@/features/dashboard/components/consolidados-dialog'
+import { BusReportDialog } from '@/features/dashboard/components/bus-report-dialog'
 import { Card, CardTitle } from '@/components/ui/card'
 import { StatCard } from '@/components/ui/stat-card'
 import { Skeleton, SkeletonCard, SkeletonChart } from '@/components/ui/skeleton'
@@ -45,26 +47,80 @@ import { WeekSelector } from '@/components/week-selector'
 
 type BaseLayerKey = 'street' | 'satellite'
 
-const createInspectorIcon = (label: string, color: string) =>
+const escapeHtml = (value: string) =>
+  value.replace(/[<>&"']/g, '')
+
+/** Minutos máximos desde el último pulso para considerar a un inspector "en vivo" */
+const ONLINE_THRESHOLD_MIN = 10
+
+const createInspectorIcon = (label: string, name: string, color: string, online: boolean) =>
   divIcon({
     className: '',
-    html: `<div style="
+    html: `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
+      <div style="position:relative;">
+        <div style="
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          width:34px;
+          height:34px;
+          border-radius:50%;
+          background:${color};
+          color:#fff;
+          font-size:12px;
+          font-weight:700;
+          border:2px solid rgba(255,255,255,0.95);
+          box-shadow:0 6px 14px rgba(15,23,42,0.35);
+          ${online ? '' : 'filter:grayscale(0.6);opacity:0.75;'}
+        ">${escapeHtml(label)}</div>
+        <span class="${online ? 'marker-live-dot' : ''}" style="
+          position:absolute;
+          top:-2px;
+          right:-2px;
+          width:11px;
+          height:11px;
+          border-radius:50%;
+          background:${online ? '#22c55e' : '#94a3b8'};
+          border:2px solid #fff;
+        "></span>
+      </div>
+      <span style="
+        background:rgba(15,23,42,0.88);
+        color:#fff;
+        font-size:10px;
+        font-weight:600;
+        padding:2px 8px;
+        border-radius:9px;
+        white-space:nowrap;
+        box-shadow:0 2px 6px rgba(15,23,42,0.3);
+      ">${escapeHtml(name)}${online ? '' : ' · inactivo'}</span>
+    </div>`,
+    iconSize: [120, 56],
+    iconAnchor: [60, 20],
+  })
+
+const createBusIcon = (enPanne: boolean) =>
+  divIcon({
+    className: '',
+    html: `<div class="marker-bus" style="
       display:flex;
       align-items:center;
       justify-content:center;
-      width:32px;
-      height:32px;
-      border-radius:50%;
-      background:${color};
-      color:#fff;
-      font-size:12px;
-      font-weight:700;
-      border:2px solid rgba(255,255,255,0.9);
-      box-shadow:0 6px 14px rgba(15,23,42,0.25);
-    ">${label}</div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
+      width:34px;
+      height:34px;
+      border-radius:12px;
+      background:${enPanne ? 'linear-gradient(135deg,#f97316,#ea580c)' : 'linear-gradient(135deg,#22c55e,#16a34a)'};
+      border:2px solid rgba(255,255,255,0.95);
+      box-shadow:0 6px 16px rgba(15,23,42,0.4);
+      font-size:17px;
+      cursor:pointer;
+    ">🚌</div>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
   })
+
+const isInspectorOnline = (lastHeartbeat: string) =>
+  dayjs().diff(dayjs(lastHeartbeat), 'minute') <= ONLINE_THRESHOLD_MIN
 
 const getInitials = (name: string) =>
   name
@@ -111,6 +167,8 @@ const useTickets = (start: string, end: string) =>
 export const DashboardPage = () => {
   const [exporting, setExporting] = useState(false)
   const [consolidadosOpen, setConsolidadosOpen] = useState(false)
+  const [busSearch, setBusSearch] = useState('')
+  const [reportPpu, setReportPpu] = useState<string | null>(null)
   const { user } = useAuthStore()
   const { weekInfo } = useWeekFilter()
   const { data: revisions, isLoading: revisionsLoading } = useWeeklyRevisions(
@@ -118,6 +176,30 @@ export const DashboardPage = () => {
     weekInfo.endISO
   )
   const { data: tickets } = useTickets(weekInfo.startISO, weekInfo.endISO)
+  const { data: flotaList } = useQuery({
+    queryKey: ['flota-search'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('flota')
+        .select('ppu, numero_interno, terminal, marca, modelo')
+        .order('ppu', { ascending: true })
+        .limit(10000)
+      if (error) throw error
+      return data as Pick<Tables<'flota'>, 'ppu' | 'numero_interno' | 'terminal' | 'marca' | 'modelo'>[]
+    },
+    staleTime: 5 * 60_000,
+  })
+
+  const busMatches = useMemo(() => {
+    const term = busSearch.trim().toUpperCase()
+    if (term.length < 2 || !flotaList) return []
+    return flotaList
+      .filter(
+        (bus) =>
+          bus.ppu.toUpperCase().includes(term) || bus.numero_interno.toUpperCase().includes(term)
+      )
+      .slice(0, 8)
+  }, [busSearch, flotaList])
   const { inspectors: liveInspectors } = useActiveInspectors()
   const mapToken = import.meta.env.VITE_MAPBOX_TOKEN
   const mapRef = useRef<LeafletMap | null>(null)
@@ -213,10 +295,17 @@ export const DashboardPage = () => {
   const pendingTickets = tickets?.filter((ticket) => ticket.estado !== 'RESUELTO') ?? []
 
   const latestRevisions = revisions?.slice(0, 6) ?? []
-  const mapRevisions =
-    revisions?.filter(
-      (revision) => typeof revision.lat === 'number' && typeof revision.lon === 'number'
-    ) ?? []
+
+  // Un solo ícono de bus por PPU: la revisión más reciente con coordenadas
+  const busMapMarkers = useMemo(() => {
+    if (!revisions) return []
+    const porPpu = new Map<string, Tables<'revisiones'>>()
+    revisions.forEach((revision) => {
+      if (typeof revision.lat !== 'number' || typeof revision.lon !== 'number') return
+      if (!porPpu.has(revision.bus_ppu)) porPpu.set(revision.bus_ppu, revision)
+    })
+    return [...porPpu.values()]
+  }, [revisions])
 
   const flyToTerminal = (terminal: TerminalSlug) => {
     const fence = TERMINAL_GEOFENCES.find((item) => item.name === terminal)
@@ -272,6 +361,64 @@ export const DashboardPage = () => {
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {/* Buscador de PPU */}
+            <div className="relative">
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 transition focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-300/40 dark:border-slate-700 dark:bg-slate-900">
+                <Search className="h-4 w-4 shrink-0 text-slate-400" />
+                <input
+                  value={busSearch}
+                  onChange={(event) => setBusSearch(event.target.value)}
+                  placeholder="Buscar PPU o N° bus…"
+                  className="w-40 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100"
+                  spellCheck={false}
+                />
+                {busSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setBusSearch('')}
+                    className="text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              {busMatches.length > 0 && (
+                <div className="absolute left-0 top-full z-[1100] mt-2 w-72 overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-950">
+                  {busMatches.map((bus) => (
+                    <button
+                      key={bus.ppu}
+                      type="button"
+                      onClick={() => {
+                        setReportPpu(bus.ppu)
+                        setBusSearch('')
+                      }}
+                      className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left transition hover:bg-brand-50 dark:hover:bg-brand-950/30"
+                    >
+                      <div>
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                          {bus.ppu}
+                          <span className="ml-2 text-xs font-normal text-slate-400">
+                            N° {bus.numero_interno}
+                          </span>
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          {bus.marca} {bus.modelo} · {bus.terminal}
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-semibold uppercase text-brand-500">
+                        Ver informe →
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {busSearch.trim().length >= 2 && busMatches.length === 0 && (
+                <div className="absolute left-0 top-full z-[1100] mt-2 w-72 rounded-2xl border border-slate-200/70 bg-white px-4 py-3 text-xs text-slate-400 shadow-xl dark:border-slate-800 dark:bg-slate-950">
+                  Sin coincidencias para "{busSearch.trim()}"
+                </div>
+              )}
+            </div>
+
             {/* Selector de Semana Global */}
             <WeekSelector />
 
@@ -473,6 +620,24 @@ export const DashboardPage = () => {
             Ver todos
           </Button>
         </div>
+        <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500 dark:text-slate-400">
+          <span className="flex items-center gap-1.5">
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br from-emerald-500 to-emerald-600 text-[11px]">🚌</span>
+            Bus revisado operativo · clic para informe completo
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br from-orange-500 to-orange-600 text-[11px]">🚌</span>
+            Bus revisado en panne
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
+            Inspector en vivo (pulso &lt; {ONLINE_THRESHOLD_MIN} min)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-400" />
+            Inspector inactivo
+          </span>
+        </div>
         <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
           <div className="h-[420px] overflow-hidden rounded-2xl border border-slate-100/80 dark:border-slate-900">
             <MapContainer
@@ -503,22 +668,15 @@ export const DashboardPage = () => {
                 ))}
               </LayerGroup>
               <LayerGroup>
-                {mapRevisions.map((revision) => (
-                  <CircleMarker
-                    key={revision.id}
-                    center={[revision.lat, revision.lon]}
-                    radius={7}
-                    color={revision.estado_bus === 'EN_PANNE' ? '#f97316' : '#22c55e'}
-                    weight={2}
-                  >
-                    <Popup>
-                      <p className="text-sm font-semibold">{revision.bus_ppu}</p>
-                      <p className="text-xs text-slate-500">
-                        {revision.estado_bus === 'EN_PANNE' ? 'En panne' : 'Operativo'} ·{' '}
-                        {dayjs(revision.created_at).format('ddd HH:mm')}
-                      </p>
-                    </Popup>
-                  </CircleMarker>
+                {busMapMarkers.map((revision) => (
+                  <Marker
+                    key={`bus-${revision.id}`}
+                    position={[revision.lat, revision.lon]}
+                    icon={createBusIcon(revision.estado_bus === 'EN_PANNE')}
+                    eventHandlers={{
+                      click: () => setReportPpu(revision.bus_ppu),
+                    }}
+                  />
                 ))}
               </LayerGroup>
               <LayerGroup>
@@ -526,23 +684,30 @@ export const DashboardPage = () => {
                   .filter(inspector => !['15.839.906-7', '18.866.264-1'].includes(inspector.usuario_rut))
                   .map((inspector) => {
                   const isSelf = user?.rut === inspector.usuario_rut
+                  const online = isInspectorOnline(inspector.last_heartbeat)
+                  const firstName = inspector.nombre.split(' ').filter(Boolean).slice(0, 2).join(' ')
                   const icon = createInspectorIcon(
                     getInitials(inspector.nombre),
-                    isSelf ? '#22c55e' : '#0284c7'
+                    firstName,
+                    isSelf ? '#22c55e' : '#0284c7',
+                    online
                   )
                   return (
                     <Marker
                       key={`inspector-${inspector.usuario_rut}`}
                       position={[inspector.lat, inspector.lon]}
                       icon={icon}
+                      zIndexOffset={online ? 1000 : 0}
                     >
                       <Popup>
                         <p className="text-sm font-semibold">{inspector.nombre}</p>
                         <p className="text-xs text-slate-500">
+                          {online ? '🟢 En vivo ahora' : `⚪ Inactivo · último pulso ${dayjs(inspector.last_heartbeat).fromNow()}`}
+                          <br />
                           {inspector.terminal} · Precisión ±
                           {Math.round(inspector.accuracy ?? 0)} m
                           <br />
-                          Último pulso {dayjs(inspector.last_heartbeat).fromNow()}
+                          Último pulso {dayjs(inspector.last_heartbeat).format('HH:mm:ss')} hrs
                         </p>
                       </Popup>
                     </Marker>
@@ -589,17 +754,32 @@ export const DashboardPage = () => {
                 )}
                 {liveInspectors
                   .filter(inspector => !['15.839.906-7', '18.866.264-1'].includes(inspector.usuario_rut))
-                  .map((inspector) => (
+                  .map((inspector) => {
+                  const online = isInspectorOnline(inspector.last_heartbeat)
+                  return (
                   <div key={inspector.usuario_rut} className="mb-3 text-xs last:mb-0">
-                    <p className="font-semibold text-slate-800 dark:text-white">
+                    <p className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-white">
+                      <span
+                        className={`inline-block h-2 w-2 rounded-full ${
+                          online ? 'marker-live-dot bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                        }`}
+                      />
                       {inspector.nombre}
+                      {online && (
+                        <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                          En vivo
+                        </span>
+                      )}
                     </p>
                     <p className="text-slate-500">
                       {inspector.terminal} · Precisión ±{Math.round(inspector.accuracy ?? 0)} m ·{' '}
-                      {dayjs(inspector.last_heartbeat).format('HH:mm')} hrs
+                      {online
+                        ? `pulso ${dayjs(inspector.last_heartbeat).format('HH:mm:ss')}`
+                        : dayjs(inspector.last_heartbeat).fromNow()}
                     </p>
                   </div>
-                ))}
+                  )
+                })}
               </ScrollArea>
             </div>
             <div className="rounded-2xl border border-slate-100/80 p-4 dark:border-slate-900">
@@ -718,6 +898,8 @@ export const DashboardPage = () => {
         weekNumber={weekInfo.weekNumber}
         year={weekInfo.year}
       />
+
+      <BusReportDialog ppu={reportPpu} onClose={() => setReportPpu(null)} />
     </div>
   )
 }
