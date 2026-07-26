@@ -37,18 +37,19 @@ export const TopBar = () => {
   const puedeVerAlertas = user && user.cargo !== 'INSPECTOR'
 
   return (
-    <header className="sticky top-0 z-20 w-full border-b border-transparent px-4 py-4 backdrop-blur supports-[backdrop-filter]:bg-white/70 dark:supports-[backdrop-filter]:bg-slate-950/70">
-      <div className="flex items-center justify-between gap-4">
-        <div className="shrink-0">
-          <p className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+    <header className="sticky top-0 z-20 w-full border-b border-transparent px-3 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-white/70 dark:supports-[backdrop-filter]:bg-slate-950/70 sm:px-4 sm:py-4">
+      <div className="flex items-center justify-between gap-2 sm:gap-4">
+        <div className="min-w-0 shrink">
+          <p className="hidden text-sm font-semibold uppercase tracking-wide text-slate-400 sm:block">
             {dayjs().format('dddd D MMMM · HH:mm')} hrs
           </p>
-          <h2 className="text-2xl font-black text-slate-900 dark:text-white">
+          <h2 className="truncate text-lg font-black text-slate-900 dark:text-white sm:text-2xl">
             {currentItem.label}
           </h2>
           {user && (
-            <p className="text-sm text-slate-500">
-              Bienvenido, {user.nombre.split(' ')[0]} · {user.cargo} · Terminal {user.terminal}
+            <p className="truncate text-xs text-slate-500 sm:text-sm">
+              Bienvenido, {user.nombre.split(' ')[0]} · {user.cargo}
+              <span className="hidden sm:inline"> · Terminal {user.terminal}</span>
             </p>
           )}
         </div>
@@ -89,7 +90,7 @@ export const TopBar = () => {
           </div>
         )}
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <TrackingStatus {...tracking} />
           <ThemeToggle />
           <NotificationCenter />

@@ -15,7 +15,7 @@ export const MobileNav = () => {
   )
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-center justify-around border-t border-slate-200/60 bg-white/95 px-4 shadow-2xl backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-950/90">
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex min-h-16 items-center justify-around border-t border-slate-200/60 bg-white/95 px-2 pb-[env(safe-area-inset-bottom)] shadow-2xl backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-950/90">
       {visibleItems.map((item) => {
         const Icon = item.icon
         const isActive = location.pathname.startsWith(item.path)

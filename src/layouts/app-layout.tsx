@@ -29,7 +29,7 @@ export const AppLayout = () => {
         <Sidebar />
         <div className="flex flex-1 flex-col md:pl-[var(--sidebar-width)]">
           <TopBar />
-          <main className="flex-1 px-4 pb-32 pt-6 md:px-8 md:pb-10 transition-colors duration-300">
+          <main className="flex-1 px-3 pb-32 pt-3 transition-colors duration-300 sm:px-4 sm:pt-6 md:px-8 md:pb-10">
             <div className="w-full">
               <Outlet />
             </div>

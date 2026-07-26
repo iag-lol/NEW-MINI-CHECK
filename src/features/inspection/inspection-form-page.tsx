@@ -358,7 +358,7 @@ const BinaryQuestion = ({
   description,
 }: BinaryQuestionProps) => (
   <div
-    className={`space-y-3 rounded-2xl border p-4 transition ${
+    className={`space-y-3 rounded-2xl border p-3.5 transition sm:p-4 ${
       value === null || value === undefined
         ? 'border-slate-200/80 bg-white/70 dark:border-slate-800 dark:bg-slate-950/40'
         : value
@@ -382,7 +382,7 @@ const BinaryQuestion = ({
         type="button"
         aria-pressed={value === true}
         onClick={() => onChange(true)}
-        className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
+        className={`flex min-h-[46px] items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
           value === true
             ? 'border-emerald-600 bg-emerald-600 text-white shadow-md shadow-emerald-600/25'
             : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-emerald-950/30'
@@ -395,7 +395,7 @@ const BinaryQuestion = ({
         type="button"
         aria-pressed={value === false}
         onClick={() => onChange(false)}
-        className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
+        className={`flex min-h-[46px] items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
           value === false
             ? 'border-red-600 bg-red-600 text-white shadow-md shadow-red-600/25'
             : 'border-slate-200 bg-white text-slate-600 hover:border-red-300 hover:bg-red-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-red-950/30'
@@ -423,18 +423,18 @@ const SectionCard = ({
   badge?: ReactNode
   children: ReactNode
 }) => (
-  <Card className="space-y-6 overflow-hidden border border-slate-200/70 bg-white/80 p-0 shadow-sm dark:border-slate-800 dark:bg-slate-950/60">
-    <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/60 px-5 py-4 dark:border-slate-800/70 dark:bg-slate-900/30 sm:px-6">
-      <div className={`rounded-xl bg-gradient-to-br ${accent} p-2.5 text-white shadow-lg`}>
-        <Icon className="h-5 w-5" />
+  <Card className="space-y-4 overflow-hidden border border-slate-200/70 bg-white/80 p-0 shadow-sm dark:border-slate-800 dark:bg-slate-950/60 sm:space-y-6">
+    <div className="flex items-center gap-2.5 border-b border-slate-100 bg-slate-50/60 px-4 py-3 dark:border-slate-800/70 dark:bg-slate-900/30 sm:gap-3 sm:px-6 sm:py-4">
+      <div className={`rounded-xl bg-gradient-to-br ${accent} p-2 text-white shadow-lg sm:p-2.5`}>
+        <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-base font-bold text-slate-900 dark:text-white">{title}</p>
-        {description && <p className="text-xs text-slate-500">{description}</p>}
+        <p className="text-sm font-bold text-slate-900 dark:text-white sm:text-base">{title}</p>
+        {description && <p className="hidden text-xs text-slate-500 sm:block">{description}</p>}
       </div>
       {badge}
     </div>
-    <div className="space-y-6 px-5 pb-6 sm:px-6">{children}</div>
+    <div className="space-y-5 px-4 pb-5 sm:space-y-6 sm:px-6 sm:pb-6">{children}</div>
   </Card>
 )
 
@@ -1288,14 +1288,14 @@ export const InspectionFormPage = () => {
       icon={ClipboardCheck}
       accent="from-brand-500 to-indigo-500"
     >
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
         <div>
           <Label>Estado operativo</Label>
           <div className="mt-3 grid grid-cols-2 gap-3">
             <button
               type="button"
               onClick={() => methods.setValue('estadoBus', 'OPERATIVO')}
-              className={`flex flex-col items-center gap-2 rounded-2xl border-2 px-4 py-5 transition active:scale-[0.98] ${
+              className={`flex flex-col items-center gap-1.5 rounded-2xl border-2 px-2 py-4 transition active:scale-[0.98] sm:gap-2 sm:px-4 sm:py-5 ${
                 estadoBus === 'OPERATIVO'
                   ? 'border-emerald-500 bg-emerald-50 shadow-lg shadow-emerald-500/10 dark:bg-emerald-950/30'
                   : 'border-slate-200 bg-white hover:border-emerald-300 dark:border-slate-800 dark:bg-slate-900'
@@ -1318,7 +1318,7 @@ export const InspectionFormPage = () => {
             <button
               type="button"
               onClick={() => methods.setValue('estadoBus', 'EN_PANNE')}
-              className={`flex flex-col items-center gap-2 rounded-2xl border-2 px-4 py-5 transition active:scale-[0.98] ${
+              className={`flex flex-col items-center gap-1.5 rounded-2xl border-2 px-2 py-4 transition active:scale-[0.98] sm:gap-2 sm:px-4 sm:py-5 ${
                 estadoBus === 'EN_PANNE'
                   ? 'border-red-500 bg-red-50 shadow-lg shadow-red-500/10 dark:bg-red-950/30'
                   : 'border-slate-200 bg-white hover:border-red-300 dark:border-slate-800 dark:bg-slate-900'
@@ -1475,7 +1475,7 @@ export const InspectionFormPage = () => {
         icon={Camera}
         accent="from-blue-500 to-sky-500"
       >
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
           <div>
             <Label>Estado del Monitor</Label>
             <select
@@ -1501,7 +1501,7 @@ export const InspectionFormPage = () => {
         </div>
         {monitorActivo ? (
           <>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
               {cameraHardwareQuestions.map((item) => (
                 <BinaryQuestion
                   key={item.field}
@@ -1517,7 +1517,7 @@ export const InspectionFormPage = () => {
                 />
               ))}
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
               <BinaryQuestion
                 label="¿Todas las cámaras son visibles?"
                 value={camaras.visiblesMonitor}
@@ -1575,7 +1575,7 @@ export const InspectionFormPage = () => {
         />
         {tieneExtintor ? (
           <div className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
               <div>
                 <Label>Mes de vencimiento</Label>
                 <Input
@@ -1607,7 +1607,7 @@ export const InspectionFormPage = () => {
                 />
               </div>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
               {extinguisherFieldConfig.map((field) => (
                 <div key={field.key}>
                   <Label>{field.label}</Label>
@@ -1681,7 +1681,7 @@ export const InspectionFormPage = () => {
         onChange={(value) => methods.setValue('mobileye.aplica', value)}
       />
       {mobileyeAplica && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {mobileyeQuestionList.map((item) => (
             <BinaryQuestion
               key={item.field}
@@ -1717,7 +1717,7 @@ export const InspectionFormPage = () => {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
         <BinaryQuestion
           label="¿Las cerraduras están en buen estado?"
           value={rackState.cerradurasBuenEstado}
@@ -1778,7 +1778,7 @@ export const InspectionFormPage = () => {
       icon={Gauge}
       accent="from-teal-500 to-emerald-500"
     >
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
         <div>
           <Label>Lectura</Label>
           <Input
@@ -2264,17 +2264,17 @@ export const InspectionFormPage = () => {
             e.preventDefault()
           }
         }}
-        className="space-y-5"
+        className="space-y-3 sm:space-y-5"
         aria-label="Formulario principal New Mini-Check"
       >
         {/* ===== HERO: BÚSQUEDA Y BUS SELECCIONADO ===== */}
         <Card className="overflow-hidden border border-slate-200/70 p-0 dark:border-slate-800">
-          <div className="flex flex-wrap items-center gap-3 bg-gradient-to-r from-slate-900 via-brand-800 to-brand-600 px-5 py-4 text-white sm:px-6">
+          <div className="flex flex-wrap items-center gap-2.5 bg-gradient-to-r from-slate-900 via-brand-800 to-brand-600 px-4 py-3 text-white sm:gap-3 sm:px-6 sm:py-4">
             <div className="rounded-xl bg-white/15 p-2">
               <Bus className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="text-lg font-black">Nueva Inspección</h1>
+              <h1 className="text-base font-black sm:text-lg">Nueva Inspección</h1>
               <p className="text-xs text-white/70">
                 Semana {dayjs().isoWeek()} · {dayjs().format('dddd D MMMM')}
               </p>
@@ -2290,7 +2290,7 @@ export const InspectionFormPage = () => {
             )}
           </div>
 
-          <div className="space-y-4 p-5 sm:p-6">
+          <div className="space-y-3 p-4 sm:space-y-4 sm:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="relative flex-1">
                 <Label htmlFor="busSearch">PPU o N° interno</Label>
@@ -2333,7 +2333,7 @@ export const InspectionFormPage = () => {
               </div>
               <Button
                 type="button"
-                className="gap-2 rounded-2xl"
+                className="w-full gap-2 rounded-2xl sm:w-auto"
                 onClick={() => searchBus()}
               >
                 <Search className="h-4 w-4" /> Buscar bus
@@ -2458,7 +2458,7 @@ export const InspectionFormPage = () => {
         )}
 
         {/* ===== STEPPER ===== */}
-        <Card className="space-y-3 p-4">
+        <Card className="space-y-2.5 p-3 sm:space-y-3 sm:p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
               Paso {currentStep + 1} de {activeSteps.length} · {activeSteps[currentStep].label}
@@ -2535,26 +2535,26 @@ export const InspectionFormPage = () => {
         </AnimatePresence>
 
         {/* ===== NAVEGACIÓN FIJA ===== */}
-        <div className="sticky bottom-20 z-20 md:bottom-4">
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-xl backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
+        <div className="sticky bottom-[4.6rem] z-20 md:bottom-4">
+          <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white/95 px-2.5 py-2 shadow-xl backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:gap-3 sm:px-4 sm:py-3">
             <Button
               type="button"
               variant="ghost"
               disabled={currentStep === 0}
               onClick={handlePrev}
-              className="gap-1.5"
+              className="shrink-0 gap-1.5 px-3 sm:px-5"
             >
               <ChevronLeft className="h-4 w-4" />
               <span className="hidden sm:inline">Anterior</span>
             </Button>
-            <p className="hidden text-xs text-slate-400 sm:block">
+            <p className="hidden text-xs text-slate-400 md:block">
               {bus ? `${bus.ppu} · ${activeSteps[currentStep].label}` : 'Selecciona un bus'}
             </p>
             {stepKey === 'cierre' ? (
               <Button
                 type="submit"
                 disabled={saving}
-                className="gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 shadow-lg shadow-emerald-500/25 hover:from-emerald-500 hover:to-emerald-400"
+                className="flex-1 gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 shadow-lg shadow-emerald-500/25 hover:from-emerald-500 hover:to-emerald-400 sm:flex-initial sm:px-6"
               >
                 {saving ? (
                   <>
@@ -2567,7 +2567,11 @@ export const InspectionFormPage = () => {
                 )}
               </Button>
             ) : (
-              <Button type="button" onClick={handleNext} className="gap-1.5 rounded-2xl px-6">
+              <Button
+                type="button"
+                onClick={handleNext}
+                className="flex-1 gap-1.5 rounded-2xl sm:flex-initial sm:px-6"
+              >
                 Continuar
                 <ChevronRight className="h-4 w-4" />
               </Button>

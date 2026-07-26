@@ -93,7 +93,7 @@ export const ConsolidadosDialog = ({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-md"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 backdrop-blur-md sm:p-4"
           onClick={onClose}
         >
           <motion.div
@@ -101,11 +101,11 @@ export const ConsolidadosDialog = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.97 }}
             transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-            className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200/60 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+            className="flex h-[100dvh] w-full flex-col overflow-hidden border border-slate-200/60 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:h-auto sm:max-h-[92vh] sm:max-w-2xl sm:rounded-3xl"
             onClick={(event) => event.stopPropagation()}
           >
             {/* Encabezado */}
-            <div className="relative bg-gradient-to-r from-brand-700 to-brand-500 px-6 py-5 text-white">
+            <div className="relative bg-gradient-to-r from-brand-700 to-brand-500 px-4 py-4 text-white sm:px-6 sm:py-5">
               <button
                 type="button"
                 onClick={onClose}
@@ -126,7 +126,7 @@ export const ConsolidadosDialog = ({
               </div>
             </div>
 
-            <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+            <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:space-y-5 sm:px-6 sm:py-5">
               {/* Archivos que se descargarán */}
               <div className="grid gap-2 sm:grid-cols-2">
                 {FILES.map((file) => (
@@ -232,8 +232,8 @@ export const ConsolidadosDialog = ({
             </div>
 
             {/* Pie */}
-            <div className="flex items-center justify-between gap-3 border-t border-slate-200/70 px-6 py-4 dark:border-slate-800">
-              <p className="text-[11px] text-slate-400">
+            <div className="flex items-center justify-between gap-3 border-t border-slate-200/70 px-4 py-3 dark:border-slate-800 sm:px-6 sm:py-4">
+              <p className="hidden text-[11px] text-slate-400 sm:block">
                 El navegador puede pedir permiso para descargar varios archivos.
               </p>
               <div className="flex gap-2">

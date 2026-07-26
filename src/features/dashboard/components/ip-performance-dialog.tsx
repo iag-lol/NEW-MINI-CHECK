@@ -626,7 +626,7 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-md sm:p-5"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 backdrop-blur-md sm:p-5"
           onClick={onClose}
         >
           <motion.div
@@ -634,11 +634,11 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.97 }}
             transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-            className="flex h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-slate-200/60 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+            className="flex h-[100dvh] w-full flex-col overflow-hidden border border-slate-200/60 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:h-[92vh] sm:max-w-5xl sm:rounded-3xl"
             onClick={(event) => event.stopPropagation()}
           >
             {/* Encabezado */}
-            <div className="relative bg-gradient-to-r from-slate-900 via-indigo-900 to-indigo-600 px-6 py-5 text-white">
+            <div className="relative bg-gradient-to-r from-slate-900 via-indigo-900 to-indigo-600 px-4 py-4 text-white sm:px-6 sm:py-5">
               <button
                 type="button"
                 onClick={onClose}
@@ -719,7 +719,7 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
             </div>
 
             {/* Cuerpo */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-4">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-6 sm:py-4">
               {seleccion ? (
                 /* ================= DETALLE ================= */
                 <div className="space-y-4">
@@ -760,7 +760,7 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
                         >
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
-                        <span className="min-w-[190px] rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-center text-xs font-bold text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300">
+                        <span className="min-w-0 flex-1 rounded-xl border border-indigo-200 bg-indigo-50 px-2 py-1.5 text-center text-[11px] font-bold text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 sm:min-w-[190px] sm:flex-initial sm:px-3 sm:text-xs">
                           {periodoLabel}
                         </span>
                         <Button
@@ -937,9 +937,9 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
                         key={colaborador.rut}
                         type="button"
                         onClick={() => abrirDetalle(colaborador.rut, colaborador.nombre)}
-                        className="flex w-full items-center gap-4 rounded-2xl border border-slate-200/70 px-4 py-3 text-left transition hover:border-indigo-400 hover:bg-indigo-50/40 dark:border-slate-800 dark:hover:border-indigo-600 dark:hover:bg-indigo-950/20"
+                        className="flex w-full items-center gap-2.5 rounded-2xl border border-slate-200/70 px-3 py-3 text-left transition hover:border-indigo-400 hover:bg-indigo-50/40 dark:border-slate-800 dark:hover:border-indigo-600 dark:hover:bg-indigo-950/20 sm:gap-4 sm:px-4"
                       >
-                        <span className="w-10 shrink-0 text-center text-lg font-black text-slate-500">
+                        <span className="w-7 shrink-0 text-center text-base font-black text-slate-500 sm:w-10 sm:text-lg">
                           {medalla(index)}
                         </span>
                         <div className="min-w-0 flex-1">
@@ -1004,7 +1004,7 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
             </div>
 
             {/* Pie */}
-            <div className="flex items-center justify-between border-t border-slate-200/70 px-6 py-3 dark:border-slate-800">
+            <div className="flex items-center justify-between border-t border-slate-200/70 px-4 py-2.5 dark:border-slate-800 sm:px-6 sm:py-3">
               <p className="text-[11px] text-slate-400">
                 Precisión = % de revisiones realizadas dentro de la geocerca de un terminal
               </p>

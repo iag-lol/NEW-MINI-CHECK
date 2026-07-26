@@ -548,7 +548,7 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-md sm:p-5"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/70 backdrop-blur-md sm:p-5"
           onClick={onClose}
         >
           <motion.div
@@ -556,11 +556,11 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.97 }}
             transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-            className="flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200/60 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+            className="flex h-[100dvh] w-full flex-col overflow-hidden border border-slate-200/60 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:h-[92vh] sm:max-w-6xl sm:rounded-3xl"
             onClick={(event) => event.stopPropagation()}
           >
             {/* Encabezado */}
-            <div className="relative bg-gradient-to-r from-slate-900 via-brand-800 to-brand-600 px-6 py-5 text-white">
+            <div className="relative bg-gradient-to-r from-slate-900 via-brand-800 to-brand-600 px-4 py-4 text-white sm:px-6 sm:py-5">
               <button
                 type="button"
                 onClick={onClose}
@@ -574,7 +574,7 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
                 </div>
                 <div>
                   <div className="flex items-center gap-3">
-                    <h2 className="text-2xl font-black tracking-wide">{ppu}</h2>
+                    <h2 className="text-xl font-black tracking-wide sm:text-2xl">{ppu}</h2>
                     {revision && (
                       <Badge
                         variant={revision.estado_bus === 'EN_PANNE' ? 'danger' : 'success'}
@@ -616,7 +616,7 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
 
               {/* KPIs */}
               {kpis && (
-                <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
+                <div className="mt-4 grid grid-cols-3 gap-1.5 sm:grid-cols-6 sm:gap-2">
                   {[
                     { label: 'Revisiones', value: kpis.total, icon: Activity },
                     { label: '% Operativo', value: `${kpis.pctOperativo}%`, icon: CheckCircle2 },
@@ -644,7 +644,7 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
             </div>
 
             {/* Cuerpo */}
-            <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-4">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 sm:px-6 sm:py-4">
               {isLoading ? (
                 <div className="flex h-64 items-center justify-center text-sm text-slate-400">
                   Cargando historial completo del bus…
@@ -948,7 +948,7 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
             </div>
 
             {/* Pie */}
-            <div className="flex items-center justify-between border-t border-slate-200/70 px-6 py-3 dark:border-slate-800">
+            <div className="flex items-center justify-between border-t border-slate-200/70 px-4 py-2.5 dark:border-slate-800 sm:px-6 sm:py-3">
               <p className="text-[11px] text-slate-400">
                 Informe generado en tiempo real desde la base de datos · Mini-Check
               </p>
