@@ -51,6 +51,13 @@ body {
   min-height: 100vh;
 }
 
+/* Red de seguridad: ningún contenido puede provocar scroll horizontal
+   de la página completa (el contenido ancho scrollea en su contenedor) */
+html,
+body {
+  overflow-x: clip;
+}
+
 .leaflet-container {
   font: inherit;
 }

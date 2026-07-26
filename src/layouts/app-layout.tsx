@@ -27,7 +27,9 @@ export const AppLayout = () => {
     <TrackingProvider value={tracking}>
       <div className="flex min-h-screen bg-theme dark:bg-slate-950">
         <Sidebar />
-        <div className="flex flex-1 flex-col md:pl-[var(--sidebar-width)]">
+        {/* min-w-0: sin esto el flex item hereda el ancho intrínseco del contenido
+            (tablas, steppers, mapas) y toda la app se desborda en móviles */}
+        <div className="flex min-w-0 flex-1 flex-col md:pl-[var(--sidebar-width)]">
           <TopBar />
           <main className="flex-1 px-3 pb-32 pt-3 transition-colors duration-300 sm:px-4 sm:pt-6 md:px-8 md:pb-10">
             <div className="w-full">
