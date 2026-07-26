@@ -1,7 +1,29 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode, type ComponentType } from 'react'
 import { FormProvider, useForm } from 'react-hook-form'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, CheckCircle2, Loader2, MapPin, Search } from 'lucide-react'
+import {
+  AlertTriangle,
+  Bus,
+  Camera,
+  Check,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardCheck,
+  Flag,
+  Flame,
+  Gauge,
+  HardDrive,
+  Loader2,
+  MapPin,
+  Megaphone,
+  Radar,
+  Search,
+  Tag,
+  Wifi,
+  X,
+  XCircle,
+} from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
@@ -141,17 +163,35 @@ const inspectionSchema = z
   })
 
 const steps = [
-  { key: 'estado', label: 'Estado general' },
-  { key: 'tag', label: 'TAG' },
-  { key: 'camaras', label: 'Cámaras' },
-  { key: 'extintores', label: 'Extintores' },
-  { key: 'odometro', label: 'Odómetro' },
-  { key: 'mobileye', label: 'Mobileye' },
-  { key: 'rack', label: 'Rack' },
-  { key: 'wifi', label: 'WiFi' },
-  { key: 'publicidad', label: 'Publicidad' },
-  { key: 'cierre', label: 'Cierre' },
+  { key: 'estado', label: 'Estado', icon: ClipboardCheck, accent: 'from-brand-500 to-indigo-500' },
+  { key: 'tag', label: 'TAG', icon: Tag, accent: 'from-amber-500 to-yellow-500' },
+  { key: 'camaras', label: 'Cámaras', icon: Camera, accent: 'from-blue-500 to-sky-500' },
+  { key: 'extintores', label: 'Extintor', icon: Flame, accent: 'from-red-500 to-orange-500' },
+  { key: 'odometro', label: 'Odómetro', icon: Gauge, accent: 'from-teal-500 to-emerald-500' },
+  { key: 'mobileye', label: 'Mobileye', icon: Radar, accent: 'from-purple-500 to-violet-500' },
+  { key: 'rack', label: 'Rack', icon: HardDrive, accent: 'from-slate-500 to-slate-600' },
+  { key: 'wifi', label: 'WiFi', icon: Wifi, accent: 'from-sky-500 to-cyan-500' },
+  { key: 'publicidad', label: 'Publicidad', icon: Megaphone, accent: 'from-pink-500 to-rose-500' },
+  { key: 'cierre', label: 'Cierre', icon: Flag, accent: 'from-emerald-500 to-green-500' },
 ] as const
+
+type StepKey = (typeof steps)[number]['key']
+
+/**
+ * Bus EN PANNE: se revisan OBLIGATORIAMENTE estos módulos.
+ * Cámaras, Odómetro y WiFi se omiten porque requieren el bus operativo.
+ */
+const PANNE_REQUIRED_STEPS: readonly StepKey[] = [
+  'estado',
+  'tag',
+  'extintores',
+  'mobileye',
+  'rack',
+  'publicidad',
+  'cierre',
+]
+
+const PANNE_SKIPPED_STEPS: readonly StepKey[] = ['camaras', 'odometro', 'wifi']
 
 const publicityAreas = [
   { key: 'izquierda', label: 'Lateral Izquierdo' },
@@ -182,7 +222,6 @@ const mobileyeQuestionList = [
 type MobileyeField = (typeof mobileyeQuestionList)[number]['field']
 
 type InspectionForm = z.infer<typeof inspectionSchema>
-type StepKey = (typeof steps)[number]['key']
 type CameraPath = `camaras.${CameraHardwareField}`
 type MobileyePath = `mobileye.${MobileyeField}`
 type PublicidadPath = `publicidad.${PublicidadAreaKey}.${'tiene' | 'danio' | 'residuos'}`
@@ -255,6 +294,52 @@ const extinguisherFieldConfig = [
   options: { value: string; label: string }[]
 }>
 
+// ============================================================
+// COMPONENTES DE UI REDISEÑADOS
+// ============================================================
+
+const AlertBanner = ({
+  tone,
+  title,
+  children,
+}: {
+  tone: 'error' | 'warning' | 'success' | 'info'
+  title?: string
+  children: ReactNode
+}) => {
+  const styles = {
+    error:
+      'border-red-200 bg-red-50/90 text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200',
+    warning:
+      'border-amber-200 bg-amber-50/90 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200',
+    success:
+      'border-emerald-200 bg-emerald-50/90 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200',
+    info: 'border-sky-200 bg-sky-50/90 text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-200',
+  }
+  const icons = {
+    error: XCircle,
+    warning: AlertTriangle,
+    success: CheckCircle2,
+    info: MapPin,
+  }
+  const Icon = icons[tone]
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -8, scale: 0.98 }}
+      className={`flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-sm ${styles[tone]}`}
+    >
+      <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+      <div className="min-w-0 flex-1 text-sm">
+        {title && <p className="font-bold">{title}</p>}
+        {children}
+      </div>
+    </motion.div>
+  )
+}
+
 interface BinaryQuestionProps {
   label: string
   value: boolean | null | undefined
@@ -272,28 +357,53 @@ const BinaryQuestion = ({
   negativeLabel = 'No',
   description,
 }: BinaryQuestionProps) => (
-  <div className="space-y-2 rounded-2xl border border-slate-100/60 bg-white/60 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-    <div>
-      <p className="text-sm font-semibold text-slate-900 dark:text-white">{label}</p>
-      {description && <p className="text-xs text-slate-500">{description}</p>}
+  <div
+    className={`space-y-3 rounded-2xl border p-4 transition ${
+      value === null || value === undefined
+        ? 'border-slate-200/80 bg-white/70 dark:border-slate-800 dark:bg-slate-950/40'
+        : value
+          ? 'border-emerald-200/80 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/10'
+          : 'border-red-200/80 bg-red-50/40 dark:border-red-900/50 dark:bg-red-950/10'
+    }`}
+  >
+    <div className="flex items-start justify-between gap-2">
+      <div>
+        <p className="text-sm font-semibold text-slate-900 dark:text-white">{label}</p>
+        {description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}
+      </div>
+      {(value === null || value === undefined) && (
+        <span className="flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+          Pendiente
+        </span>
+      )}
     </div>
-    <div className="flex gap-3">
-      <Button
+    <div className="grid grid-cols-2 gap-2">
+      <button
         type="button"
-        variant={value === true ? 'success' : 'outline'}
-        className="flex-1 rounded-xl"
+        aria-pressed={value === true}
         onClick={() => onChange(true)}
+        className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
+          value === true
+            ? 'border-emerald-600 bg-emerald-600 text-white shadow-md shadow-emerald-600/25'
+            : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-emerald-950/30'
+        }`}
       >
+        <Check className="h-4 w-4" />
         {positiveLabel}
-      </Button>
-      <Button
+      </button>
+      <button
         type="button"
-        variant={value === false ? 'destructive' : 'outline'}
-        className="flex-1 rounded-xl"
+        aria-pressed={value === false}
         onClick={() => onChange(false)}
+        className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
+          value === false
+            ? 'border-red-600 bg-red-600 text-white shadow-md shadow-red-600/25'
+            : 'border-slate-200 bg-white text-slate-600 hover:border-red-300 hover:bg-red-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-red-950/30'
+        }`}
       >
+        <X className="h-4 w-4" />
         {negativeLabel}
-      </Button>
+      </button>
     </div>
   </div>
 )
@@ -301,20 +411,36 @@ const BinaryQuestion = ({
 const SectionCard = ({
   title,
   description,
+  icon: Icon,
+  accent,
+  badge,
   children,
 }: {
   title: string
   description?: string
+  icon: ComponentType<{ className?: string }>
+  accent: string
+  badge?: ReactNode
   children: ReactNode
 }) => (
-  <Card className="space-y-6 border border-slate-100/80 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950/60">
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.35em] text-brand-500">{title}</p>
-      {description && <p className="text-sm text-slate-500">{description}</p>}
+  <Card className="space-y-6 overflow-hidden border border-slate-200/70 bg-white/80 p-0 shadow-sm dark:border-slate-800 dark:bg-slate-950/60">
+    <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/60 px-5 py-4 dark:border-slate-800/70 dark:bg-slate-900/30 sm:px-6">
+      <div className={`rounded-xl bg-gradient-to-br ${accent} p-2.5 text-white shadow-lg`}>
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-base font-bold text-slate-900 dark:text-white">{title}</p>
+        {description && <p className="text-xs text-slate-500">{description}</p>}
+      </div>
+      {badge}
     </div>
-    {children}
+    <div className="space-y-6 px-5 pb-6 sm:px-6">{children}</div>
   </Card>
 )
+
+// ============================================================
+// PÁGINA DEL FORMULARIO
+// ============================================================
 
 export const InspectionFormPage = () => {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -422,7 +548,25 @@ export const InspectionFormPage = () => {
   const mobileyeState = methods.watch('mobileye')
   const rackState = methods.watch('rack')
   const publicityState = methods.watch('publicidad')
-  const stepKey: StepKey = steps[step].key
+
+  const isEnPanne = estadoBus === 'EN_PANNE'
+
+  // Pasos activos según el estado del bus:
+  // EN PANNE → TAG, Extintor, Mobileye, Rack y Publicidad son OBLIGATORIOS
+  const activeSteps = useMemo(
+    () => (isEnPanne ? steps.filter((item) => PANNE_REQUIRED_STEPS.includes(item.key)) : [...steps]),
+    [isEnPanne]
+  )
+  const currentStep = Math.min(step, activeSteps.length - 1)
+  const stepKey: StepKey = activeSteps[currentStep].key
+  const progressPct = activeSteps.length > 1 ? (currentStep / (activeSteps.length - 1)) * 100 : 0
+
+  // Al cambiar el estado del bus cambia el flujo de pasos → volver al inicio
+  useEffect(() => {
+    setStep(0)
+    setValidationMessage(null)
+  }, [estadoBus])
+
   const expectedRackLocks = useMemo(() => {
     const marca = bus?.marca?.toLowerCase() ?? ''
     return marca.includes('volvo') ? 4 : 2
@@ -587,19 +731,13 @@ export const InspectionFormPage = () => {
     }
   }, [trackingLocation, methods, user?.terminal])
 
-  useEffect(() => {
-    if (estadoBus === 'EN_PANNE' && step !== 0 && step !== steps.length - 1) {
-      setStep(0)
-    }
-  }, [estadoBus, step])
-
   // Auto-rellenar TAG cuando se cambia al paso "tag" si hay un bus seleccionado
   useEffect(() => {
     const loadLastTag = async () => {
       if (stepKey === 'tag' && bus?.ppu) {
         const currentTagTiene = methods.getValues('tag.tiene')
         const currentTagSerie = methods.getValues('tag.serie')
-        
+
         // Solo auto-rellenar si no hay valores ya establecidos (evitar sobrescribir)
         if (currentTagTiene === true && !currentTagSerie) {
           try {
@@ -650,323 +788,33 @@ export const InspectionFormPage = () => {
     }
   }, [searchParams, setSearchParams])
 
-  const handleNext = () => {
-    // Si el bus está EN_PANNE, saltar directo al cierre (último paso)
-    if (estadoBus === 'EN_PANNE' && step === 0) {
-      attemptNavigateToStep(steps.length - 1)
-      return
+  // Timer de espera WiFi de 3 minutos
+  useEffect(() => {
+    if (isWifiWaiting && wifiWaitingTime < 180) {
+      const timer = setTimeout(() => {
+        setWifiWaitingTime(wifiWaitingTime + 1)
+      }, 1000)
+      return () => clearTimeout(timer)
+    } else if (isWifiWaiting && wifiWaitingTime >= 180) {
+      setIsWifiWaiting(false)
+      setWifiWaitingTime(0)
     }
+  }, [isWifiWaiting, wifiWaitingTime])
 
+  const handleNext = () => {
     // VALIDACIÓN GPS: Bloquear navegación si no hay GPS (solo para buses OPERATIVOS)
-    if (!gpsActive || !trackingLocation) {
-      setValidationMessage('⚠️ Debes autorizar el GPS para continuar. Haz clic en "Actualizar GPS" arriba.')
+    if (!isEnPanne && (!gpsActive || !trackingLocation)) {
+      setValidationMessage('Debes autorizar el GPS para continuar. Usa el botón "Activar GPS".')
       return
     }
-    attemptNavigateToStep(Math.min(step + 1, steps.length - 1))
+    attemptNavigateToStep(Math.min(currentStep + 1, activeSteps.length - 1))
   }
   const handlePrev = () => {
-    attemptNavigateToStep(Math.max(step - 1, 0))
-  }
-
-  const submitInspection = async (values: InspectionForm) => {
-    // VALIDACIÓN GPS: Permitir envío sin GPS solo para buses EN_PANNE
-    if (!gpsActive || !trackingLocation) {
-      if (values.estadoBus === 'OPERATIVO') {
-        setValidationMessage('❌ NO PUEDES ENVIAR SIN GPS ACTIVO. Autoriza el permiso de ubicación para continuar.')
-        return
-      }
-      // Para buses EN_PANNE, continuar con coordenadas por defecto
-      console.warn('Bus EN_PANNE enviado sin GPS - usando coordenadas por defecto')
-    }
-
-    if (step !== steps.length - 1) {
-      attemptNavigateToStep(steps.length - 1)
-      return
-    }
-
-    const snapshot = methods.getValues()
-
-    // Para buses EN_PANNE, solo validar el paso 'estado'
-    if (snapshot.estadoBus === 'EN_PANNE') {
-      const estadoIssues = getMissingForStep('estado', snapshot)
-      if (estadoIssues.length) {
-        setValidationMessage(`Estado del bus: ${estadoIssues.join(' · ')}`)
-        setStep(0)
-        return
-      }
-    } else {
-      // Para buses OPERATIVOS, validar todos los pasos
-      for (let i = 0; i < steps.length; i++) {
-        const issues = getMissingForStep(steps[i].key, snapshot)
-        if (issues.length) {
-          setValidationMessage(`${steps[i].label}: ${issues.join(' · ')}`)
-          setStep(i)
-          return
-        }
-      }
-
-      const isValid = await methods.trigger()
-      if (!isValid) {
-        setValidationMessage('Revisa los campos con error antes de enviar.')
-        return
-      }
-    }
-
-    setValidationMessage(null)
-
-    if (!user || !bus) {
-      setBusAlert('Debes seleccionar un bus válido antes de enviar.')
-      return
-    }
-
-    setSaving(true)
-    try {
-      // Capturar IP del usuario
-      const userIP = await getUserIP()
-      const ipInfo = userIP ? await getIPGeoLocation(userIP) : null
-
-      const revisionInsert = {
-        inspector_rut: user.rut,
-        inspector_nombre: user.nombre,
-        terminal_detectado: terminalDetected?.name ?? 'SIN_TERMINAL',
-        terminal_reportado: values.terminalReportado,
-        bus_ppu: bus.ppu,
-        bus_interno: bus.numero_interno,
-        estado_bus: values.estadoBus,
-        lat: trackingLocation?.lat ?? -33.45,
-        lon: trackingLocation?.lon ?? -70.66,
-        observaciones: values.observacionGeneral ?? null,
-        semana_iso: `${getIsoWeekYear()}-W${String(dayjs().isoWeek()).padStart(2, '0')}`,
-        operativo: values.estadoBus === 'OPERATIVO',
-        ip_address: userIP,
-        ip_info: ipInfo ? {
-          city: ipInfo.city,
-          region: ipInfo.region,
-          country: ipInfo.country,
-          isp: ipInfo.isp,
-        } : null,
-      }
-      const { data: revisionData, error } = await supabase
-        .from('revisiones')
-        .insert(revisionInsert)
-        .select('id')
-        .single()
-      if (error) throw error
-
-      // Insertar registros según estado del bus
-      const isEnPanne = values.estadoBus === 'EN_PANNE'
-
-      await supabase.from('tags').insert({
-        revision_id: revisionData.id,
-        tiene: isEnPanne ? false : values.tag.tiene,
-        serie: isEnPanne ? null : (values.tag.serie || null),
-        observacion: isEnPanne ? 'Bus en panne - no revisado' : (values.tag.observacion || null),
-        bus_ppu: bus.ppu,
-        terminal: values.terminalReportado,
-      })
-
-      await supabase.from('camaras').insert({
-        revision_id: revisionData.id,
-        monitor_estado: isEnPanne ? 'SIN_SENAL' : values.camaras.monitorEstado,
-        detalle: isEnPanne ? {} : {
-          monitorDetalle: values.camaras.monitorDetalle,
-          camDelantera: values.camaras.camDelantera,
-          camCabina: values.camaras.camCabina,
-          camInteriores: values.camaras.camInteriores,
-          camTrasera: values.camaras.camTrasera,
-          visiblesMonitor: values.camaras.visiblesMonitor,
-          activaReversa: values.camaras.activaReversa,
-          activaPuertas: values.camaras.activaPuertas,
-          visiblesPuertasCerradas: values.camaras.visiblesPuertasCerradas,
-        },
-        observacion: isEnPanne ? 'Bus en panne - no revisado' : (values.camaras.observacion || null),
-        bus_ppu: bus.ppu,
-        terminal: values.terminalReportado,
-      })
-
-      await supabase.from('extintores').insert({
-        revision_id: revisionData.id,
-        tiene: isEnPanne ? false : values.extintores.tiene,
-        vencimiento_mes: isEnPanne ? null : (values.extintores.vencimientoMes ?? null),
-        vencimiento_anio: isEnPanne ? null : (values.extintores.vencimientoAnio ?? null),
-        certificacion: isEnPanne ? null : (values.extintores.certificacion ?? null),
-        sonda: isEnPanne ? null : (values.extintores.sonda ?? null),
-        manometro: isEnPanne ? null : (values.extintores.manometro ?? null),
-        presion: isEnPanne ? null : (values.extintores.presion ?? null),
-        cilindro: isEnPanne ? null : (values.extintores.cilindro ?? null),
-        porta: isEnPanne ? null : (values.extintores.porta ?? null),
-        observacion: isEnPanne ? 'Bus en panne - no revisado' : (values.extintores.observacion ?? null),
-        bus_ppu: bus.ppu,
-        terminal: values.terminalReportado,
-      })
-
-      // Mobileye solo para buses OPERATIVOS con marca Volvo
-      if (!isEnPanne && values.mobileye.aplica) {
-        await supabase.from('mobileye').insert({
-          revision_id: revisionData.id,
-          bus_marca: bus.marca,
-          alerta_izq: values.mobileye.alertaIzq ?? null,
-          alerta_der: values.mobileye.alertaDer ?? null,
-          consola: values.mobileye.consola ?? null,
-          sensor_frontal: values.mobileye.sensorFrontal ?? null,
-          sensor_izq: values.mobileye.sensorIzq ?? null,
-          sensor_der: values.mobileye.sensorDer ?? null,
-          observacion: values.mobileye.observacion ?? null,
-          bus_ppu: bus.ppu,
-          terminal: values.terminalReportado,
-        })
-      }
-
-      await supabase.from('odometro').insert({
-        revision_id: revisionData.id,
-        lectura: isEnPanne ? 0 : values.odometro.lectura,
-        estado: isEnPanne ? 'NO_FUNCIONA' : values.odometro.estado,
-        observacion: isEnPanne ? 'Bus en panne - no revisado' : (values.odometro.observacion ?? null),
-        bus_ppu: bus.ppu,
-        terminal: values.terminalReportado,
-      })
-
-      await supabase.from('rack').insert({
-        revision_id: revisionData.id,
-        tiene_disco_duro: isEnPanne ? null : values.rack.tieneDiscoDuro,
-        tiene_seguridad_extra:
-          isEnPanne || values.rack.tieneDiscoDuro !== true ? null : values.rack.tieneSeguridadExtra,
-        tiene_candado: isEnPanne ? null : values.rack.tieneCandado,
-        cerraduras_buen_estado: isEnPanne ? null : values.rack.cerradurasBuenEstado,
-        cantidad_cerraduras_esperada: values.rack.cantidadCerradurasEsperada,
-        observacion: isEnPanne ? 'Bus en panne - no revisado' : (values.rack.observacion || null),
-        bus_ppu: bus.ppu,
-        terminal: values.terminalReportado,
-      })
-
-      await supabase.from('wifi').insert({
-        revision_id: revisionData.id,
-        ppu_visible: isEnPanne ? null : (values.wifi.ppuVisible ?? null),
-        bus_encendido: isEnPanne ? null : (values.wifi.busEncendido ?? null),
-        tiene_internet: isEnPanne ? null : (values.wifi.tieneInternet ?? null),
-        observacion: isEnPanne ? 'Bus en panne - no revisado' : (values.wifi.observacion || null),
-        bus_ppu: bus.ppu,
-        terminal: values.terminalReportado,
-      })
-
-      const publicidadTiene = isEnPanne ? false : publicityAreas.some((area) => values.publicidad[area.key].tiene)
-      const publicidadDanio = isEnPanne ? false : publicityAreas.some((area) => values.publicidad[area.key].danio)
-      const publicidadResiduos = isEnPanne ? false : publicityAreas.some((area) => values.publicidad[area.key].residuos)
-
-      const publicidadPayload: Database['public']['Tables']['publicidad']['Insert'] = {
-        revision_id: revisionData.id,
-        tiene: publicidadTiene,
-        danio: publicidadDanio,
-        residuos: publicidadResiduos,
-        detalle_lados: isEnPanne ? {
-          izquierda: { tiene: false, danio: false, residuos: false, observacion: 'Bus en panne - no revisado' },
-          derecha: { tiene: false, danio: false, residuos: false, observacion: 'Bus en panne - no revisado' },
-          luneta: { tiene: false, danio: false, residuos: false, observacion: 'Bus en panne - no revisado' },
-        } : {
-          izquierda: values.publicidad.izquierda,
-          derecha: values.publicidad.derecha,
-          luneta: values.publicidad.luneta,
-        },
-        // El nombre de la campaña se captura en la observación de cada lado con publicidad
-        nombre_publicidad: (() => {
-          if (isEnPanne) return null
-          const nombres = publicityAreas
-            .map((area) => values.publicidad[area.key])
-            .filter((lado) => lado.tiene && lado.observacion?.trim())
-            .map((lado) => (lado.observacion as string).trim())
-          return nombres.length > 0 ? [...new Set(nombres)].join(' · ') : null
-        })(),
-        observacion: isEnPanne ? 'Bus en panne - no revisado' : null,
-        bus_ppu: bus.ppu,
-        terminal: values.terminalReportado,
-      }
-
-      await supabase.from('publicidad').insert(publicidadPayload)
-
-      // NO generar tickets para buses EN_PANNE
-      if (!isEnPanne) {
-        const extintorCritico =
-          !values.extintores.tiene ||
-          values.extintores.certificacion === 'VENCIDA' ||
-          (values.extintores.presion && values.extintores.presion !== 'OPTIMO') ||
-          (values.extintores.cilindro && values.extintores.cilindro !== 'OK') ||
-          (values.extintores.sonda && values.extintores.sonda !== 'OK') ||
-          (values.extintores.manometro && values.extintores.manometro !== 'OK') ||
-          (values.extintores.porta && values.extintores.porta !== 'TIENE')
-
-        const tickets: Array<{ modulo: string; descripcion: string }> = []
-        if (extintorCritico) {
-          tickets.push({ modulo: 'Extintores', descripcion: 'Hallazgos críticos en extintores' })
-        }
-        if (values.rack.tieneDiscoDuro === false) {
-          tickets.push({ modulo: 'Rack', descripcion: 'Rack sin disco duro detectado' })
-        } else if (
-          values.rack.cerradurasBuenEstado === false ||
-          values.rack.tieneCandado === false ||
-          values.rack.tieneSeguridadExtra === false
-        ) {
-          tickets.push({ modulo: 'Rack', descripcion: 'Rack con seguridad comprometida' })
-        }
-        if (publicidadDanio || publicidadResiduos) {
-          tickets.push({ modulo: 'Publicidad', descripcion: 'Publicidad con daño o residuos' })
-        }
-        if (
-          values.mobileye.aplica &&
-          [
-            values.mobileye.alertaDer,
-            values.mobileye.alertaIzq,
-            values.mobileye.consola,
-            values.mobileye.sensorDer,
-            values.mobileye.sensorIzq,
-            values.mobileye.sensorFrontal,
-          ].some((value) => value === false)
-        ) {
-          tickets.push({ modulo: 'Mobileye', descripcion: 'Sensor Mobileye reportó falla' })
-        }
-
-        if (tickets.length) {
-          await supabase.from('tickets').insert(
-            tickets.map((ticket) => ({
-              revision_id: revisionData.id,
-              descripcion: ticket.descripcion,
-              modulo: ticket.modulo,
-              estado: 'PENDIENTE' as const,
-              prioridad: 'ALTA' as const,
-              terminal: values.terminalReportado,
-            }))
-          )
-        }
-      }
-
-      push({
-        id: revisionData.id,
-        title: 'Revisión enviada',
-        body: `Bus ${bus.ppu} · ${values.terminalReportado}`,
-      })
-
-      methods.reset()
-      setBus(null)
-      setBusQuery('')
-      setStep(0)
-    } catch (error) {
-      console.error(error)
-      setBusAlert('No pudimos guardar la revisión. Intenta nuevamente.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const handleRefreshGps = async () => {
-    setRefreshingGPS(true)
-    try {
-      await refreshLocation()
-    } finally {
-      setRefreshingGPS(false)
-    }
+    attemptNavigateToStep(Math.max(currentStep - 1, 0))
   }
 
   const getMissingForStep = (
-    stepKey: StepKey,
+    targetKey: StepKey,
     values?: InspectionForm,
     options?: { shallow?: boolean }
   ): string[] => {
@@ -979,7 +827,7 @@ export const InspectionFormPage = () => {
       }
     }
 
-    switch (stepKey) {
+    switch (targetKey) {
       case 'estado':
         if (!snapshot.terminalReportado?.trim()) {
           missing.push('Selecciona el terminal detectado')
@@ -1030,6 +878,8 @@ export const InspectionFormPage = () => {
           if (!ext.presion) missing.push('Extintor · Presión')
           if (!ext.cilindro) missing.push('Extintor · Cilindro')
           if (!ext.porta) missing.push('Extintor · Porta')
+        } else if (!ext.observacion?.trim()) {
+          missing.push('Extintor · Describe por qué no tiene extintor')
         }
         break
       }
@@ -1091,25 +941,32 @@ export const InspectionFormPage = () => {
           } else if (lateral.tiene) {
             requireBoolean(lateral.danio, `Publicidad · ${area.label} · Define si hay daño`)
             requireBoolean(lateral.residuos, `Publicidad · ${area.label} · Define si hay residuos`)
+            if (!lateral.observacion?.trim()) {
+              missing.push(`Publicidad · ${area.label} · Nombre de la campaña`)
+            }
+          } else {
+            if (lateral.danio !== true && lateral.residuos !== true) {
+              missing.push(`Publicidad · ${area.label} · Marca "Con daño" o "Con residuos"`)
+            }
+            if (!lateral.observacion?.trim()) {
+              missing.push(`Publicidad · ${area.label} · Describe el motivo`)
+            }
           }
         })
         break
       case 'cierre':
         if (!options?.shallow) {
-          // Para buses EN_PANNE, solo validar el paso 'estado'
-          if (snapshot.estadoBus === 'EN_PANNE') {
-            const estadoMissing = getMissingForStep('estado', snapshot, { shallow: true })
-            if (estadoMissing.length) {
-              missing.push(`Estado del bus: ${estadoMissing[0]}`)
-            }
-          } else {
-            // Para buses OPERATIVOS, validar todos los pasos
-            for (const stepConfig of steps) {
-              if (stepConfig.key === 'cierre') continue
-              const childMissing = getMissingForStep(stepConfig.key, snapshot, { shallow: true })
-              if (childMissing.length) {
-                missing.push(`${stepConfig.label}: ${childMissing[0]}`)
-              }
+          // Validar todos los pasos del flujo activo (en panne incluye
+          // obligatoriamente TAG, Extintor, Mobileye, Rack y Publicidad)
+          const relevantes =
+            snapshot.estadoBus === 'EN_PANNE'
+              ? steps.filter((item) => PANNE_REQUIRED_STEPS.includes(item.key))
+              : steps
+          for (const stepConfig of relevantes) {
+            if (stepConfig.key === 'cierre') continue
+            const childMissing = getMissingForStep(stepConfig.key, snapshot, { shallow: true })
+            if (childMissing.length) {
+              missing.push(`${stepConfig.label}: ${childMissing[0]}`)
             }
           }
         }
@@ -1120,22 +977,17 @@ export const InspectionFormPage = () => {
   }
 
   const attemptNavigateToStep = (targetIndex: number) => {
-    if (targetIndex < 0 || targetIndex >= steps.length) return false
-    if (targetIndex > step) {
+    if (targetIndex < 0 || targetIndex >= activeSteps.length) return false
+    if (targetIndex > currentStep) {
       const snapshot = methods.getValues()
-
-      // Para buses EN_PANNE saltando al cierre, NO validar pasos intermedios
-      const isEnPanneToCierre = snapshot.estadoBus === 'EN_PANNE' && targetIndex === steps.length - 1 && step === 0
-
-      if (!isEnPanneToCierre) {
-        // Solo validar pasos intermedios para buses OPERATIVOS
-        for (let current = step; current < targetIndex; current++) {
-          const issues = getMissingForStep(steps[current].key, snapshot)
-          if (issues.length) {
-            setValidationMessage(`${steps[current].label}: ${issues.join(' · ')}`)
-            setStep(current)
-            return false
-          }
+      // Validar TODOS los pasos intermedios del flujo activo
+      // (en panne los 5 módulos obligatorios también se validan)
+      for (let current = currentStep; current < targetIndex; current++) {
+        const issues = getMissingForStep(activeSteps[current].key, snapshot)
+        if (issues.length) {
+          setValidationMessage(`${activeSteps[current].label}: ${issues.join(' · ')}`)
+          setStep(current)
+          return false
         }
       }
     }
@@ -1144,29 +996,368 @@ export const InspectionFormPage = () => {
     return true
   }
 
+  const submitInspection = async (values: InspectionForm) => {
+    const enPanne = values.estadoBus === 'EN_PANNE'
+
+    // VALIDACIÓN GPS: Permitir envío sin GPS solo para buses EN_PANNE
+    if (!gpsActive || !trackingLocation) {
+      if (!enPanne) {
+        setValidationMessage('NO PUEDES ENVIAR SIN GPS ACTIVO. Autoriza el permiso de ubicación para continuar.')
+        return
+      }
+      // Para buses EN_PANNE, continuar con coordenadas por defecto
+      console.warn('Bus EN_PANNE enviado sin GPS - usando coordenadas por defecto')
+    }
+
+    if (currentStep !== activeSteps.length - 1) {
+      attemptNavigateToStep(activeSteps.length - 1)
+      return
+    }
+
+    const snapshot = methods.getValues()
+
+    // Validar todos los pasos del flujo activo (operativo o panne)
+    for (let i = 0; i < activeSteps.length; i++) {
+      const issues = getMissingForStep(activeSteps[i].key, snapshot)
+      if (issues.length) {
+        setValidationMessage(`${activeSteps[i].label}: ${issues.join(' · ')}`)
+        setStep(i)
+        return
+      }
+    }
+
+    setValidationMessage(null)
+
+    if (!user || !bus) {
+      setBusAlert('Debes seleccionar un bus válido antes de enviar.')
+      return
+    }
+
+    setSaving(true)
+    try {
+      // Capturar IP del usuario
+      const userIP = await getUserIP()
+      const ipInfo = userIP ? await getIPGeoLocation(userIP) : null
+
+      const revisionInsert = {
+        inspector_rut: user.rut,
+        inspector_nombre: user.nombre,
+        terminal_detectado: terminalDetected?.name ?? 'SIN_TERMINAL',
+        terminal_reportado: values.terminalReportado,
+        bus_ppu: bus.ppu,
+        bus_interno: bus.numero_interno,
+        estado_bus: values.estadoBus,
+        lat: trackingLocation?.lat ?? -33.45,
+        lon: trackingLocation?.lon ?? -70.66,
+        observaciones: values.observacionGeneral ?? null,
+        semana_iso: `${getIsoWeekYear()}-W${String(dayjs().isoWeek()).padStart(2, '0')}`,
+        operativo: values.estadoBus === 'OPERATIVO',
+        ip_address: userIP,
+        ip_info: ipInfo ? {
+          city: ipInfo.city,
+          region: ipInfo.region,
+          country: ipInfo.country,
+          isp: ipInfo.isp,
+        } : null,
+      }
+      const { data: revisionData, error } = await supabase
+        .from('revisiones')
+        .insert(revisionInsert)
+        .select('id')
+        .single()
+      if (error) throw error
+
+      // EN PANNE: TAG, Extintor, Mobileye, Rack y Publicidad se revisan
+      // OBLIGATORIAMENTE, por lo que siempre se guardan los valores reales.
+      // Solo Cámaras, Odómetro y WiFi quedan como "no revisado".
+
+      await supabase.from('tags').insert({
+        revision_id: revisionData.id,
+        tiene: values.tag.tiene,
+        serie: values.tag.serie || null,
+        observacion: values.tag.observacion || null,
+        bus_ppu: bus.ppu,
+        terminal: values.terminalReportado,
+      })
+
+      await supabase.from('camaras').insert({
+        revision_id: revisionData.id,
+        monitor_estado: enPanne ? 'SIN_SENAL' : values.camaras.monitorEstado,
+        detalle: enPanne ? {} : {
+          monitorDetalle: values.camaras.monitorDetalle,
+          camDelantera: values.camaras.camDelantera,
+          camCabina: values.camaras.camCabina,
+          camInteriores: values.camaras.camInteriores,
+          camTrasera: values.camaras.camTrasera,
+          visiblesMonitor: values.camaras.visiblesMonitor,
+          activaReversa: values.camaras.activaReversa,
+          activaPuertas: values.camaras.activaPuertas,
+          visiblesPuertasCerradas: values.camaras.visiblesPuertasCerradas,
+        },
+        observacion: enPanne ? 'Bus en panne - no revisado' : (values.camaras.observacion || null),
+        bus_ppu: bus.ppu,
+        terminal: values.terminalReportado,
+      })
+
+      await supabase.from('extintores').insert({
+        revision_id: revisionData.id,
+        tiene: values.extintores.tiene,
+        vencimiento_mes: values.extintores.vencimientoMes ?? null,
+        vencimiento_anio: values.extintores.vencimientoAnio ?? null,
+        certificacion: values.extintores.certificacion ?? null,
+        sonda: values.extintores.sonda ?? null,
+        manometro: values.extintores.manometro ?? null,
+        presion: values.extintores.presion ?? null,
+        cilindro: values.extintores.cilindro ?? null,
+        porta: values.extintores.porta ?? null,
+        observacion: values.extintores.observacion ?? null,
+        bus_ppu: bus.ppu,
+        terminal: values.terminalReportado,
+      })
+
+      // Mobileye aplica solo a buses Volvo (operativos o en panne)
+      if (values.mobileye.aplica) {
+        await supabase.from('mobileye').insert({
+          revision_id: revisionData.id,
+          bus_marca: bus.marca,
+          alerta_izq: values.mobileye.alertaIzq ?? null,
+          alerta_der: values.mobileye.alertaDer ?? null,
+          consola: values.mobileye.consola ?? null,
+          sensor_frontal: values.mobileye.sensorFrontal ?? null,
+          sensor_izq: values.mobileye.sensorIzq ?? null,
+          sensor_der: values.mobileye.sensorDer ?? null,
+          observacion: values.mobileye.observacion ?? null,
+          bus_ppu: bus.ppu,
+          terminal: values.terminalReportado,
+        })
+      }
+
+      await supabase.from('odometro').insert({
+        revision_id: revisionData.id,
+        lectura: enPanne ? 0 : values.odometro.lectura,
+        estado: enPanne ? 'NO_FUNCIONA' : values.odometro.estado,
+        observacion: enPanne ? 'Bus en panne - no revisado' : (values.odometro.observacion ?? null),
+        bus_ppu: bus.ppu,
+        terminal: values.terminalReportado,
+      })
+
+      await supabase.from('rack').insert({
+        revision_id: revisionData.id,
+        tiene_disco_duro: values.rack.tieneDiscoDuro,
+        tiene_seguridad_extra:
+          values.rack.tieneDiscoDuro !== true ? null : values.rack.tieneSeguridadExtra,
+        tiene_candado: values.rack.tieneCandado,
+        cerraduras_buen_estado: values.rack.cerradurasBuenEstado,
+        cantidad_cerraduras_esperada: values.rack.cantidadCerradurasEsperada,
+        observacion: values.rack.observacion || null,
+        bus_ppu: bus.ppu,
+        terminal: values.terminalReportado,
+      })
+
+      await supabase.from('wifi').insert({
+        revision_id: revisionData.id,
+        ppu_visible: enPanne ? null : (values.wifi.ppuVisible ?? null),
+        bus_encendido: enPanne ? null : (values.wifi.busEncendido ?? null),
+        tiene_internet: enPanne ? null : (values.wifi.tieneInternet ?? null),
+        observacion: enPanne ? 'Bus en panne - no revisado' : (values.wifi.observacion || null),
+        bus_ppu: bus.ppu,
+        terminal: values.terminalReportado,
+      })
+
+      const publicidadTiene = publicityAreas.some((area) => values.publicidad[area.key].tiene)
+      const publicidadDanio = publicityAreas.some((area) => values.publicidad[area.key].danio)
+      const publicidadResiduos = publicityAreas.some((area) => values.publicidad[area.key].residuos)
+
+      const publicidadPayload: Database['public']['Tables']['publicidad']['Insert'] = {
+        revision_id: revisionData.id,
+        tiene: publicidadTiene,
+        danio: publicidadDanio,
+        residuos: publicidadResiduos,
+        detalle_lados: {
+          izquierda: values.publicidad.izquierda,
+          derecha: values.publicidad.derecha,
+          luneta: values.publicidad.luneta,
+        },
+        // El nombre de la campaña se captura en la observación de cada lado con publicidad
+        nombre_publicidad: (() => {
+          const nombres = publicityAreas
+            .map((area) => values.publicidad[area.key])
+            .filter((lado) => lado.tiene && lado.observacion?.trim())
+            .map((lado) => (lado.observacion as string).trim())
+          return nombres.length > 0 ? [...new Set(nombres)].join(' · ') : null
+        })(),
+        observacion: null,
+        bus_ppu: bus.ppu,
+        terminal: values.terminalReportado,
+      }
+
+      await supabase.from('publicidad').insert(publicidadPayload)
+
+      // Tickets automáticos: los módulos obligatorios generan tickets
+      // también para buses en panne (la revisión ahora es real)
+      const extintorCritico =
+        !values.extintores.tiene ||
+        values.extintores.certificacion === 'VENCIDA' ||
+        (values.extintores.presion && values.extintores.presion !== 'OPTIMO') ||
+        (values.extintores.cilindro && values.extintores.cilindro !== 'OK') ||
+        (values.extintores.sonda && values.extintores.sonda !== 'OK') ||
+        (values.extintores.manometro && values.extintores.manometro !== 'OK') ||
+        (values.extintores.porta && values.extintores.porta !== 'TIENE')
+
+      const tickets: Array<{ modulo: string; descripcion: string }> = []
+      if (extintorCritico) {
+        tickets.push({ modulo: 'Extintores', descripcion: 'Hallazgos críticos en extintores' })
+      }
+      if (values.rack.tieneDiscoDuro === false) {
+        tickets.push({ modulo: 'Rack', descripcion: 'Rack sin disco duro detectado' })
+      } else if (
+        values.rack.cerradurasBuenEstado === false ||
+        values.rack.tieneCandado === false ||
+        values.rack.tieneSeguridadExtra === false
+      ) {
+        tickets.push({ modulo: 'Rack', descripcion: 'Rack con seguridad comprometida' })
+      }
+      if (publicidadDanio || publicidadResiduos) {
+        tickets.push({ modulo: 'Publicidad', descripcion: 'Publicidad con daño o residuos' })
+      }
+      if (
+        values.mobileye.aplica &&
+        [
+          values.mobileye.alertaDer,
+          values.mobileye.alertaIzq,
+          values.mobileye.consola,
+          values.mobileye.sensorDer,
+          values.mobileye.sensorIzq,
+          values.mobileye.sensorFrontal,
+        ].some((value) => value === false)
+      ) {
+        tickets.push({ modulo: 'Mobileye', descripcion: 'Sensor Mobileye reportó falla' })
+      }
+      if (!values.tag.tiene) {
+        tickets.push({ modulo: 'TAG', descripcion: 'Bus sin TAG instalado' })
+      }
+
+      if (tickets.length) {
+        await supabase.from('tickets').insert(
+          tickets.map((ticket) => ({
+            revision_id: revisionData.id,
+            descripcion: enPanne ? `${ticket.descripcion} (bus en panne)` : ticket.descripcion,
+            modulo: ticket.modulo,
+            estado: 'PENDIENTE' as const,
+            prioridad: 'ALTA' as const,
+            terminal: values.terminalReportado,
+          }))
+        )
+      }
+
+      push({
+        id: revisionData.id,
+        title: 'Revisión enviada',
+        body: `Bus ${bus.ppu} · ${values.terminalReportado}`,
+      })
+
+      methods.reset()
+      setBus(null)
+      setBusQuery('')
+      setStep(0)
+    } catch (error) {
+      console.error(error)
+      setBusAlert('No pudimos guardar la revisión. Intenta nuevamente.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleRefreshGps = async () => {
+    setRefreshingGPS(true)
+    try {
+      await refreshLocation()
+    } finally {
+      setRefreshingGPS(false)
+    }
+  }
+
+  // ============================================================
+  // RENDERIZADO DE PASOS
+  // ============================================================
+
   const renderEstado = () => (
-    <SectionCard title="Estado del bus" description="Valida condiciones generales antes de continuar.">
-      <div className="grid gap-4 md:grid-cols-2">
+    <SectionCard
+      title="Estado del bus"
+      description="Valida condiciones generales antes de continuar"
+      icon={ClipboardCheck}
+      accent="from-brand-500 to-indigo-500"
+    >
+      <div className="grid gap-4 lg:grid-cols-2">
         <div>
           <Label>Estado operativo</Label>
-          <div className="mt-3 flex gap-3">
-            <Button
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <button
               type="button"
-              variant={estadoBus === 'OPERATIVO' ? 'success' : 'outline'}
-              className="flex-1 rounded-2xl"
               onClick={() => methods.setValue('estadoBus', 'OPERATIVO')}
+              className={`flex flex-col items-center gap-2 rounded-2xl border-2 px-4 py-5 transition active:scale-[0.98] ${
+                estadoBus === 'OPERATIVO'
+                  ? 'border-emerald-500 bg-emerald-50 shadow-lg shadow-emerald-500/10 dark:bg-emerald-950/30'
+                  : 'border-slate-200 bg-white hover:border-emerald-300 dark:border-slate-800 dark:bg-slate-900'
+              }`}
             >
-              <CheckCircle2 className="mr-2 h-4 w-4" /> Operativo
-            </Button>
-            <Button
+              <CheckCircle2
+                className={`h-7 w-7 ${estadoBus === 'OPERATIVO' ? 'text-emerald-600' : 'text-slate-300'}`}
+              />
+              <span
+                className={`text-sm font-bold ${
+                  estadoBus === 'OPERATIVO'
+                    ? 'text-emerald-700 dark:text-emerald-300'
+                    : 'text-slate-500'
+                }`}
+              >
+                Operativo
+              </span>
+              <span className="text-[10px] text-slate-400">Revisión completa · 10 pasos</span>
+            </button>
+            <button
               type="button"
-              variant={estadoBus === 'EN_PANNE' ? 'destructive' : 'outline'}
-              className="flex-1 rounded-2xl"
               onClick={() => methods.setValue('estadoBus', 'EN_PANNE')}
+              className={`flex flex-col items-center gap-2 rounded-2xl border-2 px-4 py-5 transition active:scale-[0.98] ${
+                estadoBus === 'EN_PANNE'
+                  ? 'border-red-500 bg-red-50 shadow-lg shadow-red-500/10 dark:bg-red-950/30'
+                  : 'border-slate-200 bg-white hover:border-red-300 dark:border-slate-800 dark:bg-slate-900'
+              }`}
             >
-              <AlertTriangle className="mr-2 h-4 w-4" /> En panne
-            </Button>
+              <AlertTriangle
+                className={`h-7 w-7 ${estadoBus === 'EN_PANNE' ? 'text-red-600' : 'text-slate-300'}`}
+              />
+              <span
+                className={`text-sm font-bold ${
+                  estadoBus === 'EN_PANNE' ? 'text-red-700 dark:text-red-300' : 'text-slate-500'
+                }`}
+              >
+                En panne
+              </span>
+              <span className="text-[10px] text-slate-400">5 módulos obligatorios</span>
+            </button>
           </div>
+
+          {isEnPanne && (
+            <div className="mt-3 rounded-2xl border border-red-200 bg-red-50/80 p-4 dark:border-red-900/50 dark:bg-red-950/30">
+              <p className="text-sm font-bold text-red-800 dark:text-red-200">
+                🔴 Bus en panne · revisión obligatoria de:
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {['TAG', 'Extintor', 'Mobileye', 'Rack', 'Publicidad'].map((mod) => (
+                  <span
+                    key={mod}
+                    className="rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-bold text-red-700 dark:bg-red-900/50 dark:text-red-200"
+                  >
+                    {mod}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-red-700/80 dark:text-red-300/80">
+                Cámaras, Odómetro y WiFi se omiten porque requieren el bus operativo.
+              </p>
+            </div>
+          )}
         </div>
         <div>
           <Label>Terminal</Label>
@@ -1175,16 +1366,23 @@ export const InspectionFormPage = () => {
             onChange={(event) => methods.setValue('terminalReportado', event.target.value)}
           />
           {terminalDetected && (
-            <p className="mt-1 text-xs text-emerald-500">
-              Detectado por GPS: {terminalDetected.name} ({terminalDetected.distance} m)
+            <p className="mt-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              📍 Detectado por GPS: {terminalDetected.name} ({terminalDetected.distance} m)
             </p>
           )}
           <div className="mt-3 rounded-2xl border border-dashed border-slate-200/70 p-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-300">
             <div className="flex items-center justify-between text-[11px] uppercase tracking-wide">
-              <span className="font-semibold text-slate-600 dark:text-slate-100">
+              <span className="flex items-center gap-1.5 font-semibold text-slate-600 dark:text-slate-100">
+                <span
+                  className={`inline-block h-2 w-2 rounded-full ${
+                    gpsActive ? 'marker-live-dot bg-emerald-500' : 'bg-red-500'
+                  }`}
+                />
                 GPS en vivo {gpsActive ? '· activo' : '· inactivo'}
               </span>
-              <span className="text-slate-400">{lastLocationUpdate ? dayjs(lastLocationUpdate).fromNow() : 'sin lectura'}</span>
+              <span className="text-slate-400">
+                {lastLocationUpdate ? dayjs(lastLocationUpdate).fromNow() : 'sin lectura'}
+              </span>
             </div>
             <p className="mt-2 font-mono text-sm text-slate-700 dark:text-white">
               {trackingLocation
@@ -1228,7 +1426,13 @@ export const InspectionFormPage = () => {
   )
 
   const renderTag = () => (
-    <SectionCard title="TAG" description="Valida instalación y serie">
+    <SectionCard
+      title="TAG"
+      description="Valida instalación y serie"
+      icon={Tag}
+      accent="from-amber-500 to-yellow-500"
+      badge={isEnPanne ? <ObligatorioBadge /> : undefined}
+    >
       <BinaryQuestion
         label="¿El bus tiene TAG?"
         value={methods.watch('tag.tiene')}
@@ -1265,13 +1469,18 @@ export const InspectionFormPage = () => {
     const monitorEstado = camaras.monitorEstado
     const monitorActivo = monitorEstado === 'FUNCIONA'
     return (
-      <SectionCard title="Cámaras" description="Preguntas específicas por componente">
+      <SectionCard
+        title="Cámaras"
+        description="Preguntas específicas por componente"
+        icon={Camera}
+        accent="from-blue-500 to-sky-500"
+      >
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <Label>Estado del Monitor</Label>
             <select
               value={camaras.monitorEstado}
-              onChange={(e) => methods.setValue('camaras.monitorEstado', e.target.value as any)}
+              onChange={(e) => methods.setValue('camaras.monitorEstado', e.target.value as InspectionForm['camaras']['monitorEstado'])}
               className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-800 dark:bg-slate-900"
             >
               <option value="FUNCIONA">Funciona Correctamente</option>
@@ -1332,10 +1541,10 @@ export const InspectionFormPage = () => {
             </div>
           </>
         ) : (
-          <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+          <AlertBanner tone="warning">
             El monitor no está operativo, por lo que no se continuó con la revisión de cámaras.
             Describe la falla para generar el ticket correspondiente.
-          </div>
+          </AlertBanner>
         )}
         <div>
           <Label>Observaciones {monitorActivo ? '' : '(obligatorio)'}</Label>
@@ -1352,13 +1561,19 @@ export const InspectionFormPage = () => {
   const renderExtintores = () => {
     const tieneExtintor = methods.watch('extintores.tiene')
     return (
-      <SectionCard title="Extintores" description="Completa vencimientos y estado físico">
+      <SectionCard
+        title="Extintores"
+        description="Completa vencimientos y estado físico"
+        icon={Flame}
+        accent="from-red-500 to-orange-500"
+        badge={isEnPanne ? <ObligatorioBadge /> : undefined}
+      >
         <BinaryQuestion
           label="¿Tiene extintor instalado?"
           value={tieneExtintor}
           onChange={(value) => methods.setValue('extintores.tiene', value, { shouldDirty: true })}
         />
-        {tieneExtintor && (
+        {tieneExtintor ? (
           <div className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2">
               <div>
@@ -1433,13 +1648,31 @@ export const InspectionFormPage = () => {
               />
             </div>
           </div>
+        ) : (
+          <div>
+            <Label>Observación (obligatorio)</Label>
+            <Textarea
+              className="mt-2"
+              placeholder="Describe por qué el bus no tiene extintor"
+              value={methods.watch('extintores.observacion') ?? ''}
+              onChange={(event) =>
+                methods.setValue('extintores.observacion', event.target.value, { shouldDirty: true })
+              }
+            />
+          </div>
         )}
       </SectionCard>
     )
   }
 
   const renderMobileye = () => (
-    <SectionCard title="Mobileye" description="Aplica solo a buses Volvo">
+    <SectionCard
+      title="Mobileye"
+      description="Aplica solo a buses Volvo"
+      icon={Radar}
+      accent="from-purple-500 to-violet-500"
+      badge={isEnPanne ? <ObligatorioBadge /> : undefined}
+    >
       <BinaryQuestion
         label="¿Este bus cuenta con Mobileye?"
         value={mobileyeAplica}
@@ -1448,7 +1681,7 @@ export const InspectionFormPage = () => {
         onChange={(value) => methods.setValue('mobileye.aplica', value)}
       />
       {mobileyeAplica && (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {mobileyeQuestionList.map((item) => (
             <BinaryQuestion
               key={item.field}
@@ -1469,7 +1702,10 @@ export const InspectionFormPage = () => {
   const renderRack = () => (
     <SectionCard
       title="Rack"
-      description="Control de cerraduras y seguridad del disco duro para prevenir robos"
+      description="Control de cerraduras y seguridad del disco duro"
+      icon={HardDrive}
+      accent="from-slate-500 to-slate-600"
+      badge={isEnPanne ? <ObligatorioBadge /> : undefined}
     >
       <div className="rounded-2xl border border-blue-200/70 bg-blue-50/60 p-4 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
         <p className="font-semibold">
@@ -1536,7 +1772,12 @@ export const InspectionFormPage = () => {
   )
 
   const renderOdometro = () => (
-    <SectionCard title="Odómetro" description="Captura lectura real">
+    <SectionCard
+      title="Odómetro"
+      description="Captura lectura real"
+      icon={Gauge}
+      accent="from-teal-500 to-emerald-500"
+    >
       <div className="grid gap-4 md:grid-cols-2">
         <div>
           <Label>Lectura</Label>
@@ -1571,7 +1812,7 @@ export const InspectionFormPage = () => {
                   methods.setValue('odometro.estado', estado as InspectionForm['odometro']['estado'])
                 }
               >
-                {estado}
+                {estado.replace(/_/g, ' ')}
               </Button>
             ))}
           </div>
@@ -1588,19 +1829,6 @@ export const InspectionFormPage = () => {
     </SectionCard>
   )
 
-  // Timer de espera WiFi de 3 minutos
-  useEffect(() => {
-    if (isWifiWaiting && wifiWaitingTime < 180) {
-      const timer = setTimeout(() => {
-        setWifiWaitingTime(wifiWaitingTime + 1)
-      }, 1000)
-      return () => clearTimeout(timer)
-    } else if (isWifiWaiting && wifiWaitingTime >= 180) {
-      setIsWifiWaiting(false)
-      setWifiWaitingTime(0)
-    }
-  }, [isWifiWaiting, wifiWaitingTime])
-
   const renderWifi = () => {
     const wifiState = methods.watch('wifi')
     const ppuVisible = wifiState.ppuVisible
@@ -1614,7 +1842,12 @@ export const InspectionFormPage = () => {
     }
 
     return (
-      <SectionCard title="WiFi" description="Revisión de conexión WiFi del bus">
+      <SectionCard
+        title="WiFi"
+        description="Revisión de conexión WiFi del bus"
+        icon={Wifi}
+        accent="from-sky-500 to-cyan-500"
+      >
         <BinaryQuestion
           label="¿Aparece la PPU del bus en la señal buscada?"
           value={ppuVisible}
@@ -1727,11 +1960,7 @@ export const InspectionFormPage = () => {
 
         {ppuVisible === true && (
           <div className="space-y-4">
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
-                ✓ La PPU aparece en la señal buscada
-              </p>
-            </div>
+            <AlertBanner tone="success">✓ La PPU aparece en la señal buscada</AlertBanner>
             <BinaryQuestion
               label="¿Tiene conexión a internet?"
               value={tieneInternet}
@@ -1764,11 +1993,7 @@ export const InspectionFormPage = () => {
             )}
 
             {tieneInternet === true && (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-                <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">
-                  ✓ Revisión WiFi completada correctamente
-                </p>
-              </div>
+              <AlertBanner tone="success">✓ Revisión WiFi completada correctamente</AlertBanner>
             )}
           </div>
         )}
@@ -1777,92 +2002,226 @@ export const InspectionFormPage = () => {
   }
 
   const renderPublicidad = () => (
-    <SectionCard title="Publicidad" description="Evalúa cada cara del bus">
+    <SectionCard
+      title="Publicidad"
+      description="Evalúa cada cara del bus"
+      icon={Megaphone}
+      accent="from-pink-500 to-rose-500"
+      badge={isEnPanne ? <ObligatorioBadge /> : undefined}
+    >
       <div className="grid gap-6">
-        {publicityAreas.map((area) => (
-          <div key={area.key} className="rounded-2xl border border-slate-100/60 p-4 dark:border-slate-800">
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">{area.label}</p>
-            <div className="mt-3 space-y-3">
-              <BinaryQuestion
-                label="¿Tiene publicidad instalada?"
-                value={publicityState?.[area.key].tiene ?? false}
-                onChange={(value) =>
-                  methods.setValue(`publicidad.${area.key}.tiene` as PublicidadPath, value, {
-                    shouldDirty: true,
-                  })
-                }
-              />
-              <BinaryQuestion
-                label="¿Daño en pintura?"
-                value={
-                  publicityState?.[area.key].danio == null
-                    ? null
-                    : publicityState?.[area.key].danio === false
-                      ? true
-                      : false
-                }
-                positiveLabel="Sin daño"
-                negativeLabel="Con daño"
-                onChange={(value) =>
-                  methods.setValue(`publicidad.${area.key}.danio` as PublicidadPath, value ? false : true, {
-                    shouldDirty: true,
-                  })
-                }
-              />
-              <BinaryQuestion
-                label="¿Residuos?"
-                value={
-                  publicityState?.[area.key].residuos == null
-                    ? null
-                    : publicityState?.[area.key].residuos === false
-                      ? true
-                      : false
-                }
-                positiveLabel="Limpio"
-                negativeLabel="Con residuos"
-                onChange={(value) =>
-                  methods.setValue(`publicidad.${area.key}.residuos` as PublicidadPath, value ? false : true, {
-                    shouldDirty: true,
-                  })
-                }
-              />
-              <div>
-                <Label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                  Observación específica
-                </Label>
-                <Textarea
-                  className="mt-2"
-                  rows={2}
-                  placeholder="Campaña instalada, daños, notas"
-                  value={publicityState?.[area.key].observacion ?? ''}
-                  onChange={(event) =>
-                    methods.setValue(
-                      `publicidad.${area.key}.observacion` as `publicidad.${PublicidadAreaKey}.observacion`,
-                      event.target.value,
-                      { shouldDirty: true }
-                    )
+        {publicityAreas.map((area) => {
+          const lateral = publicityState?.[area.key]
+          return (
+            <div
+              key={area.key}
+              className="rounded-2xl border border-slate-200/70 p-4 dark:border-slate-800"
+            >
+              <p className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                <span className="rounded-lg bg-pink-100 px-2 py-0.5 text-[10px] font-black uppercase text-pink-700 dark:bg-pink-950/50 dark:text-pink-300">
+                  {area.label}
+                </span>
+              </p>
+              <div className="mt-3 space-y-3">
+                <BinaryQuestion
+                  label="¿Tiene publicidad instalada?"
+                  value={lateral?.tiene ?? false}
+                  onChange={(value) =>
+                    methods.setValue(`publicidad.${area.key}.tiene` as PublicidadPath, value, {
+                      shouldDirty: true,
+                    })
                   }
                 />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <BinaryQuestion
+                    label="¿Daño en pintura?"
+                    value={
+                      lateral?.danio == null ? null : lateral?.danio === false ? true : false
+                    }
+                    positiveLabel="Sin daño"
+                    negativeLabel="Con daño"
+                    onChange={(value) =>
+                      methods.setValue(`publicidad.${area.key}.danio` as PublicidadPath, value ? false : true, {
+                        shouldDirty: true,
+                      })
+                    }
+                  />
+                  <BinaryQuestion
+                    label="¿Residuos?"
+                    value={
+                      lateral?.residuos == null
+                        ? null
+                        : lateral?.residuos === false
+                          ? true
+                          : false
+                    }
+                    positiveLabel="Limpio"
+                    negativeLabel="Con residuos"
+                    onChange={(value) =>
+                      methods.setValue(`publicidad.${area.key}.residuos` as PublicidadPath, value ? false : true, {
+                        shouldDirty: true,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                    {lateral?.tiene
+                      ? 'Nombre de la campaña (obligatorio)'
+                      : 'Motivo / observación (obligatorio)'}
+                  </Label>
+                  <Textarea
+                    className="mt-2"
+                    rows={2}
+                    placeholder={
+                      lateral?.tiene
+                        ? 'Ej: Coca-Cola, Entel, Falabella…'
+                        : 'Describe el daño o los residuos encontrados'
+                    }
+                    value={lateral?.observacion ?? ''}
+                    onChange={(event) =>
+                      methods.setValue(
+                        `publicidad.${area.key}.observacion` as `publicidad.${PublicidadAreaKey}.observacion`,
+                        event.target.value,
+                        { shouldDirty: true }
+                      )
+                    }
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </SectionCard>
   )
 
-  const renderCierre = () => (
-    <SectionCard title="Resumen" description="Confirma antes de enviar">
-      <div className="rounded-2xl border border-slate-100/70 p-4 text-sm dark:border-slate-800">
-        <p>Bus: {bus?.ppu ?? 'Selecciona una PPU'}</p>
-        <p>Terminal: {methods.watch('terminalReportado')}</p>
-        <p>Estado: {estadoBus}</p>
-      </div>
-      <p className="text-xs text-slate-500">
-        Al enviar se notificará a los supervisores y se crearán tickets automáticos según hallazgos.
-      </p>
-    </SectionCard>
-  )
+  const renderCierre = () => {
+    const snapshot = methods.getValues()
+    const modulos = activeSteps.filter(
+      (item) => item.key !== 'estado' && item.key !== 'cierre'
+    )
+    const omitidos = isEnPanne ? steps.filter((item) => PANNE_SKIPPED_STEPS.includes(item.key)) : []
+
+    return (
+      <SectionCard
+        title="Resumen y envío"
+        description="Confirma antes de enviar"
+        icon={Flag}
+        accent="from-emerald-500 to-green-500"
+      >
+        {/* Identidad de la revisión */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200/70 p-4 dark:border-slate-800">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Bus</p>
+            <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">
+              {bus?.ppu ?? '—'}
+            </p>
+            <p className="text-xs text-slate-500">
+              {bus ? `N° ${bus.numero_interno} · ${bus.marca} ${bus.modelo}` : 'Selecciona una PPU'}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-200/70 p-4 dark:border-slate-800">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Terminal</p>
+            <p className="mt-1 text-lg font-black text-slate-900 dark:text-white">
+              {methods.watch('terminalReportado') || '—'}
+            </p>
+            <p className="text-xs text-slate-500">
+              {terminalDetected
+                ? `GPS: ${terminalDetected.name} (${terminalDetected.distance} m)`
+                : 'Sin detección GPS'}
+            </p>
+          </div>
+          <div
+            className={`rounded-2xl border p-4 ${
+              isEnPanne
+                ? 'border-red-200 bg-red-50/60 dark:border-red-900/50 dark:bg-red-950/20'
+                : 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+            }`}
+          >
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Estado</p>
+            <p
+              className={`mt-1 text-lg font-black ${
+                isEnPanne
+                  ? 'text-red-700 dark:text-red-300'
+                  : 'text-emerald-700 dark:text-emerald-300'
+              }`}
+            >
+              {isEnPanne ? 'EN PANNE' : 'OPERATIVO'}
+            </p>
+            <p className="text-xs text-slate-500">
+              {isEnPanne ? '5 módulos obligatorios revisados' : 'Revisión completa'}
+            </p>
+          </div>
+        </div>
+
+        {/* Estado de cada módulo */}
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
+            Módulos revisados
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {modulos.map((item) => {
+              const faltantes = getMissingForStep(item.key, snapshot, { shallow: true })
+              const completo = faltantes.length === 0
+              const Icon = item.icon
+              return (
+                <div
+                  key={item.key}
+                  className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 ${
+                    completo
+                      ? 'border-emerald-200/80 bg-emerald-50/50 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+                      : 'border-amber-200/80 bg-amber-50/50 dark:border-amber-900/50 dark:bg-amber-950/20'
+                  }`}
+                >
+                  <Icon
+                    className={`h-4 w-4 shrink-0 ${completo ? 'text-emerald-600' : 'text-amber-600'}`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                      {item.label}
+                    </p>
+                    <p
+                      className={`truncate text-[10px] ${
+                        completo ? 'text-emerald-600' : 'text-amber-600'
+                      }`}
+                    >
+                      {completo ? 'Completo' : faltantes[0]}
+                    </p>
+                  </div>
+                  {completo ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+                  )}
+                </div>
+              )
+            })}
+            {omitidos.map((item) => {
+              const Icon = item.icon
+              return (
+                <div
+                  key={item.key}
+                  className="flex items-center gap-2.5 rounded-xl border border-slate-200/70 bg-slate-50/60 px-3 py-2.5 opacity-70 dark:border-slate-800 dark:bg-slate-900/40"
+                >
+                  <Icon className="h-4 w-4 shrink-0 text-slate-400" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-slate-500">{item.label}</p>
+                    <p className="text-[10px] text-slate-400">Omitido · bus en panne</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-500">
+          Al enviar se notificará a los supervisores y se crearán tickets automáticos según los
+          hallazgos detectados{isEnPanne ? ' (incluidos los módulos obligatorios en panne)' : ''}.
+        </p>
+      </SectionCard>
+    )
+  }
 
   const renderStep = () => {
     switch (stepKey) {
@@ -1891,76 +2250,135 @@ export const InspectionFormPage = () => {
     }
   }
 
+  // ============================================================
+  // LAYOUT PRINCIPAL
+  // ============================================================
+
   return (
     <FormProvider {...methods}>
       <form
         onSubmit={methods.handleSubmit(submitInspection)}
         onKeyDown={(e) => {
           // Prevenir envío con Enter si no estamos en el paso final
-          if (e.key === 'Enter' && step !== steps.length - 1) {
+          if (e.key === 'Enter' && currentStep !== activeSteps.length - 1) {
             e.preventDefault()
           }
         }}
-        className="space-y-8"
+        className="space-y-5"
         aria-label="Formulario principal New Mini-Check"
       >
-        <Card className="space-y-4 p-6">
-          <div className="flex flex-col gap-3 md:flex-row md:items-end">
-            <div className="flex-1">
-              <Label htmlFor="busSearch">PPU o Nº interno</Label>
-              <Input
-                id="busSearch"
-                placeholder="Ej: SHRS75"
-                value={busQuery}
-                onChange={(event) => setBusQuery(event.target.value.toUpperCase())}
-              />
-              {suggestions.length > 0 && (
-                <div className="mt-2 rounded-2xl border border-slate-100 bg-white shadow-lg dark:border-slate-800 dark:bg-slate-900">
-                  {suggestions.map((record) => (
-                    <button
-                      key={record.id}
-                      type="button"
-                      className="flex w-full flex-col gap-0.5 px-4 py-2 text-left text-sm text-slate-600 transition hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
-                      onClick={() => {
-                        const value = record.ppu.toUpperCase()
-                        setBusQuery(value)
-                        searchBus(value)
-                      }}
-                    >
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {record.ppu} · #{record.numero_interno}
-                      </span>
-                      <span className="text-xs text-slate-500">Terminal {record.terminal}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
+        {/* ===== HERO: BÚSQUEDA Y BUS SELECCIONADO ===== */}
+        <Card className="overflow-hidden border border-slate-200/70 p-0 dark:border-slate-800">
+          <div className="flex flex-wrap items-center gap-3 bg-gradient-to-r from-slate-900 via-brand-800 to-brand-600 px-5 py-4 text-white sm:px-6">
+            <div className="rounded-xl bg-white/15 p-2">
+              <Bus className="h-5 w-5" />
             </div>
-            <Button
-              type="button"
-              className="gap-2 rounded-2xl"
-              variant="outline"
-              onClick={() => searchBus()}
-            >
-              <Search className="h-4 w-4" /> Buscar bus
-            </Button>
-          </div>
-          {bus && (
-            <div className="rounded-2xl bg-slate-50/80 p-4 text-sm dark:bg-slate-900/40">
-              <p className="text-base font-semibold text-slate-900 dark:text-white">
-                {bus.ppu} · #{bus.numero_interno} · {bus.marca} {bus.modelo}
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg font-black">Nueva Inspección</h1>
+              <p className="text-xs text-white/70">
+                Semana {dayjs().isoWeek()} · {dayjs().format('dddd D MMMM')}
               </p>
-              <p className="text-slate-500">Terminal asignado: {bus.terminal}</p>
             </div>
-          )}
-          {busAlert && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
-              {busAlert}
+            {bus && (
+              <span
+                className={`rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wide ${
+                  isEnPanne ? 'bg-red-500/90' : 'bg-emerald-500/90'
+                }`}
+              >
+                {isEnPanne ? 'En panne' : 'Operativo'}
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-4 p-5 sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="relative flex-1">
+                <Label htmlFor="busSearch">PPU o N° interno</Label>
+                <div className="relative mt-2">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    id="busSearch"
+                    placeholder="Ej: SHRS75 o 1694"
+                    className="pl-9"
+                    value={busQuery}
+                    onChange={(event) => setBusQuery(event.target.value.toUpperCase())}
+                  />
+                </div>
+                {suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-950">
+                    {suggestions.map((record) => (
+                      <button
+                        key={record.id}
+                        type="button"
+                        className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm text-slate-600 transition hover:bg-brand-50 dark:text-slate-300 dark:hover:bg-brand-950/30"
+                        onClick={() => {
+                          const value = record.ppu.toUpperCase()
+                          setBusQuery(value)
+                          searchBus(value)
+                        }}
+                      >
+                        <div>
+                          <span className="font-bold text-slate-900 dark:text-white">
+                            {record.ppu}
+                          </span>
+                          <span className="ml-2 text-xs text-slate-400">
+                            #{record.numero_interno} · {record.terminal}
+                          </span>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-slate-300" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Button
+                type="button"
+                className="gap-2 rounded-2xl"
+                onClick={() => searchBus()}
+              >
+                <Search className="h-4 w-4" /> Buscar bus
+              </Button>
             </div>
-          )}
+
+            {bus && (
+              <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-brand-200/60 bg-gradient-to-r from-brand-50/80 to-white p-4 dark:border-brand-900/40 dark:from-brand-950/30 dark:to-slate-950">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 text-xl shadow-lg shadow-brand-500/25">
+                  🚌
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-base font-black text-slate-900 dark:text-white">
+                    {bus.ppu}
+                    <span className="ml-2 text-sm font-semibold text-slate-400">
+                      #{bus.numero_interno}
+                    </span>
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {bus.marca} {bus.modelo} {bus.anio} · Terminal {bus.terminal}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5 text-xs text-slate-400 hover:text-red-500"
+                  onClick={() => {
+                    setBus(null)
+                    setBusQuery('')
+                    setBusAlert(null)
+                  }}
+                >
+                  <X className="h-3.5 w-3.5" /> Cambiar
+                </Button>
+              </div>
+            )}
+
+            <AnimatePresence>
+              {busAlert && <AlertBanner tone="warning">{busAlert}</AlertBanner>}
+            </AnimatePresence>
+          </div>
         </Card>
 
-        {/* BANNER GPS NO AUTORIZADO */}
+        {/* ===== BANNER GPS NO AUTORIZADO ===== */}
         {(!gpsActive || !trackingLocation) && (
           <Card className="border-2 border-red-500 bg-red-50 p-4 dark:border-red-700 dark:bg-red-950/50">
             <div className="space-y-3">
@@ -2031,33 +2449,82 @@ export const InspectionFormPage = () => {
           </Card>
         )}
 
-        <Card className="p-4">
-          <div className="flex flex-wrap gap-2">
-            {steps.map((item, index) => (
-              <button
-                key={item.key}
-                type="button"
-                className={`rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wide ${step === index
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 text-slate-500 dark:bg-slate-900/40'
-                  }`}
-                onClick={() => attemptNavigateToStep(index)}
-              >
-                {item.label}
-              </button>
-            ))}
+        {/* ===== BANNER MODO PANNE ===== */}
+        {isEnPanne && (
+          <AlertBanner tone="error" title="Modo EN PANNE activo">
+            Debes revisar obligatoriamente: TAG, Extintor, Mobileye, Rack y Publicidad. Cámaras,
+            Odómetro y WiFi se omiten automáticamente.
+          </AlertBanner>
+        )}
+
+        {/* ===== STEPPER ===== */}
+        <Card className="space-y-3 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+              Paso {currentStep + 1} de {activeSteps.length} · {activeSteps[currentStep].label}
+            </p>
+            <p className="text-xs font-bold text-brand-600 dark:text-brand-400">
+              {Math.round(progressPct)}%
+            </p>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+            <motion.div
+              className={`h-full rounded-full ${
+                isEnPanne
+                  ? 'bg-gradient-to-r from-red-500 to-orange-500'
+                  : 'bg-gradient-to-r from-brand-500 to-indigo-500'
+              }`}
+              animate={{ width: `${Math.max(progressPct, 3)}%` }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            />
+          </div>
+          <div className="-mx-1 overflow-x-auto px-1 pb-1">
+            <div className="flex min-w-max items-center gap-1.5">
+              {activeSteps.map((item, index) => {
+                const Icon = item.icon
+                const isCurrent = index === currentStep
+                const isDone = index < currentStep
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => attemptNavigateToStep(index)}
+                    className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition active:scale-[0.97] ${
+                      isCurrent
+                        ? isEnPanne
+                          ? 'border-red-500 bg-red-600 text-white shadow-md shadow-red-500/25'
+                          : 'border-brand-500 bg-brand-600 text-white shadow-md shadow-brand-500/25'
+                        : isDone
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300'
+                          : 'border-slate-200 bg-white text-slate-400 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900'
+                    }`}
+                  >
+                    {isDone ? <Check className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
+                    {item.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </Card>
 
-        {validationMessage && (
-          <div className="rounded-2xl border border-red-200 bg-red-50/80 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
-            {validationMessage}
-          </div>
-        )}
+        {/* ===== ALERTA DE VALIDACIÓN ===== */}
+        <AnimatePresence>
+          {validationMessage && (
+            <AlertBanner tone="error" title="Faltan datos por completar">
+              <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs">
+                {validationMessage.split(' · ').map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
+              </ul>
+            </AlertBanner>
+          )}
+        </AnimatePresence>
 
+        {/* ===== PASO ACTUAL ===== */}
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={`step-${step}-${stepKey}`}
+            key={`step-${currentStep}-${stepKey}`}
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -12 }}
@@ -2067,21 +2534,53 @@ export const InspectionFormPage = () => {
           </motion.div>
         </AnimatePresence>
 
-        <div className="flex flex-col gap-3 md:flex-row md:justify-between">
-          <Button type="button" variant="ghost" disabled={step === 0} onClick={handlePrev}>
-            Paso anterior
-          </Button>
-          {stepKey === 'cierre' ? (
-            <Button type="submit" disabled={saving} className="rounded-2xl">
-              {saving ? 'Guardando...' : 'Enviar revisión'}
+        {/* ===== NAVEGACIÓN FIJA ===== */}
+        <div className="sticky bottom-20 z-20 md:bottom-4">
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-xl backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={currentStep === 0}
+              onClick={handlePrev}
+              className="gap-1.5"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Anterior</span>
             </Button>
-          ) : (
-            <Button type="button" onClick={handleNext} className="rounded-2xl">
-              Continuar
-            </Button>
-          )}
+            <p className="hidden text-xs text-slate-400 sm:block">
+              {bus ? `${bus.ppu} · ${activeSteps[currentStep].label}` : 'Selecciona un bus'}
+            </p>
+            {stepKey === 'cierre' ? (
+              <Button
+                type="submit"
+                disabled={saving}
+                className="gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-6 shadow-lg shadow-emerald-500/25 hover:from-emerald-500 hover:to-emerald-400"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Guardando...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4" /> Enviar revisión
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button type="button" onClick={handleNext} className="gap-1.5 rounded-2xl px-6">
+                Continuar
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </form>
     </FormProvider>
   )
 }
+
+const ObligatorioBadge = () => (
+  <span className="rounded-full bg-red-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-red-700 dark:bg-red-950/60 dark:text-red-300">
+    Obligatorio en panne
+  </span>
+)
