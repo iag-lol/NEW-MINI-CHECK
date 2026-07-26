@@ -2267,9 +2267,10 @@ export const InspectionFormPage = () => {
         className="space-y-3 sm:space-y-5"
         aria-label="Formulario principal New Mini-Check"
       >
-        {/* ===== HERO: BÚSQUEDA Y BUS SELECCIONADO ===== */}
-        <Card className="overflow-hidden border border-slate-200/70 p-0 dark:border-slate-800">
-          <div className="flex flex-wrap items-center gap-2.5 bg-gradient-to-r from-slate-900 via-brand-800 to-brand-600 px-4 py-3 text-white sm:gap-3 sm:px-6 sm:py-4">
+        {/* ===== HERO: BÚSQUEDA Y BUS SELECCIONADO =====
+            Sin overflow-hidden: recortaba el dropdown de sugerencias de PPU */}
+        <Card className="border border-slate-200/70 p-0 dark:border-slate-800">
+          <div className="flex flex-wrap items-center gap-2.5 rounded-t-2xl bg-gradient-to-r from-slate-900 via-brand-800 to-brand-600 px-4 py-3 text-white sm:gap-3 sm:px-6 sm:py-4">
             <div className="rounded-xl bg-white/15 p-2">
               <Bus className="h-5 w-5" />
             </div>
@@ -2305,7 +2306,7 @@ export const InspectionFormPage = () => {
                   />
                 </div>
                 {suggestions.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-950">
+                  <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-72 overflow-y-auto rounded-2xl border border-slate-200/80 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950">
                     {suggestions.map((record) => (
                       <button
                         key={record.id}
