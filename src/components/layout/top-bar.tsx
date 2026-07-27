@@ -78,7 +78,7 @@ export const TopBar = () => {
             Ocupan el espacio libre del header y se van sumando en grilla. */}
         {puedeVerAlertas && total > 0 && (
           <div className="hidden min-w-0 flex-1 md:block">
-            <div className="flex max-h-[5.5rem] flex-wrap items-center justify-center gap-1.5 overflow-y-auto overscroll-contain py-0.5">
+            <div className="flex max-h-[6.9rem] flex-wrap items-center justify-center gap-1.5 overflow-y-auto overscroll-contain py-0.5">
               <AnimatePresence initial={false}>
                 {inspeccionesEnCurso.map((item) => (
                   <motion.div
@@ -88,24 +88,34 @@ export const TopBar = () => {
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9, y: -6 }}
                     transition={{ type: 'spring', damping: 24, stiffness: 320 }}
-                    title={`${item.nombre} · ${item.ppu}${
-                      item.interno ? ` (${item.interno})` : ''
-                    } · ${item.terminal} · hace ${tiempoTranscurrido(item.startedAt)}`}
-                    className="flex shrink-0 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 py-1.5 pl-2 pr-2.5 shadow-sm dark:border-amber-700/50 dark:bg-amber-950/40"
+                    title={`${item.nombre} se encuentra revisando el bus ${item.ppu}${
+                      item.interno ? ` (N° ${item.interno})` : ''
+                    } en Terminal ${item.terminal} · hace ${tiempoTranscurrido(item.startedAt)}`}
+                    className="relative flex h-[3.15rem] w-[14rem] shrink-0 items-center gap-2 overflow-hidden rounded-xl border border-amber-200/90 bg-gradient-to-br from-amber-50 to-white px-2 shadow-sm dark:border-amber-700/50 dark:from-amber-950/50 dark:to-slate-950"
                   >
-                    <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/50">
-                      <Bus className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />
-                      <span className="marker-live-dot absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-950" />
+                    <span className="live-halo relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-amber-500 shadow-sm">
+                      <Bus className="h-4 w-4 text-white" />
+                      <span className="marker-live-dot absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-950" />
                     </span>
-                    <div className="min-w-0 leading-tight">
-                      <p className="truncate text-[11px] font-bold text-amber-900 dark:text-amber-100">
-                        {primerNombre(item.nombre)}
-                      </p>
-                      <p className="truncate text-[10px] text-amber-700/90 dark:text-amber-300/90">
-                        <span className="font-bold">{item.ppu}</span> ·{' '}
-                        {tiempoTranscurrido(item.startedAt)}
-                      </p>
-                    </div>
+
+                    <p className="min-w-0 flex-1 text-[10px] leading-[1.22] text-slate-600 dark:text-slate-300">
+                      <span className="font-bold text-slate-800 dark:text-slate-100">
+                        {item.nombre}
+                      </span>{' '}
+                      se encuentra revisando el bus{' '}
+                      <span className="font-black text-amber-700 dark:text-amber-300">
+                        {item.ppu}
+                      </span>{' '}
+                      en Terminal {item.terminal}{' '}
+                      <span className="font-semibold text-amber-600 dark:text-amber-400">
+                        · {tiempoTranscurrido(item.startedAt)}
+                      </span>
+                    </p>
+
+                    {/* Barra de actividad en curso */}
+                    <span className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-hidden bg-amber-100 dark:bg-amber-900/40">
+                      <span className="live-sweep-bar block h-full w-1/3 rounded-full bg-gradient-to-r from-transparent via-amber-500 to-transparent" />
+                    </span>
                   </motion.div>
                 ))}
               </AnimatePresence>
@@ -178,7 +188,11 @@ export const TopBar = () => {
         )}
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-          <TrackingStatus {...tracking} />
+          {/* Con inspecciones en curso, las tarjetas tienen prioridad sobre
+              el chip de GPS (ese dato también se ve dentro del formulario) */}
+          <div className={total > 0 ? 'hidden 2xl:block' : ''}>
+            <TrackingStatus {...tracking} />
+          </div>
           <ThemeToggle />
           <NotificationCenter />
         </div>
