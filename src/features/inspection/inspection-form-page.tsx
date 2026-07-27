@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode, type ComponentType } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type ComponentType } from 'react'
 import { FormProvider, useForm } from 'react-hook-form'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -533,7 +533,12 @@ export const InspectionFormPage = () => {
     },
     staleTime: 60_000,
   })
-  const [validationMessage, setValidationMessage] = useState<string | null>(null)
+  // Estructurado (no un string unido): unir y volver a partir por " · "
+  // despedazaba los mensajes que contienen ese separador
+  const [validationMessage, setValidationMessage] = useState<{
+    title: string
+    items: string[]
+  } | null>(null)
   const [wifiWaitingTime, setWifiWaitingTime] = useState(0)
   const [isWifiWaiting, setIsWifiWaiting] = useState(false)
   const {
@@ -583,27 +588,32 @@ export const InspectionFormPage = () => {
       .slice(0, 5)
   }, [busQuery, flotaCatalog])
 
-  // Auto-relleno de publicidad según reglas del usuario
+  // Auto-relleno de publicidad: SOLO cuando cambia el "tiene" de ese lateral.
+  // Antes se recorrían los tres lados en cada ejecución y tocar un lateral
+  // borraba los daños/residuos ya marcados en los otros dos.
+  const prevPublicidadTiene = useRef<Record<PublicidadAreaKey, boolean | null>>({
+    izquierda: null,
+    derecha: null,
+    luneta: null,
+  })
+
   useEffect(() => {
     publicityAreas.forEach((area) => {
       const tiene = publicityState[area.key].tiene
-      const currentDanio = publicityState[area.key].danio
-      const currentResiduos = publicityState[area.key].residuos
+      const previo = prevPublicidadTiene.current[area.key]
+      if (previo === tiene) return
+      prevPublicidadTiene.current[area.key] = tiene
 
-      // Si TIENE publicidad → auto-rellenar Sin daño + Limpio
+      // Al marcar que TIENE publicidad → precargar Sin daño + Limpio (editable)
       if (tiene === true) {
-        if (currentDanio !== false || currentResiduos !== false) {
-          methods.setValue(`publicidad.${area.key}.danio`, false, { shouldDirty: true })
-          methods.setValue(`publicidad.${area.key}.residuos`, false, { shouldDirty: true })
-        }
+        methods.setValue(`publicidad.${area.key}.danio`, false, { shouldDirty: true })
+        methods.setValue(`publicidad.${area.key}.residuos`, false, { shouldDirty: true })
       }
 
-      // Si NO TIENE publicidad → resetear auto-relleno (dejar en null para forzar selección)
-      if (tiene === false) {
-        if (currentDanio === false && currentResiduos === false) {
-          methods.setValue(`publicidad.${area.key}.danio`, null, { shouldDirty: true })
-          methods.setValue(`publicidad.${area.key}.residuos`, null, { shouldDirty: true })
-        }
+      // Al marcar que NO tiene → limpiar para que el inspector responda
+      if (tiene === false && previo === true) {
+        methods.setValue(`publicidad.${area.key}.danio`, null, { shouldDirty: true })
+        methods.setValue(`publicidad.${area.key}.residuos`, null, { shouldDirty: true })
       }
     })
   }, [
@@ -804,7 +814,10 @@ export const InspectionFormPage = () => {
   const handleNext = () => {
     // VALIDACIÓN GPS: Bloquear navegación si no hay GPS (solo para buses OPERATIVOS)
     if (!isEnPanne && (!gpsActive || !trackingLocation)) {
-      setValidationMessage('Debes autorizar el GPS para continuar. Usa el botón "Activar GPS".')
+      setValidationMessage({
+        title: 'GPS requerido',
+        items: ['Debes autorizar el GPS para continuar. Usa el botón "Activar GPS".'],
+      })
       return
     }
     attemptNavigateToStep(Math.min(currentStep + 1, activeSteps.length - 1))
@@ -937,19 +950,21 @@ export const InspectionFormPage = () => {
         publicityAreas.forEach((area) => {
           const lateral = snapshot.publicidad[area.key]
           if (lateral.tiene === null || lateral.tiene === undefined) {
-            missing.push(`Publicidad · ${area.label} · Indica si tiene campaña`)
-          } else if (lateral.tiene) {
-            requireBoolean(lateral.danio, `Publicidad · ${area.label} · Define si hay daño`)
-            requireBoolean(lateral.residuos, `Publicidad · ${area.label} · Define si hay residuos`)
+            missing.push(`${area.label}: indica si tiene campaña`)
+            return
+          }
+          requireBoolean(lateral.danio, `${area.label}: define si hay daño`)
+          requireBoolean(lateral.residuos, `${area.label}: define si hay residuos`)
+
+          if (lateral.tiene) {
             if (!lateral.observacion?.trim()) {
-              missing.push(`Publicidad · ${area.label} · Nombre de la campaña`)
+              missing.push(`${area.label}: nombre de la campaña`)
             }
-          } else {
-            if (lateral.danio !== true && lateral.residuos !== true) {
-              missing.push(`Publicidad · ${area.label} · Marca "Con daño" o "Con residuos"`)
-            }
+          } else if (lateral.danio === true || lateral.residuos === true) {
+            // Un lateral sin publicidad y sin hallazgos es válido:
+            // la observación solo se exige si hay daño o residuos
             if (!lateral.observacion?.trim()) {
-              missing.push(`Publicidad · ${area.label} · Describe el motivo`)
+              missing.push(`${area.label}: describe el daño o los residuos`)
             }
           }
         })
@@ -985,7 +1000,7 @@ export const InspectionFormPage = () => {
       for (let current = currentStep; current < targetIndex; current++) {
         const issues = getMissingForStep(activeSteps[current].key, snapshot)
         if (issues.length) {
-          setValidationMessage(`${activeSteps[current].label}: ${issues.join(' · ')}`)
+          setValidationMessage({ title: activeSteps[current].label, items: issues })
           setStep(current)
           return false
         }
@@ -1002,7 +1017,10 @@ export const InspectionFormPage = () => {
     // VALIDACIÓN GPS: Permitir envío sin GPS solo para buses EN_PANNE
     if (!gpsActive || !trackingLocation) {
       if (!enPanne) {
-        setValidationMessage('NO PUEDES ENVIAR SIN GPS ACTIVO. Autoriza el permiso de ubicación para continuar.')
+        setValidationMessage({
+          title: 'No puedes enviar sin GPS activo',
+          items: ['Autoriza el permiso de ubicación para continuar.'],
+        })
         return
       }
       // Para buses EN_PANNE, continuar con coordenadas por defecto
@@ -1020,7 +1038,7 @@ export const InspectionFormPage = () => {
     for (let i = 0; i < activeSteps.length; i++) {
       const issues = getMissingForStep(activeSteps[i].key, snapshot)
       if (issues.length) {
-        setValidationMessage(`${activeSteps[i].label}: ${issues.join(' · ')}`)
+        setValidationMessage({ title: activeSteps[i].label, items: issues })
         setStep(i)
         return
       }
@@ -2512,9 +2530,9 @@ export const InspectionFormPage = () => {
         {/* ===== ALERTA DE VALIDACIÓN ===== */}
         <AnimatePresence>
           {validationMessage && (
-            <AlertBanner tone="error" title="Faltan datos por completar">
+            <AlertBanner tone="error" title={`${validationMessage.title}: faltan datos`}>
               <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs">
-                {validationMessage.split(' · ').map((item, index) => (
+                {validationMessage.items.map((item, index) => (
                   <li key={index}>{item}</li>
                 ))}
               </ul>
