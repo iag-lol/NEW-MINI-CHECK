@@ -43,7 +43,7 @@ import { useActiveInspectors } from '@/hooks/use-active-inspectors'
 import { useInspeccionesEnCurso } from '@/hooks/use-inspeccion-presence'
 
 type RevisionRow = Tables<'revisiones'>
-type Rango = '1m' | '2m' | 'all'
+type Rango = 'semana' | '1m' | '2m' | 'all'
 type ModoDetalle = 'semana' | '1m' | '2m' | 'all'
 
 interface ColaboradorStats {
@@ -64,18 +64,28 @@ interface ColaboradorStats {
   ultimaActividad: string
 }
 
-const fetchRevisionesRango = async (rango: Rango): Promise<RevisionRow[]> => {
+const fetchRevisionesRango = async (
+  rango: Rango,
+  semanaOffset = 0
+): Promise<RevisionRow[]> => {
   let query = supabase
     .from('revisiones')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(10000)
-  if (rango !== 'all') {
+
+  if (rango === 'semana') {
+    const inicio = dayjs().isoWeekday(1).startOf('day').add(semanaOffset, 'week')
+    query = query
+      .gte('created_at', inicio.toISOString())
+      .lt('created_at', inicio.add(7, 'day').toISOString())
+  } else if (rango !== 'all') {
     query = query.gte(
       'created_at',
       dayjs().subtract(rango === '1m' ? 1 : 2, 'month').toISOString()
     )
   }
+
   const { data } = await query
   return (data as RevisionRow[]) ?? []
 }
@@ -479,7 +489,8 @@ interface IpPerformanceDialogProps {
 }
 
 export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps) => {
-  const [rango, setRango] = useState<Rango>('1m')
+  const [rango, setRango] = useState<Rango>('semana')
+  const [rankingSemanaOffset, setRankingSemanaOffset] = useState(0)
   const [seleccion, setSeleccion] = useState<{ rut: string; nombre: string } | null>(null)
   const [modoDetalle, setModoDetalle] = useState<ModoDetalle>('semana')
   const [semanaOffset, setSemanaOffset] = useState(0)
@@ -495,10 +506,25 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
 
   // Ranking global (según rango del encabezado)
   const { data: revisiones, isLoading } = useQuery({
-    queryKey: ['ip-performance', rango],
-    queryFn: () => fetchRevisionesRango(rango),
+    queryKey: ['ip-performance', rango, rango === 'semana' ? rankingSemanaOffset : 0],
+    queryFn: () => fetchRevisionesRango(rango, rankingSemanaOffset),
     enabled: open,
   })
+
+  // Semana mostrada en el ranking
+  const rankingSemanaInicio = useMemo(
+    () => dayjs().isoWeekday(1).startOf('day').add(rankingSemanaOffset, 'week'),
+    [rankingSemanaOffset]
+  )
+  const rankingPeriodoLabel = useMemo(() => {
+    if (rango === 'semana')
+      return `Semana ${rankingSemanaInicio.isoWeek()} · ${rankingSemanaInicio.format(
+        'DD MMM'
+      )} – ${rankingSemanaInicio.add(6, 'day').format('DD MMM')}`
+    if (rango === '1m') return 'Último mes'
+    if (rango === '2m') return 'Últimos 2 meses'
+    return 'Historial completo'
+  }, [rango, rankingSemanaInicio])
 
   // Historial COMPLETO del colaborador seleccionado (independiente del rango)
   const { data: detalleRevs, isLoading: loadingDetalle } = useQuery({
@@ -609,7 +635,7 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
         },
       ]
     : [
-        { label: 'Revisiones totales', value: globales.totalRevs, icon: Activity },
+        { label: rankingPeriodoLabel, value: globales.totalRevs, icon: Activity },
         { label: 'Colaboradores', value: globales.colaboradores, icon: User },
         { label: 'Buses distintos', value: globales.buses, icon: Bus },
         {
@@ -678,27 +704,65 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
                   </p>
                 </div>
                 {!seleccion && (
-                  <div className="ml-auto flex gap-1 rounded-2xl border border-white/15 bg-slate-950/30 p-1">
-                    {(
-                      [
-                        ['1m', '1 mes'],
-                        ['2m', '2 meses'],
-                        ['all', 'Todo'],
-                      ] as [Rango, string][]
-                    ).map(([value, label]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setRango(value)}
-                        className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
-                          rango === value
-                            ? 'bg-white text-indigo-700 shadow'
-                            : 'text-white/80 hover:bg-white/10'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                  <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                    <div className="flex gap-1 rounded-2xl border border-white/15 bg-slate-950/30 p-1">
+                      {(
+                        [
+                          ['semana', 'Semanal'],
+                          ['1m', '1 mes'],
+                          ['2m', '2 meses'],
+                          ['all', 'Todo'],
+                        ] as [Rango, string][]
+                      ).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setRango(value)}
+                          className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+                            rango === value
+                              ? 'bg-white text-indigo-700 shadow'
+                              : 'text-white/80 hover:bg-white/10'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Navegación entre semanas del ranking */}
+                    {rango === 'semana' && (
+                      <div className="flex items-center gap-1 rounded-2xl border border-white/15 bg-slate-950/30 p-1">
+                        <button
+                          type="button"
+                          onClick={() => setRankingSemanaOffset((prev) => prev - 1)}
+                          className="rounded-xl p-1.5 text-white/80 transition hover:bg-white/10"
+                          aria-label="Semana anterior"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <span className="min-w-[150px] text-center text-[11px] font-bold text-white">
+                          {rankingPeriodoLabel}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={rankingSemanaOffset >= 0}
+                          onClick={() => setRankingSemanaOffset((prev) => Math.min(prev + 1, 0))}
+                          className="rounded-xl p-1.5 text-white/80 transition hover:bg-white/10 disabled:opacity-30"
+                          aria-label="Semana siguiente"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                        {rankingSemanaOffset !== 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setRankingSemanaOffset(0)}
+                            className="rounded-xl px-2 py-1 text-[11px] font-semibold text-white/80 transition hover:bg-white/10"
+                          >
+                            Hoy
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -920,16 +984,28 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
                 <div className="flex h-64 flex-col items-center justify-center gap-2 text-center">
                   <Globe className="h-10 w-10 text-slate-300" />
                   <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
-                    Sin revisiones en el rango seleccionado
+                    Sin revisiones en {rankingPeriodoLabel.toLowerCase()}
                   </p>
+                  {rango === 'semana' && (
+                    <p className="text-xs text-slate-400">
+                      Usa las flechas del encabezado para cambiar de semana
+                    </p>
+                  )}
                 </div>
               ) : (
                 /* ================= RANKING ================= */
                 <div className="space-y-2">
-                  <p className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100">
-                    <Medal className="h-4 w-4 text-amber-500" /> Ranking de colaboradores · clic para
-                    ver el informe individual
-                  </p>
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <p className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100">
+                      <Medal className="h-4 w-4 text-amber-500" /> Ranking de colaboradores
+                    </p>
+                    <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-bold text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
+                      {rankingPeriodoLabel}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Clic en un colaborador para su informe individual
+                    </span>
+                  </div>
                   {stats.map((colaborador, index) => {
                     const enCurso = inspeccionesEnCurso.find((item) => item.rut === colaborador.rut)
                     return (

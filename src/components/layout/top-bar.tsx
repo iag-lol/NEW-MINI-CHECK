@@ -55,7 +55,6 @@ export const TopBar = () => {
   // Las alertas de inspección en curso se muestran a supervisores y jefes
   const puedeVerAlertas = user && user.cargo !== 'INSPECTOR'
   const total = inspeccionesEnCurso.length
-  const primera = inspeccionesEnCurso[0]
 
   return (
     <header className="sticky top-0 z-20 w-full border-b border-transparent px-3 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-white/70 dark:supports-[backdrop-filter]:bg-slate-950/70 sm:px-4 sm:py-4">
@@ -75,38 +74,65 @@ export const TopBar = () => {
           )}
         </div>
 
-        {/* Alertas en vivo: TODAS las inspecciones en curso */}
+        {/* Alertas en vivo: una tarjeta por cada colaborador revisando.
+            Ocupan el espacio libre del header y se van sumando en grilla. */}
         {puedeVerAlertas && total > 0 && (
-          <div ref={alertRef} className="relative shrink-0">
-            <motion.button
+          <div className="hidden min-w-0 flex-1 md:block">
+            <div className="flex max-h-[5.5rem] flex-wrap items-center justify-center gap-1.5 overflow-y-auto overscroll-contain py-0.5">
+              <AnimatePresence initial={false}>
+                {inspeccionesEnCurso.map((item) => (
+                  <motion.div
+                    key={`${item.rut}-${item.ppu}`}
+                    layout
+                    initial={{ opacity: 0, scale: 0.9, y: -6 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: -6 }}
+                    transition={{ type: 'spring', damping: 24, stiffness: 320 }}
+                    title={`${item.nombre} · ${item.ppu}${
+                      item.interno ? ` (${item.interno})` : ''
+                    } · ${item.terminal} · hace ${tiempoTranscurrido(item.startedAt)}`}
+                    className="flex shrink-0 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 py-1.5 pl-2 pr-2.5 shadow-sm dark:border-amber-700/50 dark:bg-amber-950/40"
+                  >
+                    <span className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/50">
+                      <Bus className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />
+                      <span className="marker-live-dot absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-950" />
+                    </span>
+                    <div className="min-w-0 leading-tight">
+                      <p className="truncate text-[11px] font-bold text-amber-900 dark:text-amber-100">
+                        {primerNombre(item.nombre)}
+                      </p>
+                      <p className="truncate text-[10px] text-amber-700/90 dark:text-amber-300/90">
+                        <span className="font-bold">{item.ppu}</span> ·{' '}
+                        {tiempoTranscurrido(item.startedAt)}
+                      </p>
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          </div>
+        )}
+
+        {/* En móvil no hay espacio para la grilla: contador desplegable */}
+        {puedeVerAlertas && total > 0 && (
+          <div ref={alertRef} className="relative shrink-0 md:hidden">
+            <button
               type="button"
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
               onClick={() => setListaAbierta((prev) => !prev)}
-              className="flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 shadow-sm transition hover:border-amber-300 hover:shadow dark:border-amber-700/50 dark:bg-amber-950/40"
+              className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 dark:border-amber-700/50 dark:bg-amber-950/40"
             >
               <span className="marker-live-dot inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500" />
-              <ClipboardList className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-              <span className="whitespace-nowrap text-xs font-bold text-amber-800 dark:text-amber-200">
-                {total === 1 ? (
-                  <>
-                    <span className="hidden lg:inline">
-                      {primerNombre(primera.nombre)} revisando {primera.ppu}
-                    </span>
-                    <span className="lg:hidden">1 revisando</span>
-                  </>
-                ) : (
-                  <>{total} revisando ahora</>
-                )}
+              <ClipboardList className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span className="text-[11px] font-bold text-amber-800 dark:text-amber-200">
+                {total}
               </span>
               <ChevronDown
-                className={`h-3.5 w-3.5 shrink-0 text-amber-500 transition-transform ${
+                className={`h-3 w-3 shrink-0 text-amber-500 transition-transform ${
                   listaAbierta ? 'rotate-180' : ''
                 }`}
               />
-            </motion.button>
+            </button>
 
-            {/* Lista desplegable con TODOS los colaboradores trabajando */}
             <AnimatePresence>
               {listaAbierta && (
                 <motion.div
@@ -114,37 +140,32 @@ export const TopBar = () => {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -8, scale: 0.97 }}
                   transition={{ type: 'spring', damping: 24, stiffness: 320 }}
-                  className="absolute right-0 top-full z-50 mt-2 w-[19rem] overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:w-80"
+                  className="absolute right-0 top-full z-50 mt-2 w-[17rem] overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950"
                 >
-                  <div className="flex items-center gap-2 border-b border-slate-100 bg-amber-50/70 px-4 py-2.5 dark:border-slate-800 dark:bg-amber-950/30">
+                  <div className="flex items-center gap-2 border-b border-slate-100 bg-amber-50/70 px-3 py-2 dark:border-slate-800 dark:bg-amber-950/30">
                     <span className="marker-live-dot inline-block h-2 w-2 rounded-full bg-amber-500" />
-                    <p className="text-xs font-black uppercase tracking-wide text-amber-800 dark:text-amber-200">
-                      Inspecciones en curso ({total})
+                    <p className="text-[11px] font-black uppercase tracking-wide text-amber-800 dark:text-amber-200">
+                      Revisando ahora ({total})
                     </p>
                   </div>
-                  <div className="max-h-80 overflow-y-auto overscroll-contain">
+                  <div className="max-h-72 overflow-y-auto overscroll-contain">
                     {inspeccionesEnCurso.map((item) => (
                       <div
                         key={`${item.rut}-${item.ppu}`}
-                        className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 dark:border-slate-800/60"
+                        className="flex items-center gap-2.5 border-b border-slate-100 px-3 py-2.5 last:border-b-0 dark:border-slate-800/60"
                       >
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-950/50">
-                          <Bus className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950/50">
+                          <Bus className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-bold text-slate-800 dark:text-slate-100">
+                          <p className="truncate text-xs font-bold text-slate-800 dark:text-slate-100">
                             {primerNombre(item.nombre)}
                           </p>
-                          <p className="truncate text-[11px] text-slate-500">
-                            Revisando{' '}
-                            <span className="font-bold text-slate-700 dark:text-slate-200">
-                              {item.ppu}
-                              {item.interno ? ` (${item.interno})` : ''}
-                            </span>{' '}
-                            · {item.terminal}
+                          <p className="truncate text-[10px] text-slate-500">
+                            <span className="font-bold">{item.ppu}</span> · {item.terminal}
                           </p>
                         </div>
-                        <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                        <span className="shrink-0 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
                           {tiempoTranscurrido(item.startedAt)}
                         </span>
                       </div>
