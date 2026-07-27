@@ -14,6 +14,9 @@ import { supabase } from '@/lib/supabase'
 
 const CHANNEL_TOPIC = 'inspecciones-en-curso'
 
+/** Una inspección abierta hace más de 2 h es una pestaña abandonada: se oculta */
+const MAX_SESSION_MIN = 120
+
 export interface InspeccionEnCurso {
   rut: string
   nombre: string
@@ -35,11 +38,16 @@ const clientKey = `client-${Math.random().toString(36).slice(2)}`
 
 const parseState = (): InspeccionEnCurso[] => {
   if (!channel) return []
+  const limite = Date.now() - MAX_SESSION_MIN * 60_000
   const state = channel.presenceState<InspeccionEnCurso>()
   const porRut = new Map<string, InspeccionEnCurso>()
   Object.values(state)
     .flat()
     .filter((meta) => typeof meta.ppu === 'string' && meta.ppu.length > 0)
+    .filter((meta) => {
+      const inicio = Date.parse(meta.startedAt)
+      return Number.isNaN(inicio) ? true : inicio >= limite
+    })
     .forEach((meta) => {
       const item: InspeccionEnCurso = {
         rut: meta.rut,
@@ -60,12 +68,19 @@ const notify = () => {
   listeners.forEach((listener) => listener(items))
 }
 
+let staleTimer: ReturnType<typeof setInterval> | null = null
+
 const ensureChannel = (): RealtimeChannel => {
   if (channel) return channel
 
   channel = supabase.channel(CHANNEL_TOPIC, {
     config: { presence: { key: clientKey } },
   })
+
+  // Re-evaluar cada minuto para expirar presencias zombie sin esperar un sync
+  if (!staleTimer) {
+    staleTimer = setInterval(notify, 60_000)
+  }
 
   channel.on('presence', { event: 'sync' }, notify)
 
