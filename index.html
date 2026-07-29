@@ -1,10 +1,17 @@
 <!doctype html>
-<html lang="en">
+<!--
+  lang="es" + notranslate: la interfaz está en español. Con lang="en" el
+  navegador ofrecía traducir la página y Google Translate reemplaza nodos
+  del DOM que React sigue controlando, provocando el crash
+  "Failed to execute 'insertBefore' on 'Node'".
+-->
+<html lang="es" translate="no">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>new-mini-check-app</title>
+    <meta name="google" content="notranslate" />
+    <title>Mini-Check</title>
   </head>
   <body>
     <div id="root"></div>

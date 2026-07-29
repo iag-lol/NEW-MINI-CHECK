@@ -26,13 +26,15 @@ import { ProtectedRoute } from '@/routes/protected-route'
 import { RequireRole } from '@/routes/require-role'
 import { RootRedirect } from '@/routes/root-redirect'
 import { NotFoundPage } from '@/routes/not-found'
+import { RouteErrorPage } from '@/routes/route-error'
 
 export const router = createBrowserRouter([
-  { path: '/', element: <RootRedirect /> },
-  { path: '/login', element: <LoginPage /> },
+  { path: '/', element: <RootRedirect />, errorElement: <RouteErrorPage /> },
+  { path: '/login', element: <LoginPage />, errorElement: <RouteErrorPage /> },
   {
     path: '/app',
     element: <ProtectedRoute />,
+    errorElement: <RouteErrorPage />,
     children: [
       { index: true, element: <Navigate to="/app/formulario" replace /> },
       {
