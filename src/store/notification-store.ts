@@ -25,6 +25,8 @@ interface NotificationState {
   unread: number
   permiso: PermisoNotificacion
   browserNotificationsEnabled: boolean
+  /** El usuario apagó los avisos a mano: no se vuelven a encender solos */
+  silenciado: boolean
   soundEnabled: boolean
   vibrationEnabled: boolean
   push: (notification: Omit<SystemNotification, 'createdAt' | 'read'>) => void
@@ -75,9 +77,21 @@ const mostrarNotificacionSistema = async (n: SystemNotification) => {
     data: { url: n.url ?? '/app/dashboard', type: n.type },
   }
 
+  // `serviceWorker.ready` no resuelve nunca si no hay ningún registro en
+  // marcha —por ejemplo servido por HTTP, donde los SW están prohibidos—.
+  // Sin este límite la notificación se quedaba esperando para siempre y no
+  // aparecía nada, ni por el worker ni por la vía clásica.
+  const conLimite = <T,>(promesa: Promise<T>, ms: number) =>
+    Promise.race([
+      promesa,
+      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), ms)),
+    ])
+
   const registration =
     getServiceWorkerRegistration() ??
-    (await navigator.serviceWorker?.ready.catch(() => null))
+    (navigator.serviceWorker
+      ? await conLimite(navigator.serviceWorker.ready, 1500).catch(() => null)
+      : null)
 
   if (registration) {
     try {
@@ -107,7 +121,12 @@ export const useNotificationStore = create<NotificationState>()(
       notifications: [],
       unread: 0,
       permiso: leerPermiso(),
-      browserNotificationsEnabled: false,
+      // Si el navegador ya tiene el permiso concedido, los avisos deben salir
+      // desde el primer momento. Arrancar en `false` dejaba a quien ya había
+      // autorizado las notificaciones sin recibir ninguna y sin ninguna pista
+      // de por qué: el interruptor estaba escondido tras los ajustes.
+      browserNotificationsEnabled: leerPermiso() === 'granted',
+      silenciado: false,
       soundEnabled: true,
       vibrationEnabled: true,
 
@@ -215,15 +234,16 @@ export const useNotificationStore = create<NotificationState>()(
         const permiso = leerPermiso()
         set((state) => ({
           permiso,
-          // Si el usuario revocó el permiso desde el navegador, apagar el switch
-          browserNotificationsEnabled:
-            permiso === 'granted' && state.browserNotificationsEnabled,
+          // Con el permiso concedido los avisos van activos, salvo que el
+          // usuario los haya apagado él mismo desde los ajustes.
+          browserNotificationsEnabled: permiso === 'granted' && !state.silenciado,
         }))
       },
 
       setBrowserNotificationsEnabled: (enabled) =>
         set((state) => ({
           browserNotificationsEnabled: enabled && state.permiso === 'granted',
+          silenciado: !enabled,
         })),
 
       setSoundEnabled: (enabled) => set({ soundEnabled: enabled }),
@@ -236,11 +256,23 @@ export const useNotificationStore = create<NotificationState>()(
     }),
     {
       name: 'mini-check-notifications',
-      version: 2,
+      version: 3,
+      // Sin `migrate`, zustand descarta el estado guardado al subir de versión
+      // y todo el mundo volvía a arrancar con los avisos apagados.
+      migrate: (estado) => {
+        const previo = (estado ?? {}) as Partial<NotificationState>
+        return {
+          ...previo,
+          silenciado: previo.silenciado ?? false,
+          vibrationEnabled: previo.vibrationEnabled ?? true,
+          soundEnabled: previo.soundEnabled ?? true,
+        } as NotificationState
+      },
       partialize: (state) => ({
         notifications: state.notifications,
         unread: state.unread,
         browserNotificationsEnabled: state.browserNotificationsEnabled,
+        silenciado: state.silenciado,
         soundEnabled: state.soundEnabled,
         vibrationEnabled: state.vibrationEnabled,
       }),

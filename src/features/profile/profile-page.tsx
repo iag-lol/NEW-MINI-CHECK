@@ -34,6 +34,7 @@ import bcrypt from 'bcryptjs'
 import dayjs from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { prepararAvatar } from '@/lib/image'
 import { useAuthStore } from '@/store/auth-store'
 import { Card, CardEyebrow, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -207,6 +208,17 @@ export function ProfilePage() {
     })
   }
 
+  /**
+   * Guarda la foto de perfil.
+   *
+   * La app inicia sesión con bcrypt contra la tabla `usuarios`, no con Supabase
+   * Auth, así que `auth.uid()` es NULL y cualquier política de Storage que pida
+   * un usuario autenticado rechaza la subida ("new row violates row-level
+   * security policy"). Por eso hay dos caminos: se intenta el bucket y, si el
+   * bucket no está disponible o la política lo bloquea, la imagen —ya reducida
+   * a ~20 KB— se guarda como data URI en la propia columna del perfil. Así
+   * subir la foto funciona sin depender de la configuración del proyecto.
+   */
   const handleUploadPhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file || !user) return
@@ -222,32 +234,54 @@ export function ProfilePage() {
 
     setUploadingPhoto(true)
     try {
-      const fileExt = file.name.split('.').pop()
-      const filePath = `avatars/${user.rut}-${Date.now()}.${fileExt}`
+      const avatar = await prepararAvatar(file)
+      let urlFinal = avatar.dataUrl
+      let viaStorage = false
 
-      const { error: uploadError } = await supabase.storage
-        .from('profile-photos')
-        .upload(filePath, file, {
-          contentType: file.type,
-          cacheControl: '3600',
-          upsert: true,
-        })
-      if (uploadError) throw uploadError
+      try {
+        const filePath = `avatars/${user.rut}-${Date.now()}.jpg`
+        const { error: uploadError } = await supabase.storage
+          .from('profile-photos')
+          .upload(filePath, avatar.blob, {
+            contentType: 'image/jpeg',
+            cacheControl: '3600',
+            upsert: true,
+          })
 
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from('profile-photos').getPublicUrl(filePath)
+        if (uploadError) throw uploadError
+
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from('profile-photos').getPublicUrl(filePath)
+        urlFinal = publicUrl
+        viaStorage = true
+      } catch (storageError) {
+        console.warn(
+          'Storage rechazó la subida; se guarda la foto en el perfil.',
+          storageError
+        )
+      }
 
       await updateProfileMutation.mutateAsync({
-        foto_perfil: publicUrl,
-        foto_url: publicUrl,
+        foto_perfil: urlFinal,
+        foto_url: urlFinal,
       })
 
       queryClient.invalidateQueries({ queryKey: ['perfil', user.rut] })
-      avisar('Foto actualizada', 'Tu nueva foto de perfil ya está visible', 'success')
+      avisar(
+        'Foto actualizada',
+        viaStorage
+          ? 'Tu nueva foto de perfil ya está visible'
+          : `Guardada en tu perfil (${Math.round(avatar.bytes / 1024)} KB)`,
+        'success'
+      )
     } catch (error) {
-      console.error('Error subiendo la foto de perfil:', error)
-      avisar('No se pudo subir', 'Revisa tu conexión e inténtalo de nuevo', 'error')
+      console.error('Error guardando la foto de perfil:', error)
+      avisar(
+        'No se pudo guardar la foto',
+        error instanceof Error ? error.message : 'Inténtalo nuevamente',
+        'error'
+      )
     } finally {
       setUploadingPhoto(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
