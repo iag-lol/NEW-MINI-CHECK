@@ -75,6 +75,20 @@ export const useAuthStore = create<AuthState>()(
         }
       },
       logout: async () => {
+        // Retirar del mapa en vivo. Es el único punto donde se borra la fila:
+        // el seguimiento GPS ya no lo hace al desmontarse, porque eso provocaba
+        // desconexiones fantasma al guardar el perfil o rehidratar el store.
+        const rut = useAuthStore.getState().user?.rut
+        if (rut) {
+          await supabase
+            .from('usuarios_activos')
+            .delete()
+            .eq('usuario_rut', rut)
+            .then(undefined, (error) =>
+              console.error('No se pudo retirar al usuario del mapa', error)
+            )
+        }
+
         await supabase.auth.signOut().catch(() => undefined)
         set({ user: null, lastVisitedPath: '/app/formulario' })
       },

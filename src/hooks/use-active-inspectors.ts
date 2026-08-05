@@ -39,6 +39,11 @@ export const useActiveInspectors = () => {
 
     fetchActiveInspectors()
 
+    // Red de seguridad: si se pierde un evento realtime (reconexión de red,
+    // pestaña dormida) la lista quedaría desfasada para siempre. Una relectura
+    // periódica la vuelve a cuadrar sin depender del canal.
+    const resync = window.setInterval(fetchActiveInspectors, 25_000)
+
     const channel = supabase
       .channel('realtime:usuarios_activos')
       .on(
@@ -67,6 +72,7 @@ export const useActiveInspectors = () => {
 
     return () => {
       isMounted = false
+      window.clearInterval(resync)
       supabase.removeChannel(channel)
     }
   }, [])

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
@@ -14,8 +14,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { MapContainer, TileLayer, CircleMarker, Popup, Circle, LayerGroup, Marker, Tooltip as LeafletTooltip } from 'react-leaflet'
-import { divIcon, type Map as LeafletMap } from 'leaflet'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -34,6 +32,7 @@ import { exportAllModulesToXlsx, exportExecutivePdf } from '@/lib/exporters'
 import { ConsolidadosDialog } from '@/features/dashboard/components/consolidados-dialog'
 import { BusReportDialog } from '@/features/dashboard/components/bus-report-dialog'
 import { IpPerformanceDialog } from '@/features/dashboard/components/ip-performance-dialog'
+import { LiveMap } from '@/features/dashboard/components/live-map'
 import { Card, CardTitle } from '@/components/ui/card'
 import { StatCard } from '@/components/ui/stat-card'
 import { Skeleton, SkeletonCard, SkeletonChart } from '@/components/ui/skeleton'
@@ -41,113 +40,25 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { Tables } from '@/types/database'
-import { TERMINAL_GEOFENCES, type TerminalSlug } from '@/constants/geofences'
 import { detectTerminal } from '@/lib/geofence'
 import { useActiveInspectors } from '@/hooks/use-active-inspectors'
 import { useAuthStore } from '@/store/auth-store'
 import { useWeekFilter } from '@/hooks/use-week-filter'
 import { WeekSelector } from '@/components/week-selector'
 
-type BaseLayerKey = 'street' | 'satellite'
-
-const escapeHtml = (value: string) =>
-  value.replace(/[<>&"']/g, '')
-
-/** Segundos máximos desde el último pulso GPS para considerar a un inspector "EN VIVO" */
-const ONLINE_THRESHOLD_SEC = 60
+/**
+ * Segundos máximos desde el último pulso GPS para considerar a un inspector
+ * "EN VIVO". El pulso llega cada 10 s: con 90 s de margen hacen falta ocho
+ * fallos seguidos para marcar a alguien inactivo, así que un túnel, un
+ * ascensor o un segundo de mala cobertura ya no lo apagan.
+ */
+const ONLINE_THRESHOLD_SEC = 90
 
 /** Horas máximas de inactividad antes de sacar a un inspector del mapa */
 const MAX_INACTIVITY_HOURS = 24
 
 /** Usuarios ocultos del centro geoespacial */
 const HIDDEN_RUTS = ['15.839.906-7', '18.866.264-1']
-
-const createInspectorIcon = (label: string, name: string, color: string, online: boolean) =>
-  divIcon({
-    className: '',
-    html: `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;">
-      <div style="position:relative;">
-        <div style="
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          width:34px;
-          height:34px;
-          border-radius:50%;
-          background:${color};
-          color:#fff;
-          font-size:12px;
-          font-weight:700;
-          border:2px solid rgba(255,255,255,0.95);
-          box-shadow:0 6px 14px rgba(15,23,42,0.35);
-          ${online ? '' : 'filter:grayscale(0.6);opacity:0.75;'}
-        ">${escapeHtml(label)}</div>
-        <span class="${online ? 'marker-live-dot' : ''}" style="
-          position:absolute;
-          top:-2px;
-          right:-2px;
-          width:11px;
-          height:11px;
-          border-radius:50%;
-          background:${online ? '#22c55e' : '#94a3b8'};
-          border:2px solid #fff;
-        "></span>
-      </div>
-      <span style="
-        background:rgba(15,23,42,0.88);
-        color:#fff;
-        font-size:10px;
-        font-weight:600;
-        padding:2px 8px;
-        border-radius:9px;
-        white-space:nowrap;
-        box-shadow:0 2px 6px rgba(15,23,42,0.3);
-      ">${escapeHtml(name)}${online ? '' : ' · inactivo'}</span>
-    </div>`,
-    iconSize: [120, 56],
-    iconAnchor: [60, 20],
-  })
-
-const createBusIcon = (enPanne: boolean) =>
-  divIcon({
-    className: '',
-    html: `<div class="marker-bus" style="
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      width:34px;
-      height:34px;
-      border-radius:12px;
-      background:${enPanne ? 'linear-gradient(135deg,#f97316,#ea580c)' : 'linear-gradient(135deg,#22c55e,#16a34a)'};
-      border:2px solid rgba(255,255,255,0.95);
-      box-shadow:0 6px 16px rgba(15,23,42,0.4);
-      font-size:17px;
-      cursor:pointer;
-    ">🚌</div>`,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
-  })
-
-const isInspectorOnline = (lastHeartbeat: string) =>
-  dayjs().diff(dayjs(lastHeartbeat), 'second') <= ONLINE_THRESHOLD_SEC
-
-/** Formatea el tiempo desde el último pulso con precisión de segundos */
-const formatPulse = (lastHeartbeat: string) => {
-  const seconds = dayjs().diff(dayjs(lastHeartbeat), 'second')
-  if (seconds < 60) return `hace ${seconds} s`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `hace ${minutes} min ${seconds % 60} s`
-  return dayjs(lastHeartbeat).fromNow()
-}
-
-const getInitials = (name: string) =>
-  name
-    .split(' ')
-    .filter(Boolean)
-    .map((word) => word[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
 
 const useWeeklyRevisions = (start: string, end: string) => {
   return useQuery({
@@ -243,31 +154,6 @@ export const DashboardPage = () => {
     [liveInspectors, pulseTick] // eslint-disable-line react-hooks/exhaustive-deps
   )
   const mapToken = import.meta.env.VITE_MAPBOX_TOKEN
-  const mapRef = useRef<LeafletMap | null>(null)
-  const [mapLayer, setMapLayer] = useState<BaseLayerKey>('satellite')
-  const baseLayers = useMemo<Record<BaseLayerKey, { id: BaseLayerKey; label: string; url: string; attribution: string }>>(
-    () => ({
-      street: {
-        id: 'street',
-        label: 'Calles',
-        url: mapToken
-          ? `https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=${mapToken}`
-          : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        attribution: mapToken ? '© Mapbox · © OpenStreetMap' : '© OpenStreetMap contributors',
-      },
-      satellite: {
-        id: 'satellite',
-        label: 'Satélite',
-        url: mapToken
-          ? `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=${mapToken}`
-          : 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        attribution: mapToken ? '© Mapbox · © OpenStreetMap' : '© Esri · Earthstar Geographics',
-      },
-    }),
-    [mapToken]
-  )
-  const currentLayer = baseLayers[mapLayer] ?? baseLayers.street
-
   const stats = useMemo(() => {
     if (!revisions) {
       return {
@@ -347,19 +233,6 @@ export const DashboardPage = () => {
     })
     return [...porPpu.values()]
   }, [revisions])
-
-  const flyToTerminal = (terminal: TerminalSlug) => {
-    const fence = TERMINAL_GEOFENCES.find((item) => item.name === terminal)
-    if (fence && mapRef.current) {
-      mapRef.current.flyTo([fence.lat, fence.lon], 15, { duration: 1.2 })
-    }
-  }
-
-  const resetMapView = () => {
-    if (mapRef.current) {
-      mapRef.current.flyTo([-33.46, -70.65], 11, { duration: 1 })
-    }
-  }
 
   if (revisionsLoading) {
     return (
@@ -636,239 +509,25 @@ export const DashboardPage = () => {
       </div>
 
       {user?.cargo === 'SUPERVISOR' ? (
-      <Card className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+      <Card className="space-y-2.5 !p-2 sm:!p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1.5 pt-1">
+          <div className="min-w-0">
             <CardTitle>Centro geoespacial en vivo</CardTitle>
-            <p className="text-sm text-slate-500">
-              Seguimiento satelital, inspectores conectados y tickets críticos.
+            <p className="text-[11.5px] text-slate-500 dark:text-slate-400">
+              Buses revisados, inspectores conectados y tickets críticos.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {(Object.values(baseLayers) as Array<(typeof baseLayers)[BaseLayerKey]>).map(
-              (layer) => (
-                <Button
-                  key={layer.id}
-                  variant={mapLayer === layer.id ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setMapLayer(layer.id)}
-                >
-                  {layer.label}
-                </Button>
-              )
-            )}
-          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {TERMINAL_GEOFENCES.map((terminal) => (
-            <Button
-              key={terminal.name}
-              variant="outline"
-              size="sm"
-              onClick={() => flyToTerminal(terminal.name)}
-            >
-              {terminal.name}
-            </Button>
-          ))}
-          <Button variant="ghost" size="sm" onClick={resetMapView}>
-            Ver todos
-          </Button>
-        </div>
-        <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500 dark:text-slate-400">
-          <span className="flex items-center gap-1.5">
-            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br from-emerald-500 to-emerald-600 text-[11px]">🚌</span>
-            Bus revisado operativo · clic para informe completo
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-gradient-to-br from-orange-500 to-orange-600 text-[11px]">🚌</span>
-            Bus revisado en panne
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500" />
-            Inspector EN VIVO (pulso GPS &lt; {ONLINE_THRESHOLD_SEC} s)
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-full bg-slate-400" />
-            Inspector inactivo
-          </span>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
-          <div className="h-[420px] overflow-hidden rounded-2xl border border-slate-100/80 dark:border-slate-900">
-            <MapContainer
-              center={[-33.46, -70.65]}
-              zoom={11}
-              scrollWheelZoom
-              className="h-full w-full"
-              ref={mapRef}
-            >
-              <TileLayer
-                key={currentLayer.id}
-                url={currentLayer.url}
-                attribution={currentLayer.attribution}
-              />
-              <LayerGroup>
-                {TERMINAL_GEOFENCES.map((fence) => (
-                  <Circle
-                    key={fence.name}
-                    center={[fence.lat, fence.lon]}
-                    radius={fence.radius}
-                    pathOptions={{ color: '#0ea5e9', fillOpacity: 0.08 }}
-                  >
-                    <Popup>
-                      <p className="text-sm font-semibold">{fence.name}</p>
-                      <p className="text-xs text-slate-500">Geocerca de {fence.radius} m</p>
-                    </Popup>
-                  </Circle>
-                ))}
-              </LayerGroup>
-              <LayerGroup>
-                {busMapMarkers.map((revision) => (
-                  <Marker
-                    key={`bus-${revision.id}`}
-                    position={[revision.lat, revision.lon]}
-                    icon={createBusIcon(revision.estado_bus === 'EN_PANNE')}
-                    eventHandlers={{
-                      click: () => setReportPpu(revision.bus_ppu),
-                    }}
-                  >
-                    <LeafletTooltip
-                      direction="top"
-                      offset={[0, -14]}
-                      opacity={1}
-                      className="bus-tooltip"
-                    >
-                      <span className="font-bold">{revision.bus_ppu}</span>
-                      <span className="ml-1.5 opacity-75">
-                        {revision.estado_bus === 'EN_PANNE' ? '· En panne' : '· Operativo'}
-                      </span>
-                    </LeafletTooltip>
-                  </Marker>
-                ))}
-              </LayerGroup>
-              <LayerGroup>
-                {visibleInspectors.map((inspector) => {
-                  const isSelf = user?.rut === inspector.usuario_rut
-                  const online = isInspectorOnline(inspector.last_heartbeat)
-                  const firstName = inspector.nombre.split(' ').filter(Boolean).slice(0, 2).join(' ')
-                  const icon = createInspectorIcon(
-                    getInitials(inspector.nombre),
-                    firstName,
-                    isSelf ? '#22c55e' : '#0284c7',
-                    online
-                  )
-                  return (
-                    <Marker
-                      key={`inspector-${inspector.usuario_rut}`}
-                      position={[inspector.lat, inspector.lon]}
-                      icon={icon}
-                      zIndexOffset={online ? 1000 : 0}
-                    >
-                      <Popup>
-                        <p className="text-sm font-semibold">{inspector.nombre}</p>
-                        <p className="text-xs text-slate-500">
-                          {online
-                            ? `🟢 EN VIVO · pulso ${formatPulse(inspector.last_heartbeat)}`
-                            : `⚪ Inactivo · último pulso ${formatPulse(inspector.last_heartbeat)}`}
-                          <br />
-                          {inspector.terminal} · Precisión GPS ±
-                          {Math.round(inspector.accuracy ?? 0)} m
-                          <br />
-                          Última señal {dayjs(inspector.last_heartbeat).format('HH:mm:ss')} hrs
-                        </p>
-                      </Popup>
-                    </Marker>
-                  )
-                })}
-              </LayerGroup>
-              <LayerGroup>
-                {ticketMarkers.map(({ ticket, revision }) => (
-                  <CircleMarker
-                    key={`ticket-${ticket.id}`}
-                    center={[revision.lat, revision.lon]}
-                    radius={9}
-                    color={
-                      ticket.estado === 'PENDIENTE'
-                        ? '#ef4444'
-                        : ticket.estado === 'EN_PROCESO'
-                        ? '#facc15'
-                        : '#14b8a6'
-                    }
-                    weight={3}
-                    opacity={0.8}
-                  >
-                    <Popup>
-                      <p className="text-sm font-semibold">{ticket.modulo}</p>
-                      <p className="text-xs text-slate-500">
-                        {ticket.descripcion}
-                        <br />
-                        Estado: {ticket.estado}
-                      </p>
-                    </Popup>
-                  </CircleMarker>
-                ))}
-              </LayerGroup>
-            </MapContainer>
-          </div>
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-slate-100/80 p-4 dark:border-slate-900">
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                Inspectores activos en vivo ({visibleInspectors.length})
-              </p>
-              <ScrollArea className="mt-3 h-40 pr-3">
-                {visibleInspectors.length === 0 && (
-                  <p className="text-xs text-slate-400">
-                    Sin inspectores dentro de terminales en las últimas 24 horas.
-                  </p>
-                )}
-                {visibleInspectors.map((inspector) => {
-                  const online = isInspectorOnline(inspector.last_heartbeat)
-                  return (
-                  <div key={inspector.usuario_rut} className="mb-3 text-xs last:mb-0">
-                    <p className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-white">
-                      <span
-                        className={`inline-block h-2 w-2 rounded-full ${
-                          online ? 'marker-live-dot bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
-                        }`}
-                      />
-                      {inspector.nombre}
-                      {online && (
-                        <span className="rounded-md bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                          En vivo
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-slate-500">
-                      {inspector.terminal} · ±{Math.round(inspector.accuracy ?? 0)} m · pulso{' '}
-                      {formatPulse(inspector.last_heartbeat)} (
-                      {dayjs(inspector.last_heartbeat).format('HH:mm:ss')})
-                    </p>
-                  </div>
-                  )
-                })}
-              </ScrollArea>
-            </div>
-            <div className="rounded-2xl border border-slate-100/80 p-4 dark:border-slate-900">
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                Tickets geolocalizados ({ticketMarkers.length})
-              </p>
-              <ScrollArea className="mt-3 h-40 pr-3">
-                {ticketMarkers.length === 0 && (
-                  <p className="text-xs text-slate-400">Sin tickets con coordenadas disponibles.</p>
-                )}
-                {ticketMarkers.map(({ ticket, revision }) => (
-                  <div key={ticket.id} className="mb-3 text-xs last:mb-0">
-                    <p className="font-semibold text-slate-800 dark:text-white">
-                      {ticket.modulo} · {ticket.estado}
-                    </p>
-                    <p className="text-slate-500">
-                      {revision.bus_ppu} · {revision.terminal_detectado}
-                    </p>
-                  </div>
-                ))}
-              </ScrollArea>
-            </div>
-          </div>
-        </div>
+        <LiveMap
+          inspectores={visibleInspectors}
+          buses={busMapMarkers}
+          tickets={ticketMarkers}
+          umbralEnVivoSeg={ONLINE_THRESHOLD_SEC}
+          rutPropio={user?.rut}
+          onSeleccionarBus={setReportPpu}
+          tick={pulseTick}
+          tokenMapbox={mapToken}
+        />
       </Card>
       ) : (
         <Card className="space-y-3">

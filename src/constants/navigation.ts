@@ -94,7 +94,6 @@ export const SIDEBAR_GROUPS: NavGroup[] = [
     label: 'Sistema',
     icon: Sliders,
     items: [
-      { label: 'Chat', path: '/app/chat', icon: MessageSquare },
       { label: 'Comunicación', path: '/app/comunicacion', icon: MessageSquare },
       { label: 'Configuración', path: '/app/configuracion', icon: Settings, roles: ['SUPERVISOR', 'JEFE DE TERMINAL'] },
     ],
@@ -112,10 +111,11 @@ export interface MobileNavItem {
   roles?: Array<'INSPECTOR' | 'SUPERVISOR' | 'JEFE DE TERMINAL'>
 }
 
+// Cuantas menos pestañas, más ancha es cada zona táctil. El chat salió del
+// dock porque duplicaba a Comunicación, que sigue disponible en "Más".
 export const MOBILE_ITEMS: MobileNavItem[] = [
   { label: 'Inicio', path: '/app/formulario', key: 'formulario', icon: ClipboardList },
   { label: 'Dashboard', path: '/app/dashboard', key: 'dashboard', icon: LayoutDashboard, roles: ['SUPERVISOR', 'JEFE DE TERMINAL'] },
-  { label: 'Chat', path: '/app/chat', key: 'comunicacion', icon: MessageSquare },
   { label: 'Pendientes', path: '/app/pendientes', key: 'pendientes', icon: Map },
   { label: 'Perfil', path: '/app/perfil', key: 'perfil', icon: Users2 },
 ]

@@ -24,7 +24,6 @@ const ReportesPage = lazy(() => import('@/features/reportes/reportes-page').then
 const ReportsPage = lazy(() => import('@/features/reports/reports-page').then((module) => ({ default: module.ReportsPage })))
 const InformesPage = lazy(() => import('@/features/informes/informes-page').then((module) => ({ default: module.InformesPage })))
 const ComunicacionPage = lazy(() => import('@/features/comunicacion/comunicacion-page').then((module) => ({ default: module.ComunicacionPage })))
-const ChatPage = lazy(() => import('@/features/chat/chat-page').then((module) => ({ default: module.ChatPage })))
 const PersonalPage = lazy(() => import('@/features/personal/personal-page').then((module) => ({ default: module.PersonalPage })))
 const ConfiguracionPage = lazy(() => import('@/features/configuracion/configuracion-page').then((module) => ({ default: module.ConfiguracionPage })))
 const PendientesPage = lazy(() => import('@/features/pendientes/pendientes-page').then((module) => ({ default: module.PendientesPage })))
@@ -69,7 +68,8 @@ export const router = createBrowserRouter([
       { path: 'analytics', element: supervisorOnly(<ReportsPage />) },
       { path: 'informes', element: supervisorOnly(<InformesPage />) },
       { path: 'comunicacion', element: loadPage(<ComunicacionPage />) },
-      { path: 'chat', element: loadPage(<ChatPage />) },
+      // 'chat' se retiró: Comunicación cubre el mismo caso de uso
+      { path: 'chat', element: <Navigate to="/app/comunicacion" replace /> },
       { path: 'personal', element: supervisorOnly(<PersonalPage />) },
       { path: 'configuracion', element: supervisorOnly(<ConfiguracionPage />) },
       { path: 'pendientes', element: loadPage(<PendientesPage />) },

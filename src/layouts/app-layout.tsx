@@ -35,6 +35,8 @@ export const AppLayout = () => {
         </a>
         <div aria-hidden="true" className="app-ambient app-ambient--one" />
         <div aria-hidden="true" className="app-ambient app-ambient--two" />
+        {/* Tapa la franja de la barra de estado en iPhone/Android instalados */}
+        <div aria-hidden="true" className="safe-top-scrim" />
         <Sidebar />
         {/* min-w-0: sin esto el flex item hereda el ancho intrínseco del contenido
             (tablas, steppers, mapas) y toda la app se desborda en móviles */}

@@ -237,7 +237,7 @@ export const InstallAppBanner = () => {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 24 }}
         transition={{ type: 'spring', damping: 26, stiffness: 300 }}
-        className="glass-panel-strong fixed bottom-[5.4rem] left-2.5 right-2.5 z-30 flex items-center gap-2.5 rounded-[20px] p-2.5 lg:hidden"
+        className="floating-above-dock glass-panel-strong fixed left-2.5 right-2.5 z-30 flex items-center gap-2.5 rounded-[20px] p-2.5 lg:hidden"
         role="complementary"
       >
         <AppIcon className="h-10 w-10 shrink-0" />

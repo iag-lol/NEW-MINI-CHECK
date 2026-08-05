@@ -58,7 +58,7 @@ export const TopBar = () => {
   const total = inspeccionesEnCurso.length
 
   return (
-    <header className="sticky top-0 z-20 w-full px-2 pb-1 pt-1.5 sm:px-5 sm:pt-3 md:px-6 lg:px-8">
+    <header className="safe-top sticky top-0 z-20 w-full px-2 pb-1 sm:px-5 md:px-6 lg:px-8">
       <div className="glass-panel-strong flex items-center justify-between gap-1.5 rounded-[var(--app-radius-lg)] px-2.5 py-2 sm:min-h-[4.4rem] sm:gap-4 sm:px-4 sm:py-2.5">
         <div className="flex min-w-0 shrink items-center gap-2 sm:gap-3">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] border border-white/60 bg-white/55 text-brand-600 dark:border-white/[0.08] dark:bg-white/[0.06] dark:text-brand-300 sm:h-10 sm:w-10 sm:rounded-[14px] sm:shadow-sm">

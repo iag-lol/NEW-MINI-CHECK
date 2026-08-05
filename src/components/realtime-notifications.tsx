@@ -81,7 +81,7 @@ export function RealtimeNotifications() {
   return (
     <div
       aria-live="polite"
-      className="pointer-events-none fixed inset-x-2.5 top-[4.6rem] z-50 flex flex-col gap-1.5 sm:inset-x-auto sm:right-4 sm:top-[5.4rem] sm:w-[21rem]"
+      className="floating-top pointer-events-none fixed inset-x-2.5 z-50 flex flex-col gap-1.5 sm:inset-x-auto sm:right-4 sm:w-[21rem]"
     >
       <AnimatePresence initial={false}>
         {visibles.map((notif) => {

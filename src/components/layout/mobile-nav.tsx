@@ -111,7 +111,7 @@ export const MobileNav = () => {
     <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
       <nav
         aria-label="Navegación principal móvil"
-        className="mobile-dock glass-panel fixed bottom-1.5 left-1.5 right-1.5 z-40 grid grid-flow-col auto-cols-fr items-stretch gap-0.5 rounded-[20px] px-1 pt-1 lg:hidden"
+        className="mobile-dock glass-panel fixed left-1.5 right-1.5 z-40 grid grid-flow-col auto-cols-fr items-stretch gap-0.5 rounded-[20px] px-1 pt-1 lg:hidden"
       >
         {visibleItems.map((item) => {
           const Icon = item.icon
