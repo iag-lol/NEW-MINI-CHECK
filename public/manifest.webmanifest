@@ -1,0 +1,68 @@
+{
+  "id": "/",
+  "name": "Mini-Check · Control Operacional",
+  "short_name": "Mini-Check",
+  "description": "Plataforma de inspección y control operacional de flota. Notificaciones en tiempo real de cada bus revisado.",
+  "start_url": "/app/formulario",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#0b1020",
+  "theme_color": "#4F46E5",
+  "lang": "es-CL",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-64.png",
+      "sizes": "64x64",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nueva inspección",
+      "short_name": "Inspección",
+      "url": "/app/formulario",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "url": "/app/dashboard",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mi perfil",
+      "short_name": "Perfil",
+      "url": "/app/perfil",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

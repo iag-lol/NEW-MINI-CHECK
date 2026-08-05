@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import dayjs from '@/lib/dayjs'
-import { playNotificationTone } from '@/lib/sound'
+import { playNotificationTone, vibrar, type TonoNotificacion } from '@/lib/sound'
+import { actualizarBadge, getServiceWorkerRegistration } from '@/lib/pwa'
 
 export interface SystemNotification {
   id: string
@@ -9,76 +10,94 @@ export interface SystemNotification {
   body: string
   createdAt: string
   read: boolean
-  type?: 'info' | 'success' | 'warning' | 'error'
+  type?: TonoNotificacion
+  /** Ruta a la que navegar al pulsar la notificación */
+  url?: string
+  /** Agrupa notificaciones del sistema: una nueva reemplaza a la anterior del mismo tag */
+  tag?: string
   metadata?: Record<string, unknown>
 }
+
+export type PermisoNotificacion = 'default' | 'granted' | 'denied' | 'unsupported'
 
 interface NotificationState {
   notifications: SystemNotification[]
   unread: number
-  permissionGranted: boolean
+  permiso: PermisoNotificacion
   browserNotificationsEnabled: boolean
   soundEnabled: boolean
+  vibrationEnabled: boolean
   push: (notification: Omit<SystemNotification, 'createdAt' | 'read'>) => void
   markAsRead: (id: string) => void
   markAll: () => void
+  remove: (id: string) => void
   requestPermission: () => Promise<boolean>
+  syncPermiso: () => void
   setBrowserNotificationsEnabled: (enabled: boolean) => void
   setSoundEnabled: (enabled: boolean) => void
+  setVibrationEnabled: (enabled: boolean) => void
   clear: () => void
 }
 
-/**
- * Request browser notification permission
- */
-const requestBrowserPermission = async (): Promise<boolean> => {
-  if (typeof window === 'undefined' || !('Notification' in window)) {
-    return false
-  }
+const soportaNotificaciones = () =>
+  typeof window !== 'undefined' && 'Notification' in window
 
-  if (Notification.permission === 'granted') {
-    return true
-  }
-
-  if (Notification.permission !== 'denied') {
-    const permission = await Notification.requestPermission()
-    return permission === 'granted'
-  }
-
-  return false
+const leerPermiso = (): PermisoNotificacion => {
+  if (!soportaNotificaciones()) return 'unsupported'
+  return Notification.permission as PermisoNotificacion
 }
 
 /**
- * Show native browser notification
+ * Muestra la notificación del sistema operativo.
+ *
+ * En Android/Chrome `new Notification()` lanza una excepción: hay que pasar
+ * por el service worker. En escritorio el worker también funciona, así que se
+ * prioriza y `new Notification()` queda sólo como plan B (Safari de escritorio,
+ * navegadores sin SW registrado).
  */
-const showBrowserNotification = (title: string, body: string, type?: string) => {
-  if (typeof window === 'undefined' || !('Notification' in window)) {
-    return
-  }
+const mostrarNotificacionSistema = async (n: SystemNotification) => {
+  if (!soportaNotificaciones() || Notification.permission !== 'granted') return
 
-  if (Notification.permission !== 'granted') {
-    return
-  }
-
-  const notification = new Notification(title, {
-    body,
-    icon: '/favicon.ico',
-    badge: '/favicon.ico',
-    tag: 'new-mini-check-notification',
-    requireInteraction: false,
+  const options: NotificationOptions & {
+    vibrate?: number[]
+    renotify?: boolean
+    badge?: string
+  } = {
+    body: n.body,
+    icon: '/icons/icon-192.png',
+    badge: '/icons/badge-96.png',
+    tag: n.tag ?? n.id,
+    renotify: Boolean(n.tag),
+    // Con la pestaña en segundo plano el audio de la app puede estar
+    // suspendido: ahí el sonido lo tiene que poner el sistema operativo.
     silent: false,
-    data: { type },
-  })
+    vibrate: [18, 40, 18],
+    data: { url: n.url ?? '/app/dashboard', type: n.type },
+  }
 
-  // Auto-close after 5 seconds
-  setTimeout(() => {
-    notification.close()
-  }, 5000)
+  const registration =
+    getServiceWorkerRegistration() ??
+    (await navigator.serviceWorker?.ready.catch(() => null))
 
-  // Click handler to bring app to focus
-  notification.onclick = () => {
-    window.focus()
-    notification.close()
+  if (registration) {
+    try {
+      await registration.showNotification(n.title, options)
+      return
+    } catch (error) {
+      console.warn('showNotification falló, se intenta la API clásica', error)
+    }
+  }
+
+  try {
+    const notification = new Notification(n.title, options)
+    notification.onclick = () => {
+      window.focus()
+      if (n.url) window.location.assign(n.url)
+      notification.close()
+    }
+    window.setTimeout(() => notification.close(), 8000)
+  } catch (error) {
+    console.warn('No se pudo mostrar la notificación del sistema', error)
   }
 }
 
@@ -87,44 +106,50 @@ export const useNotificationStore = create<NotificationState>()(
     (set, get) => ({
       notifications: [],
       unread: 0,
-      permissionGranted:
-        typeof Notification !== 'undefined' && Notification.permission === 'granted',
+      permiso: leerPermiso(),
       browserNotificationsEnabled: false,
       soundEnabled: true,
+      vibrationEnabled: true,
 
-      push: ({ id, title, body, type = 'info', metadata }) => {
+      push: (entrada) => {
         const {
-          permissionGranted,
+          permiso,
           browserNotificationsEnabled,
           soundEnabled,
+          vibrationEnabled,
           notifications,
         } = get()
 
         // Los canales realtime pueden informar el mismo evento más de una vez.
-        if (notifications.some((notification) => notification.id === id)) return
-
-        // Show browser notification
-        if (permissionGranted && browserNotificationsEnabled) {
-          showBrowserNotification(title, body, type)
-        }
-
-        // Play sound
-        if (soundEnabled) playNotificationTone()
+        if (notifications.some((notification) => notification.id === entrada.id)) return
 
         const payload: SystemNotification = {
-          id,
-          title,
-          body,
-          type,
-          metadata,
+          type: 'info',
+          ...entrada,
           createdAt: dayjs().toISOString(),
           read: false,
         }
 
-        set((state) => ({
-          notifications: [payload, ...state.notifications].slice(0, 50),
-          unread: state.unread + 1,
-        }))
+        const enPrimerPlano =
+          typeof document === 'undefined' || document.visibilityState === 'visible'
+
+        if (permiso === 'granted' && browserNotificationsEnabled) {
+          void mostrarNotificacionSistema(payload)
+        }
+
+        // Sólo sonamos nosotros cuando el usuario está mirando la app; si no,
+        // el tono ya lo pone la notificación del sistema y sonaría dos veces.
+        if (soundEnabled && enPrimerPlano) playNotificationTone(payload.type)
+        if (vibrationEnabled && enPrimerPlano) vibrar()
+
+        set((state) => {
+          const unread = state.unread + 1
+          actualizarBadge(unread)
+          return {
+            notifications: [payload, ...state.notifications].slice(0, 80),
+            unread,
+          }
+        })
       },
 
       markAsRead: (id) =>
@@ -132,53 +157,98 @@ export const useNotificationStore = create<NotificationState>()(
           const notification = state.notifications.find((n) => n.id === id)
           if (!notification || notification.read) return state
 
+          const unread = Math.max(0, state.unread - 1)
+          actualizarBadge(unread)
           return {
             notifications: state.notifications.map((n) =>
               n.id === id ? { ...n, read: true } : n
             ),
-            unread: Math.max(0, state.unread - 1),
+            unread,
           }
         }),
 
-      markAll: () =>
+      markAll: () => {
+        actualizarBadge(0)
         set((state) => ({
           notifications: state.notifications.map((notification) => ({
             ...notification,
             read: true,
           })),
           unread: 0,
-        })),
+        }))
+      },
+
+      remove: (id) =>
+        set((state) => {
+          const notification = state.notifications.find((n) => n.id === id)
+          const unread =
+            notification && !notification.read
+              ? Math.max(0, state.unread - 1)
+              : state.unread
+          actualizarBadge(unread)
+          return {
+            notifications: state.notifications.filter((n) => n.id !== id),
+            unread,
+          }
+        }),
 
       requestPermission: async () => {
-        const granted = await requestBrowserPermission()
+        if (!soportaNotificaciones()) {
+          set({ permiso: 'unsupported', browserNotificationsEnabled: false })
+          return false
+        }
+
+        let permission = Notification.permission
+        if (permission === 'default') {
+          permission = await Notification.requestPermission()
+        }
+
+        const granted = permission === 'granted'
         set({
-          permissionGranted: granted,
+          permiso: permission as PermisoNotificacion,
           browserNotificationsEnabled: granted,
         })
         return granted
       },
 
+      syncPermiso: () => {
+        const permiso = leerPermiso()
+        set((state) => ({
+          permiso,
+          // Si el usuario revocó el permiso desde el navegador, apagar el switch
+          browserNotificationsEnabled:
+            permiso === 'granted' && state.browserNotificationsEnabled,
+        }))
+      },
+
       setBrowserNotificationsEnabled: (enabled) =>
         set((state) => ({
-          browserNotificationsEnabled: enabled && state.permissionGranted,
+          browserNotificationsEnabled: enabled && state.permiso === 'granted',
         })),
 
       setSoundEnabled: (enabled) => set({ soundEnabled: enabled }),
+      setVibrationEnabled: (enabled) => set({ vibrationEnabled: enabled }),
 
-      clear: () =>
-        set({
-          notifications: [],
-          unread: 0,
-        }),
+      clear: () => {
+        actualizarBadge(0)
+        set({ notifications: [], unread: 0 })
+      },
     }),
     {
       name: 'mini-check-notifications',
+      version: 2,
       partialize: (state) => ({
         notifications: state.notifications,
         unread: state.unread,
         browserNotificationsEnabled: state.browserNotificationsEnabled,
         soundEnabled: state.soundEnabled,
+        vibrationEnabled: state.vibrationEnabled,
       }),
+      onRehydrateStorage: () => (state) => {
+        // El permiso vive en el navegador, no en el storage: siempre releerlo.
+        state?.syncPermiso()
+        if (state?.unread) actualizarBadge(state.unread)
+      },
     }
   )
 )

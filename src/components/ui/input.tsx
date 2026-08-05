@@ -12,7 +12,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         type={type}
         data-ui="input"
         className={cn(
-          'glass-control flex h-11 w-full rounded-xl border px-4 text-sm text-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,.65),0_4px_14px_-10px_rgba(15,23,42,.35)] outline-none placeholder:text-slate-400 focus-visible:border-brand-400/70 focus-visible:ring-4 focus-visible:ring-brand-300/20 dark:text-white dark:placeholder:text-slate-500',
+          'glass-control flex h-11 w-full rounded-[var(--app-radius-sm)] border px-3.5 text-sm text-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,.6)] outline-none transition placeholder:text-slate-400 focus-visible:border-brand-400/70 focus-visible:ring-4 focus-visible:ring-brand-400/15 dark:text-white dark:placeholder:text-slate-500 sm:px-4',
           error && 'border-red-500 focus-visible:ring-red-500/40',
           className
         )}

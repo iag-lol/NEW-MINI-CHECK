@@ -363,13 +363,13 @@ export const DashboardPage = () => {
 
   if (revisionsLoading) {
     return (
-      <div className="space-y-8">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="space-y-3 sm:space-y-6">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
         </div>
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-3 sm:gap-5 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <Skeleton className="mb-2 h-6 w-1/3" />
             <Skeleton className="mb-4 h-4 w-1/2" />
@@ -384,18 +384,18 @@ export const DashboardPage = () => {
   const operationalRate = stats.total > 0 ? (stats.operativo / stats.total) * 100 : 0
 
   return (
-    <div className="space-y-5 sm:space-y-8">
+    <div className="space-y-3 sm:space-y-6">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="glass-panel relative overflow-hidden rounded-[26px] p-4 sm:p-6"
+        className="glass-panel relative overflow-hidden rounded-[var(--app-radius-lg)] p-3 sm:p-5"
       >
         <div aria-hidden="true" className="pointer-events-none absolute -right-12 -top-20 h-52 w-52 rounded-full bg-brand-400/15 blur-3xl" />
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">Centro de control</p>
-            <h1 className="text-2xl font-extrabold tracking-[-0.04em] text-slate-950 dark:text-white sm:text-3xl">
+            <h1 className="text-[19px] font-extrabold tracking-[-0.04em] text-slate-950 dark:text-white sm:text-2xl">
               Dashboard de Supervisión
             </h1>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
@@ -488,7 +488,7 @@ export const DashboardPage = () => {
       </motion.div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
         <StatCard
           title="Revisiones Totales"
           value={stats.total}
@@ -519,7 +519,7 @@ export const DashboardPage = () => {
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-3 sm:gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardTitle>Actividad diaria</CardTitle>
           <p className="text-sm text-slate-500">Conteo por día · lunes a domingo</p>
@@ -572,7 +572,7 @@ export const DashboardPage = () => {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-3 sm:gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardTitle>Terminales</CardTitle>
           <p className="text-sm text-slate-500">Comparativo por terminal en la semana</p>
@@ -881,7 +881,7 @@ export const DashboardPage = () => {
         </Card>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-3 sm:gap-5 lg:grid-cols-2">
         <Card>
           <CardTitle>Últimas revisiones</CardTitle>
           <ScrollArea className="mt-4 h-80 pr-4">

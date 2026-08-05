@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { MobileNav } from '@/components/layout/mobile-nav'
 import { TopBar } from '@/components/layout/top-bar'
 import { RealtimeNotifications } from '@/components/realtime-notifications'
+import { InstallAppBanner } from '@/components/install-app'
 import { useRealtimeSubscriptions } from '@/hooks/use-realtime'
 import { useRealtimeLocation } from '@/hooks/use-realtime-location'
 import { useTheme } from '@/hooks/use-theme'
@@ -42,7 +43,7 @@ export const AppLayout = () => {
           <main
             id="main-content"
             tabIndex={-1}
-            className="safe-bottom flex-1 px-3 pt-2 outline-none sm:px-5 sm:pt-3 md:px-6 md:pb-8 lg:px-8"
+            className="safe-bottom flex-1 px-2 pt-1.5 outline-none sm:px-5 sm:pt-3 md:px-6 md:pb-8 lg:px-8"
           >
             <div className="app-content">
               <Outlet />
@@ -51,6 +52,7 @@ export const AppLayout = () => {
         </div>
         <MobileNav />
         <RealtimeNotifications />
+        <InstallAppBanner />
       </div>
     </TrackingProvider>
   )

@@ -445,7 +445,7 @@ export function ChatPage() {
       <ChatToastContainer toasts={toasts} onDismiss={removeToast} />
 
       {/* Contenedor principal del chat - ajustado al layout */}
-      <div className="glass-panel flex h-[calc(100dvh-12.75rem)] min-h-[32rem] flex-col overflow-hidden rounded-[26px] md:h-[calc(100dvh-8rem)]">
+      <div className="glass-panel flex h-[calc(100dvh-12.75rem)] min-h-[32rem] flex-col overflow-hidden rounded-[var(--app-radius-lg)] md:h-[calc(100dvh-8rem)]">
         {/* Header */}
         <div className="relative flex items-center justify-between overflow-hidden border-b border-white/15 bg-gradient-to-r from-brand-500 to-violet-600 px-4 py-3.5 sm:px-6 sm:py-4">
           <div aria-hidden="true" className="absolute -right-8 -top-16 h-32 w-32 rounded-full bg-white/15 blur-3xl" />

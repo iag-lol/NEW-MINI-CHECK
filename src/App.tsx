@@ -2,7 +2,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from 'react-router-dom'
 import { ThemeProvider } from '@/providers/theme-provider'
 import { router } from '@/router'
-import { Component, type ReactNode } from 'react'
+import { Component, useEffect, type ReactNode } from 'react'
+import { inicializarPWA } from '@/lib/pwa'
+import { desbloquearAudio } from '@/lib/sound'
+import { useNotificationStore } from '@/store/notification-store'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -65,7 +68,29 @@ class ErrorBoundary extends Component<
   }
 }
 
+/**
+ * Arranque de la integración con el sistema operativo: service worker,
+ * instalación como app y desbloqueo del audio de notificaciones (los
+ * navegadores exigen un gesto previo del usuario para poder sonar).
+ */
+const usePlataformaNativa = () => {
+  useEffect(() => {
+    inicializarPWA((url) => void router.navigate(url))
+    useNotificationStore.getState().syncPermiso()
+
+    const desbloquear = () => desbloquearAudio()
+    window.addEventListener('pointerdown', desbloquear, { once: true })
+    window.addEventListener('keydown', desbloquear, { once: true })
+    return () => {
+      window.removeEventListener('pointerdown', desbloquear)
+      window.removeEventListener('keydown', desbloquear)
+    }
+  }, [])
+}
+
 function App() {
+  usePlataformaNativa()
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>

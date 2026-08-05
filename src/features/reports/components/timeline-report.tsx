@@ -67,7 +67,7 @@ export function TimelineReport({ startDate, endDate }: TimelineReportProps) {
   return (
     <div className="space-y-6">
       {/* Stats Summary */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
         <StatCard label="Total" value={stats.total} icon={Calendar} color="blue" />
         <StatCard label="Operativos" value={stats.operative} icon={CheckCircle} color="green" />
         <StatCard label="En Panne" value={stats.nonOperative} icon={XCircle} color="red" />

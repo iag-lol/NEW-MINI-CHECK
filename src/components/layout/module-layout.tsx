@@ -145,24 +145,23 @@ export const ModuleLayout = <T extends TableName>({
   }, [filteredData, getCharts, charts])
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-3 sm:space-y-5">
       {/* Header */}
-      <div className="glass-panel relative overflow-hidden rounded-[26px] p-4 sm:p-6">
-        <div className="pointer-events-none absolute -right-12 -top-20 h-52 w-52 rounded-full bg-brand-400/15 blur-3xl" />
-        <div className="pointer-events-none absolute bottom-0 left-1/3 h-24 w-64 rounded-full bg-violet-400/10 blur-3xl" />
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+      <div className="glass-panel relative overflow-hidden rounded-[var(--app-radius-lg)] p-3 sm:p-5">
+        <div className="pointer-events-none absolute -right-12 -top-20 h-52 w-52 rounded-full bg-brand-400/12 blur-3xl" />
+        <div className="relative flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between lg:gap-5">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-4">
             {Icon && (
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-white/30 bg-gradient-to-br from-brand-500 to-violet-600 text-white shadow-[0_14px_30px_-14px_var(--color-brand-600)] sm:h-14 sm:w-14 sm:rounded-[18px]">
-                <Icon className="h-6 w-6 sm:h-7 sm:w-7" />
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] border border-white/25 bg-gradient-to-br from-brand-500 to-violet-600 text-white shadow-[0_10px_22px_-14px_var(--color-brand-600)] sm:h-12 sm:w-12 sm:rounded-[17px]">
+                <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
               </div>
             )}
             <div className="min-w-0">
-              <p className="truncate text-[10px] font-bold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">
+              <p className="truncate text-[9px] font-black uppercase tracking-[0.16em] text-brand-600 dark:text-brand-400">
                 {table}
               </p>
-              <h1 className="truncate text-2xl font-extrabold tracking-[-0.04em] text-slate-950 dark:text-white sm:text-3xl">{title}</h1>
-              <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-slate-600 dark:text-slate-400 sm:text-sm">{description}</p>
+              <h1 className="truncate text-[17px] font-extrabold leading-tight tracking-[-0.04em] text-slate-950 dark:text-white sm:text-2xl">{title}</h1>
+              <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-slate-600 dark:text-slate-400 sm:text-sm sm:leading-5">{description}</p>
             </div>
           </div>
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
@@ -183,13 +182,13 @@ export const ModuleLayout = <T extends TableName>({
 
       {/* Statistics */}
       {isFetching && !data ? (
-        <div className="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
         </div>
       ) : (
-        <div className="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
           {stats.map((stat, index) => (
             <StatCard
               key={index}
@@ -206,7 +205,7 @@ export const ModuleLayout = <T extends TableName>({
 
       {/* Filters and Search */}
       {(filters.length > 0 || searchFields.length > 0) && (
-        <Card className="p-4">
+        <Card>
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
