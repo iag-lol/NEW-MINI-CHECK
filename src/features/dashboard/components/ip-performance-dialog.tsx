@@ -29,6 +29,7 @@ import {
   Moon,
   Route,
   Sun,
+  FileDown,
   User,
   X,
 } from 'lucide-react'
@@ -41,6 +42,13 @@ import { closestTerminalDistance, haversineMeters } from '@/lib/geofence'
 import { TERMINAL_GEOFENCES } from '@/constants/geofences'
 import { useActiveInspectors } from '@/hooks/use-active-inspectors'
 import { useInspeccionesEnCurso } from '@/hooks/use-inspeccion-presence'
+import {
+  analizarRendimiento,
+  construirPeriodo,
+  formatearMinutos,
+  type Severidad,
+} from '@/features/dashboard/lib/analisis-rendimiento'
+import { generarInformeRendimiento } from '@/features/dashboard/lib/pdf-rendimiento'
 
 type RevisionRow = Tables<'revisiones'>
 type Rango = 'semana' | '1m' | '2m' | 'all'
@@ -579,6 +587,40 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
     [detalleFiltradas]
   )
 
+  /**
+   * Chequeo de rendimiento del colaborador para el período visible.
+   *
+   * `inicioActividad` sale del historial completo, no del filtrado: sin ese
+   * dato, analizar "los últimos dos meses" de alguien que entró hace tres
+   * semanas lo acusaría de faltar cinco semanas enteras.
+   */
+  const analisis = useMemo(() => {
+    if (!seleccion) return null
+    const primera = detalleRevs?.length
+      ? detalleRevs[detalleRevs.length - 1].created_at
+      : undefined
+    const periodo = construirPeriodo(modoDetalle, semanaInicio, primera)
+    return analizarRendimiento(detalleFiltradas, periodo, {
+      rut: seleccion.rut,
+      nombre: seleccion.nombre,
+      inicioActividad: primera,
+    })
+  }, [seleccion, detalleRevs, detalleFiltradas, modoDetalle, semanaInicio])
+
+  const [generandoPdf, setGenerandoPdf] = useState(false)
+
+  const descargarInforme = () => {
+    if (!analisis) return
+    setGenerandoPdf(true)
+    try {
+      generarInformeRendimiento(analisis)
+    } catch (error) {
+      console.error('No se pudo generar el informe de rendimiento', error)
+    } finally {
+      setGenerandoPdf(false)
+    }
+  }
+
   // Buses revisados agrupados por día (más reciente primero)
   const busesPorDia = useMemo(() => {
     const grupos = new Map<string, RevisionRow[]>()
@@ -855,7 +897,20 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
                         ? `${detalleStats.operativos} operativos · ${detalleStats.panne} en panne · ${detalleStats.diasActivos} día${detalleStats.diasActivos !== 1 ? 's' : ''} activo${detalleStats.diasActivos !== 1 ? 's' : ''}`
                         : 'Sin actividad en el período'}
                     </span>
+
+                    <Button
+                      size="sm"
+                      className="gap-1.5"
+                      disabled={generandoPdf || !analisis}
+                      onClick={descargarInforme}
+                    >
+                      <FileDown className="h-3.5 w-3.5" />
+                      {generandoPdf ? 'Generando…' : 'Informe PDF'}
+                    </Button>
                   </div>
+
+                  {/* Chequeo de rendimiento del período seleccionado */}
+                  {analisis && <PanelRendimiento analisis={analisis} />}
 
                   {loadingDetalle ? (
                     <div className="flex h-56 items-center justify-center text-sm text-slate-400">
@@ -1096,3 +1151,223 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
     document.body
   )
 }
+
+/* -------------------------------------------------------------------------
+   Chequeo de rendimiento en pantalla
+
+   Es el mismo análisis que alimenta el PDF: se muestra aquí para que el
+   supervisor no tenga que descargar un archivo sólo para saber si hay algo
+   que mirar.
+   ------------------------------------------------------------------------- */
+
+const TONO_SEVERIDAD: Record<Severidad, string> = {
+  critica: 'border-red-300/60 bg-red-50/70 dark:border-red-500/25 dark:bg-red-950/30',
+  alta: 'border-orange-300/60 bg-orange-50/70 dark:border-orange-500/25 dark:bg-orange-950/25',
+  media: 'border-amber-300/60 bg-amber-50/70 dark:border-amber-500/25 dark:bg-amber-950/25',
+  info: 'border-blue-300/50 bg-blue-50/60 dark:border-blue-500/20 dark:bg-blue-950/25',
+}
+
+const TEXTO_SEVERIDAD: Record<Severidad, string> = {
+  critica: 'text-red-700 dark:text-red-300',
+  alta: 'text-orange-700 dark:text-orange-300',
+  media: 'text-amber-700 dark:text-amber-300',
+  info: 'text-blue-700 dark:text-blue-300',
+}
+
+const ETIQUETA_SEVERIDAD: Record<Severidad, string> = {
+  critica: 'Crítica',
+  alta: 'Alta',
+  media: 'Media',
+  info: 'Info',
+}
+
+const PanelRendimiento = ({
+  analisis,
+}: {
+  analisis: ReturnType<typeof analizarRendimiento>
+}) => {
+  const maxSemana = Math.max(1, ...analisis.porSemana.map((s) => s.revisiones))
+
+  const colorNota =
+    analisis.puntuacion >= 85
+      ? 'from-emerald-500 to-emerald-600'
+      : analisis.puntuacion >= 70
+        ? 'from-brand-500 to-violet-600'
+        : analisis.puntuacion >= 50
+          ? 'from-amber-500 to-orange-600'
+          : 'from-red-500 to-red-600'
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-slate-200/70 p-3 dark:border-slate-800">
+      <div className="flex items-center gap-3">
+        <span
+          className={`flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-2xl bg-gradient-to-br ${colorNota} text-white shadow-md`}
+        >
+          <span className="text-[19px] font-black leading-none tabular-nums">
+            {analisis.puntuacion}
+          </span>
+          <span className="text-[8px] font-bold uppercase tracking-wide opacity-80">
+            /100
+          </span>
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[13px] font-extrabold tracking-[-0.02em] text-slate-950 dark:text-white">
+            Chequeo de rendimiento · {analisis.notaGlobal}
+          </p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            {analisis.diasActivos} de {analisis.diasLaborables} días laborables con
+            actividad · racha máxima de {analisis.rachaMaxima} días
+          </p>
+        </div>
+      </div>
+
+      {/* Componentes de la nota */}
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+        {analisis.componentes.map((componente) => (
+          <div
+            key={componente.etiqueta}
+            className="rounded-xl border border-white/60 bg-white/50 p-2 dark:border-white/[0.06] dark:bg-white/[0.035]"
+          >
+            <p className="truncate text-[9px] font-bold uppercase tracking-[0.1em] text-slate-500">
+              {componente.etiqueta}
+            </p>
+            <p className="text-[15px] font-extrabold tabular-nums text-slate-900 dark:text-white">
+              {componente.valor}
+            </p>
+            <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-800">
+              <div
+                className="h-full rounded-full bg-brand-500"
+                style={{ width: `${Math.min(100, componente.valor)}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Ritmo de trabajo */}
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+        <DatoRitmo
+          etiqueta="Entre revisiones"
+          valor={formatearMinutos(analisis.cadenciaMedianaMin)}
+          nota="mediana del período"
+        />
+        <DatoRitmo
+          etiqueta="Jornada media"
+          valor={formatearMinutos(analisis.jornadaMediaMin)}
+          nota={
+            analisis.revisionesPorHora !== null
+              ? `${analisis.revisionesPorHora} rev/hora`
+              : 'sin datos'
+          }
+        />
+        <DatoRitmo
+          etiqueta="Pausa más larga"
+          valor={formatearMinutos(analisis.huecoMaximoMin)}
+          nota={
+            analisis.huecoMaximoFecha
+              ? dayjs(analisis.huecoMaximoFecha).format('DD MMM')
+              : '—'
+          }
+        />
+        <DatoRitmo
+          etiqueta="Promedio diario"
+          valor={String(analisis.promedioPorDiaActivo)}
+          nota={`mediana ${analisis.medianaPorDiaActivo}`}
+        />
+      </div>
+
+      {/* Evolución semanal */}
+      {analisis.porSemana.length > 1 && (
+        <div>
+          <p className="mb-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-slate-500">
+            Evolución semanal
+          </p>
+          <div className="flex items-end gap-1 overflow-x-auto pb-1">
+            {analisis.porSemana.map((semana) => (
+              <div
+                key={semana.clave}
+                className="flex w-9 shrink-0 flex-col items-center gap-1"
+                title={`Semana ${semana.numero}: ${semana.revisiones} revisiones`}
+              >
+                <span className="text-[9px] font-bold tabular-nums text-slate-500">
+                  {semana.revisiones}
+                </span>
+                <div className="flex h-14 w-full items-end">
+                  <div
+                    className={`w-full rounded-t-md ${
+                      semana.ausente
+                        ? 'bg-red-300 dark:bg-red-900/60'
+                        : semana.clave === analisis.mejorSemana?.clave
+                          ? 'bg-gradient-to-t from-brand-600 to-brand-400'
+                          : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                    style={{
+                      height: `${Math.max(
+                        semana.ausente ? 4 : 8,
+                        (semana.revisiones / maxSemana) * 100
+                      )}%`,
+                    }}
+                  />
+                </div>
+                <span className="text-[8.5px] font-semibold text-slate-400">
+                  S{semana.numero}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Alertas */}
+      <div className="space-y-1.5">
+        <p className="text-[9px] font-black uppercase tracking-[0.16em] text-slate-500">
+          Alertas ({analisis.alertas.length})
+        </p>
+        {analisis.alertas.slice(0, 6).map((alerta, indice) => (
+          <div
+            key={`${alerta.titulo}-${indice}`}
+            className={`rounded-xl border px-2.5 py-2 ${TONO_SEVERIDAD[alerta.severidad]}`}
+          >
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`text-[8.5px] font-black uppercase tracking-[0.1em] ${TEXTO_SEVERIDAD[alerta.severidad]}`}
+              >
+                {ETIQUETA_SEVERIDAD[alerta.severidad]}
+              </span>
+              <p className="min-w-0 flex-1 truncate text-[11.5px] font-bold text-slate-900 dark:text-white">
+                {alerta.titulo}
+              </p>
+            </div>
+            <p className="mt-0.5 text-[10.5px] leading-snug text-slate-600 dark:text-slate-300">
+              {alerta.detalle}
+            </p>
+          </div>
+        ))}
+        {analisis.alertas.length > 6 && (
+          <p className="px-1 text-[10px] text-slate-400">
+            {analisis.alertas.length - 6} alerta
+            {analisis.alertas.length - 6 !== 1 ? 's' : ''} más en el informe PDF.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const DatoRitmo = ({
+  etiqueta,
+  valor,
+  nota,
+}: {
+  etiqueta: string
+  valor: string
+  nota: string
+}) => (
+  <div className="rounded-xl border border-white/60 bg-white/50 p-2 dark:border-white/[0.06] dark:bg-white/[0.035]">
+    <p className="truncate text-[9px] font-bold uppercase tracking-[0.1em] text-slate-500">
+      {etiqueta}
+    </p>
+    <p className="text-[14px] font-extrabold text-slate-900 dark:text-white">{valor}</p>
+    <p className="truncate text-[9px] text-slate-400">{nota}</p>
+  </div>
+)
