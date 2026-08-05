@@ -1,6 +1,6 @@
 import { useState, useMemo, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { RefreshCcw, Search, Filter, MoveHorizontal, type LucideIcon } from 'lucide-react'
+import { RefreshCcw, Search, Filter, type LucideIcon } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import type { Database } from '@/types/database'
@@ -302,12 +302,58 @@ export const ModuleLayout = <T extends TableName>({
         </div>
       )}
 
-      {/* Data Table */}
-      <Card className="overflow-hidden p-0">
-        <div className="flex items-center gap-2 border-b border-white/50 bg-white/25 px-4 py-2 text-[11px] font-medium text-slate-500 sm:hidden dark:border-white/5 dark:bg-white/[0.025]">
-          <MoveHorizontal className="h-3.5 w-3.5" />
-          Desliza para consultar todas las columnas
-        </div>
+      {/* Listado en tarjetas: la vista de móvil.
+          Una tabla de 8 columnas en una pantalla de 390 px sólo se puede leer
+          arrastrando de lado, y así se pierde de vista a qué bus pertenece
+          cada dato. En tarjetas cada registro se lee entero de una vez. */}
+      <div className="space-y-2 lg:hidden">
+        {filteredData?.map((row) => {
+          const rowKey = 'id' in row && row.id ? (row.id as string) : JSON.stringify(row)
+          const [encabezado, ...resto] = columns
+          return (
+            <Card key={rowKey} className="!p-0">
+              <div className="flex items-center justify-between gap-2 border-b border-white/50 px-3 py-2.5 dark:border-white/[0.06]">
+                <div className="min-w-0 text-[13px] font-extrabold tracking-[-0.02em] text-slate-950 dark:text-white">
+                  {encabezado.render(row)}
+                </div>
+              </div>
+              <dl className="divide-y divide-white/40 dark:divide-white/[0.04]">
+                {resto.map((column) => (
+                  <div
+                    key={column.label}
+                    className="flex items-start justify-between gap-3 px-3 py-2"
+                  >
+                    <dt className="shrink-0 pt-px text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
+                      {column.label}
+                    </dt>
+                    <dd className="min-w-0 flex-1 text-right text-[12px] text-slate-700 dark:text-slate-200">
+                      {column.render(row)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </Card>
+          )
+        })}
+
+        {/* Mientras llega la primera consulta no se afirma que no hay nada */}
+        {isFetching && !data && (
+          <Card className="py-10 text-center text-[12.5px] text-slate-400">
+            Cargando registros...
+          </Card>
+        )}
+
+        {!isFetching && filteredData?.length === 0 && (
+          <Card className="py-10 text-center text-[12.5px] text-slate-400">
+            {data?.length === 0
+              ? 'No hay registros para mostrar todavía.'
+              : 'No se encontraron resultados con los filtros aplicados.'}
+          </Card>
+        )}
+      </div>
+
+      {/* Tabla: a partir de pantalla grande, donde sí caben las columnas */}
+      <Card className="hidden overflow-hidden p-0 lg:block">
         <div className={cn(tableScrollClassName ?? 'max-h-[60vh]', 'overflow-auto')}>
           <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
             <thead className="sticky top-0 z-10 bg-white/85 text-left uppercase tracking-wide text-slate-500 backdrop-blur-xl dark:bg-slate-900/85">

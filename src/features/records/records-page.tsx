@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import ExcelJS from 'exceljs'
 import jsPDF from 'jspdf'
@@ -13,6 +14,8 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { useNotificationStore } from '@/store/notification-store'
+import { useAuthStore } from '@/store/auth-store'
+import { cn } from '@/lib/utils'
 import type { Tables } from '@/types/database'
 import { Loader2, Trash2, PenSquare } from 'lucide-react'
 
@@ -23,20 +26,40 @@ interface Filters {
 }
 
 export const RecordsPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const user = useAuthStore((state) => state.user)
+
   const [filters, setFilters] = useState<Filters>({
     terminal: 'TODOS',
     estado: 'TODOS',
     query: '',
   })
+
+  // "Ver todas mis revisiones" llega desde el perfil con ?mias=1: la pantalla
+  // debe abrirse ya filtrada, no mostrando las de todo el equipo.
+  const [soloMias, setSoloMias] = useState(() => searchParams.get('mias') === '1')
+
   const { push } = useNotificationStore()
   const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  const alternarSoloMias = (valor: boolean) => {
+    setSoloMias(valor)
+    // La URL refleja el filtro: así se puede compartir o recargar sin perderlo
+    const siguiente = new URLSearchParams(searchParams)
+    if (valor) siguiente.set('mias', '1')
+    else siguiente.delete('mias')
+    setSearchParams(siguiente, { replace: true })
+  }
+
   const { data: revisiones, isLoading, refetch } = useQuery({
-    queryKey: ['records', filters],
+    queryKey: ['records', filters, soloMias ? user?.rut : 'todos'],
     queryFn: async () => {
       let query = supabase.from('revisiones').select('*').order('created_at', { ascending: false })
+      if (soloMias && user) {
+        query = query.eq('inspector_rut', user.rut)
+      }
       if (filters.terminal !== 'TODOS') {
         query = query.eq('terminal_detectado', filters.terminal)
       }
@@ -137,7 +160,32 @@ export const RecordsPage = () => {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card className="space-y-2.5">
+        {/* Alcance del listado: mis revisiones o las de todo el equipo */}
+        {user && (
+          <div className="flex rounded-[var(--app-radius-sm)] border border-white/60 bg-white/40 p-1 dark:border-white/[0.06] dark:bg-white/[0.035]">
+            {[
+              { valor: true, etiqueta: 'Mis revisiones' },
+              { valor: false, etiqueta: 'Todo el equipo' },
+            ].map((opcion) => (
+              <button
+                key={String(opcion.valor)}
+                type="button"
+                onClick={() => alternarSoloMias(opcion.valor)}
+                aria-pressed={soloMias === opcion.valor}
+                className={cn(
+                  'press-feedback flex-1 rounded-[calc(var(--app-radius-sm)-4px)] px-3 py-1.5 text-[12px] font-bold transition',
+                  soloMias === opcion.valor
+                    ? 'bg-brand-500 text-white shadow-[0_6px_16px_-10px_var(--color-brand-600)]'
+                    : 'text-slate-600 dark:text-slate-300'
+                )}
+              >
+                {opcion.etiqueta}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Rejilla de filtros: el buscador necesita el ancho completo en móvil */}
         <div className="grid gap-2 sm:gap-3 md:grid-cols-4">
           <div className="md:col-span-2">
@@ -188,7 +236,85 @@ export const RecordsPage = () => {
         </div>
       </Card>
 
-      <Card className="p-0">
+      {/* Tarjetas: la vista de móvil. Siete columnas no caben en un teléfono y
+          arrastrar de lado hace perder de vista a qué bus pertenece cada dato. */}
+      <div className="space-y-2 lg:hidden">
+        {isLoading && (
+          <Card className="py-9 text-center text-[12.5px] text-slate-400">
+            Cargando registros...
+          </Card>
+        )}
+
+        {!isLoading && !revisiones?.length && (
+          <Card className="py-9 text-center text-[12.5px] text-slate-400">
+            {soloMias
+              ? 'Todavía no tienes revisiones con estos filtros.'
+              : 'No hay registros para los filtros aplicados.'}
+          </Card>
+        )}
+
+        {!isLoading &&
+          revisiones?.map((revision) => (
+            <Card key={revision.id} className="!p-0">
+              <div className="flex items-start justify-between gap-2 border-b border-white/50 px-3 py-2.5 dark:border-white/[0.06]">
+                <div className="min-w-0">
+                  <p className="truncate text-[14px] font-extrabold tracking-[-0.02em] text-slate-950 dark:text-white">
+                    {revision.bus_ppu}
+                  </p>
+                  <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                    N° {revision.bus_interno} · {revision.terminal_detectado}
+                  </p>
+                </div>
+                <Badge
+                  variant={revision.estado_bus === 'EN_PANNE' ? 'danger' : 'success'}
+                  className="shrink-0"
+                >
+                  {revision.estado_bus === 'EN_PANNE' ? 'En panne' : 'Operativo'}
+                </Badge>
+              </div>
+
+              <dl className="divide-y divide-white/40 dark:divide-white/[0.04]">
+                <FilaRegistro label="Inspector" valor={revision.inspector_nombre} />
+                <FilaRegistro
+                  label="Fecha"
+                  valor={dayjs(revision.created_at).format('DD MMM YYYY · HH:mm')}
+                />
+                {revision.observaciones && (
+                  <FilaRegistro label="Observación" valor={revision.observaciones} />
+                )}
+              </dl>
+
+              <div className="flex gap-2 border-t border-white/50 p-2 dark:border-white/[0.06]">
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  className="flex-1 gap-1.5"
+                  onClick={() => openEditor(revision.id)}
+                >
+                  <PenSquare className="h-3.5 w-3.5" />
+                  Ver / editar
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 gap-1.5 text-red-500 hover:bg-red-500/10"
+                  onClick={() => handleDelete(revision.id)}
+                  disabled={deletingId === revision.id}
+                >
+                  {deletingId === revision.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                  Eliminar
+                </Button>
+              </div>
+            </Card>
+          ))}
+      </div>
+
+      {/* Tabla: a partir de pantalla grande, donde sí caben las columnas */}
+      <Card className="hidden p-0 lg:block">
         <div className="max-h-[70vh] overflow-auto">
           <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
               <thead className="bg-slate-50/80 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/20">
@@ -842,3 +968,15 @@ const RevisionDetailSheet = ({ revisionId, onSaved }: RevisionDetailSheetProps) 
     </div>
   )
 }
+
+/** Fila etiqueta/valor de la tarjeta de registro en móvil. */
+const FilaRegistro = ({ label, valor }: { label: string; valor: string }) => (
+  <div className="flex items-start justify-between gap-3 px-3 py-2">
+    <dt className="shrink-0 pt-px text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
+      {label}
+    </dt>
+    <dd className="min-w-0 flex-1 text-right text-[12px] text-slate-700 dark:text-slate-200">
+      {valor}
+    </dd>
+  </div>
+)

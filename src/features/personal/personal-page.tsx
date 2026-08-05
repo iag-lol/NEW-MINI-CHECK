@@ -265,7 +265,78 @@ export const PersonalPage = () => {
             {feedback.message}
           </div>
         )}
-        <div className="mt-4 max-h-[360px] overflow-auto">
+        {/* Tarjetas en móvil: seis columnas con dos botones de acción no caben
+            en un teléfono sin arrastrar de lado */}
+        <div className="mt-3 space-y-2 lg:hidden">
+          {loadingUsuarios && (
+            <p className="py-6 text-center text-[12.5px] text-slate-400">
+              Cargando personal...
+            </p>
+          )}
+          {!loadingUsuarios && usuarios?.length === 0 && (
+            <p className="py-6 text-center text-[12.5px] text-slate-400">
+              Aún no hay usuarios registrados.
+            </p>
+          )}
+          {usuarios?.map((usuario) => (
+            <div
+              key={usuario.rut}
+              className="rounded-[var(--app-radius-sm)] border border-white/60 bg-white/40 p-2.5 dark:border-white/[0.06] dark:bg-white/[0.035]"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-extrabold text-slate-950 dark:text-white">
+                    {usuario.nombre}
+                  </p>
+                  <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                    {usuario.rut} · {usuario.terminal}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-slate-400">
+                    Alta {dayjs(usuario.created_at).format('DD MMM YYYY')}
+                  </p>
+                </div>
+                <Badge
+                  className="shrink-0"
+                  variant={
+                    usuario.cargo === 'SUPERVISOR'
+                      ? 'warning'
+                      : usuario.cargo === 'JEFE DE TERMINAL'
+                        ? 'success'
+                        : 'outline'
+                  }
+                >
+                  {usuario.cargo}
+                </Badge>
+              </div>
+              <div className="mt-2 flex gap-2">
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  className="flex-1 text-[11px]"
+                  onClick={() => resetPassword(usuario.rut)}
+                >
+                  Resetear clave
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 gap-1.5 text-[11px] text-red-500 hover:bg-red-500/10"
+                  disabled={deletingRut === usuario.rut || currentUser?.rut === usuario.rut}
+                  onClick={() => eliminarUsuario(usuario)}
+                >
+                  {deletingRut === usuario.rut ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                  Eliminar
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 hidden max-h-[360px] overflow-auto lg:block">
           <table className="min-w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
                 <tr>

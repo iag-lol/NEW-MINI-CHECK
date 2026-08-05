@@ -692,7 +692,8 @@ export function ProfilePage() {
               <Button
                 variant="outline"
                 className="w-full gap-2"
-                onClick={() => navigate('/app/registros')}
+                // `mias=1` abre Registros filtrado a esta persona, no al equipo
+                onClick={() => navigate('/app/registros?mias=1')}
               >
                 Ver todas mis revisiones
                 <ChevronRight className="h-4 w-4" />
