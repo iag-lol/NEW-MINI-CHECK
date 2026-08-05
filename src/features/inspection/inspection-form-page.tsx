@@ -14,6 +14,7 @@ import {
   Flame,
   Gauge,
   HardDrive,
+  KeyRound,
   Loader2,
   MapPin,
   Megaphone,
@@ -142,6 +143,9 @@ const inspectionSchema = z
       observacion: z.string().optional(),
     }),
     rack: z.object({
+      // Sin llave física no se puede abrir el rack: se omite la revisión
+      // y se conserva el último registro real del bus
+      sinLlave: z.boolean(),
       tieneDiscoDuro: z.boolean().nullable(),
       tieneSeguridadExtra: z.boolean().nullable(),
       tieneCandado: z.boolean().nullable(),
@@ -192,6 +196,40 @@ const PANNE_REQUIRED_STEPS: readonly StepKey[] = [
 ]
 
 const PANNE_SKIPPED_STEPS: readonly StepKey[] = ['camaras', 'odometro', 'wifi']
+
+// Marcadores de registros que NO representan una revisión real del rack
+const OBS_PANNE = 'Bus en panne - no revisado'
+const OBS_SIN_LLAVE = 'Sin llave'
+
+/**
+ * Último registro de rack que sí fue una revisión real del bus:
+ * descarta los guardados como "bus en panne" y los heredados por "sin llave",
+ * para no arrastrar una copia de una copia.
+ */
+const fetchUltimoRackReal = async (ppu: string): Promise<Tables<'rack'> | null> => {
+  const { data, error } = await supabase
+    .from('rack')
+    .select('*')
+    .eq('bus_ppu', ppu)
+    .order('created_at', { ascending: false })
+    .limit(30)
+
+  if (error || !data) return null
+
+  const esRevisionReal = (row: Tables<'rack'>) => {
+    const obs = (row.observacion ?? '').trim()
+    if (obs === OBS_PANNE) return false
+    if (obs.startsWith(OBS_SIN_LLAVE)) return false
+    // Un registro sin ninguna respuesta tampoco aporta nada
+    return (
+      row.tiene_disco_duro !== null ||
+      row.tiene_candado !== null ||
+      row.cerraduras_buen_estado !== null
+    )
+  }
+
+  return (data as Tables<'rack'>[]).find(esRevisionReal) ?? null
+}
 
 const publicityAreas = [
   { key: 'izquierda', label: 'Lateral Izquierdo' },
@@ -490,6 +528,7 @@ export const InspectionFormPage = () => {
       },
       odometro: { estado: 'OK', lectura: undefined, observacion: '' },
       rack: {
+        sinLlave: false,
         tieneDiscoDuro: null,
         tieneSeguridadExtra: null,
         tieneCandado: null,
@@ -541,6 +580,9 @@ export const InspectionFormPage = () => {
   } | null>(null)
   const [wifiWaitingTime, setWifiWaitingTime] = useState(0)
   const [isWifiWaiting, setIsWifiWaiting] = useState(false)
+  // Último registro real del rack, para mostrarlo y conservarlo si no hay llave
+  const [ultimoRack, setUltimoRack] = useState<Tables<'rack'> | null>(null)
+  const [cargandoUltimoRack, setCargandoUltimoRack] = useState(false)
   const {
     location: trackingLocation,
     error: trackingError,
@@ -798,6 +840,30 @@ export const InspectionFormPage = () => {
     }
   }, [searchParams, setSearchParams])
 
+  // Al marcar "sin llave" se busca el último registro real para mostrar
+  // exactamente qué información se va a conservar
+  useEffect(() => {
+    let vigente = true
+    if (!rackState.sinLlave || !bus?.ppu) {
+      setUltimoRack(null)
+      setCargandoUltimoRack(false)
+      return
+    }
+
+    setCargandoUltimoRack(true)
+    fetchUltimoRackReal(bus.ppu)
+      .then((registro) => {
+        if (vigente) setUltimoRack(registro)
+      })
+      .finally(() => {
+        if (vigente) setCargandoUltimoRack(false)
+      })
+
+    return () => {
+      vigente = false
+    }
+  }, [rackState.sinLlave, bus?.ppu])
+
   // Timer de espera WiFi de 3 minutos
   useEffect(() => {
     if (isWifiWaiting && wifiWaitingTime < 180) {
@@ -906,6 +972,8 @@ export const InspectionFormPage = () => {
       }
       case 'rack': {
         const rack = snapshot.rack
+        // Sin llave física no se puede abrir el rack: nada es obligatorio
+        if (rack.sinLlave) break
         requireBoolean(rack.cerradurasBuenEstado, 'Rack · Estado de cerraduras')
         requireBoolean(rack.tieneCandado, 'Rack · Candado instalado')
         requireBoolean(rack.tieneDiscoDuro, 'Rack · Presencia de disco duro')
@@ -1159,15 +1227,47 @@ export const InspectionFormPage = () => {
         terminal: values.terminalReportado,
       })
 
+      // RACK · sin llave física: no se revisó, se conserva el último
+      // registro real del bus (se vuelve a consultar aquí para no depender
+      // de lo que se cargó en pantalla).
+      const rackSinLlave = values.rack.sinLlave === true
+      const rackHeredado = rackSinLlave ? await fetchUltimoRackReal(bus.ppu) : null
+
+      const rackInsert = rackSinLlave
+        ? rackHeredado
+          ? {
+              tiene_disco_duro: rackHeredado.tiene_disco_duro,
+              tiene_seguridad_extra: rackHeredado.tiene_seguridad_extra,
+              tiene_candado: rackHeredado.tiene_candado,
+              cerraduras_buen_estado: rackHeredado.cerraduras_buen_estado,
+              cantidad_cerraduras_esperada: rackHeredado.cantidad_cerraduras_esperada,
+              observacion: `${OBS_SIN_LLAVE} · se conserva la revisión del ${dayjs(
+                rackHeredado.created_at
+              ).format('DD/MM/YYYY')}${
+                rackHeredado.observacion ? ` · ${rackHeredado.observacion}` : ''
+              }`,
+            }
+          : {
+              tiene_disco_duro: null,
+              tiene_seguridad_extra: null,
+              tiene_candado: null,
+              cerraduras_buen_estado: null,
+              cantidad_cerraduras_esperada: values.rack.cantidadCerradurasEsperada,
+              observacion: `${OBS_SIN_LLAVE} · sin registro previo para conservar`,
+            }
+        : {
+            tiene_disco_duro: values.rack.tieneDiscoDuro,
+            tiene_seguridad_extra:
+              values.rack.tieneDiscoDuro !== true ? null : values.rack.tieneSeguridadExtra,
+            tiene_candado: values.rack.tieneCandado,
+            cerraduras_buen_estado: values.rack.cerradurasBuenEstado,
+            cantidad_cerraduras_esperada: values.rack.cantidadCerradurasEsperada,
+            observacion: values.rack.observacion || null,
+          }
+
       await supabase.from('rack').insert({
         revision_id: revisionData.id,
-        tiene_disco_duro: values.rack.tieneDiscoDuro,
-        tiene_seguridad_extra:
-          values.rack.tieneDiscoDuro !== true ? null : values.rack.tieneSeguridadExtra,
-        tiene_candado: values.rack.tieneCandado,
-        cerraduras_buen_estado: values.rack.cerradurasBuenEstado,
-        cantidad_cerraduras_esperada: values.rack.cantidadCerradurasEsperada,
-        observacion: values.rack.observacion || null,
+        ...rackInsert,
         bus_ppu: bus.ppu,
         terminal: values.terminalReportado,
       })
@@ -1226,14 +1326,18 @@ export const InspectionFormPage = () => {
       if (extintorCritico) {
         tickets.push({ modulo: 'Extintores', descripcion: 'Hallazgos críticos en extintores' })
       }
-      if (values.rack.tieneDiscoDuro === false) {
-        tickets.push({ modulo: 'Rack', descripcion: 'Rack sin disco duro detectado' })
-      } else if (
-        values.rack.cerradurasBuenEstado === false ||
-        values.rack.tieneCandado === false ||
-        values.rack.tieneSeguridadExtra === false
-      ) {
-        tickets.push({ modulo: 'Rack', descripcion: 'Rack con seguridad comprometida' })
+      // Sin llave no hubo revisión real del rack: los datos son heredados,
+      // así que no se generan tickets nuevos (ya existen los de su origen)
+      if (!rackSinLlave) {
+        if (values.rack.tieneDiscoDuro === false) {
+          tickets.push({ modulo: 'Rack', descripcion: 'Rack sin disco duro detectado' })
+        } else if (
+          values.rack.cerradurasBuenEstado === false ||
+          values.rack.tieneCandado === false ||
+          values.rack.tieneSeguridadExtra === false
+        ) {
+          tickets.push({ modulo: 'Rack', descripcion: 'Rack con seguridad comprometida' })
+        }
       }
       if (publicidadDanio || publicidadResiduos) {
         tickets.push({ modulo: 'Publicidad', descripcion: 'Publicidad con daño o residuos' })
@@ -1274,7 +1378,13 @@ export const InspectionFormPage = () => {
         body: `Bus ${bus.ppu} · ${values.terminalReportado}`,
       })
 
+      // Si no hay llaves disponibles suele ser así todo el turno: se conserva
+      // la elección para no re-marcarla en cada bus
+      const conservarSinLlave = values.rack.sinLlave
       methods.reset()
+      if (conservarSinLlave) {
+        methods.setValue('rack.sinLlave', true)
+      }
       setBus(null)
       setBusQuery('')
       setStep(0)
@@ -1723,8 +1833,113 @@ export const InspectionFormPage = () => {
       description="Control de cerraduras y seguridad del disco duro"
       icon={HardDrive}
       accent="from-slate-500 to-slate-600"
-      badge={isEnPanne ? <ObligatorioBadge /> : undefined}
+      badge={
+        rackState.sinLlave ? (
+          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+            Sin llave · omitido
+          </span>
+        ) : isEnPanne ? (
+          <ObligatorioBadge />
+        ) : undefined
+      }
     >
+      {/* Disponibilidad de llave física */}
+      <div>
+        <Label>¿Tienes la llave del rack?</Label>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => methods.setValue('rack.sinLlave', false, { shouldDirty: true })}
+            className={`flex min-h-[46px] items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
+              !rackState.sinLlave
+                ? 'border-emerald-600 bg-emerald-600 text-white shadow-md shadow-emerald-600/25'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+            }`}
+          >
+            <KeyRound className="h-4 w-4" />
+            Con llave
+          </button>
+          <button
+            type="button"
+            onClick={() => methods.setValue('rack.sinLlave', true, { shouldDirty: true })}
+            className={`flex min-h-[46px] items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-semibold transition active:scale-[0.98] ${
+              rackState.sinLlave
+                ? 'border-amber-600 bg-amber-600 text-white shadow-md shadow-amber-600/25'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-amber-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+            }`}
+          >
+            <KeyRound className="h-4 w-4" />
+            Sin llave
+          </button>
+        </div>
+      </div>
+
+      {rackState.sinLlave ? (
+        /* SIN LLAVE: se omite la revisión y se conserva el último registro real */
+        <div className="space-y-3">
+          <AlertBanner tone="warning" title="Rack omitido · sin llave física">
+            No es obligatorio responder este módulo. Se guardará la última revisión real de este
+            bus, sin generar tickets nuevos.
+          </AlertBanner>
+
+          {!bus ? (
+            <p className="text-xs text-slate-500">Selecciona un bus para ver qué se conservará.</p>
+          ) : cargandoUltimoRack ? (
+            <div className="flex items-center gap-2 rounded-2xl border border-slate-200/70 p-4 text-sm text-slate-500 dark:border-slate-800">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Buscando la última revisión del rack…
+            </div>
+          ) : ultimoRack ? (
+            <div className="rounded-2xl border border-slate-200/70 p-4 dark:border-slate-800">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                  Se conservará esta revisión
+                </p>
+                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  {dayjs(ultimoRack.created_at).format('DD/MM/YYYY')}
+                </span>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {[
+                  ['Disco duro', ultimoRack.tiene_disco_duro],
+                  ['Seguridad extra', ultimoRack.tiene_seguridad_extra],
+                  ['Candado', ultimoRack.tiene_candado],
+                  ['Cerraduras en buen estado', ultimoRack.cerraduras_buen_estado],
+                ].map(([label, valor]) => (
+                  <div
+                    key={label as string}
+                    className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-2 text-xs dark:border-slate-800/70"
+                  >
+                    <span className="text-slate-500">{label as string}</span>
+                    <span
+                      className={`font-bold ${
+                        valor === true
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : valor === false
+                            ? 'text-red-600 dark:text-red-400'
+                            : 'text-slate-400'
+                      }`}
+                    >
+                      {valor === true ? 'Sí' : valor === false ? 'No' : 'Sin dato'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {ultimoRack.observacion && (
+                <p className="mt-2 text-[11px] text-slate-500">
+                  Observación original: “{ultimoRack.observacion}”
+                </p>
+              )}
+            </div>
+          ) : (
+            <AlertBanner tone="info">
+              Este bus no tiene una revisión previa del rack para conservar. Se registrará como
+              “sin llave · sin registro previo”.
+            </AlertBanner>
+          )}
+        </div>
+      ) : (
+        <>
       <div className="rounded-2xl border border-blue-200/70 bg-blue-50/60 p-4 text-sm text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-100">
         <p className="font-semibold">
           {bus?.marca?.toLowerCase().includes('volvo') ? 'Volvo' : 'Scania/Otros'}: se esperan{' '}
@@ -1786,6 +2001,8 @@ export const InspectionFormPage = () => {
           onChange={(event) => methods.setValue('rack.observacion', event.target.value, { shouldDirty: true })}
         />
       </div>
+        </>
+      )}
     </SectionCard>
   )
 
