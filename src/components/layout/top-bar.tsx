@@ -58,22 +58,22 @@ export const TopBar = () => {
   const total = inspeccionesEnCurso.length
 
   return (
-    <header className="sticky top-0 z-20 w-full px-3 pb-1 pt-2 sm:px-5 sm:pt-3 md:px-6 lg:px-8">
-      <div className="glass-panel-strong flex min-h-[4.6rem] items-center justify-between gap-2 rounded-[24px] px-3 py-2.5 sm:gap-4 sm:px-4">
-        <div className="flex min-w-0 shrink items-center gap-3">
-          <span className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-white/60 bg-white/55 text-brand-600 shadow-sm sm:flex dark:border-white/[0.08] dark:bg-white/[0.06] dark:text-brand-300">
-            <CurrentIcon className="h-[18px] w-[18px]" />
+    <header className="sticky top-0 z-20 w-full px-2 pb-1 pt-1.5 sm:px-5 sm:pt-3 md:px-6 lg:px-8">
+      <div className="glass-panel-strong flex items-center justify-between gap-1.5 rounded-[var(--app-radius-lg)] px-2.5 py-2 sm:min-h-[4.4rem] sm:gap-4 sm:px-4 sm:py-2.5">
+        <div className="flex min-w-0 shrink items-center gap-2 sm:gap-3">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] border border-white/60 bg-white/55 text-brand-600 dark:border-white/[0.08] dark:bg-white/[0.06] dark:text-brand-300 sm:h-10 sm:w-10 sm:rounded-[14px] sm:shadow-sm">
+            <CurrentIcon className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
           </span>
           <div className="min-w-0">
             <time className="hidden text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 sm:block">
               {dayjs().format('dddd D MMMM · HH:mm')} hrs
             </time>
-            <h2 className="truncate text-base font-extrabold tracking-[-0.035em] text-slate-950 dark:text-white sm:text-xl">
+            <h2 className="truncate text-[14px] font-extrabold leading-tight tracking-[-0.035em] text-slate-950 dark:text-white sm:text-xl">
               {currentItem.label}
             </h2>
             {user && (
-              <p className="truncate text-[11px] text-slate-500 sm:text-xs dark:text-slate-400">
-                Hola, {user.nombre.split(' ')[0]} · {user.cargo}
+              <p className="truncate text-[10px] leading-tight text-slate-500 dark:text-slate-400 sm:text-xs">
+                {user.nombre.split(' ')[0]} · {user.cargo}
                 <span className="hidden lg:inline"> · Terminal {user.terminal}</span>
               </p>
             )}
@@ -137,15 +137,15 @@ export const TopBar = () => {
               onClick={() => setListaAbierta((prev) => !prev)}
               aria-label={`${total} inspecciones en curso`}
               aria-expanded={listaAbierta}
-              className="flex items-center gap-1.5 rounded-xl border border-amber-200/70 bg-amber-50/65 px-2.5 py-1.5 backdrop-blur-xl dark:border-amber-500/20 dark:bg-amber-500/10"
+              className="press-feedback flex items-center gap-1 rounded-[11px] border border-amber-300/60 bg-amber-50/70 px-1.5 py-1 backdrop-blur-xl dark:border-amber-500/20 dark:bg-amber-500/10"
             >
-              <span className="marker-live-dot inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500" />
-              <ClipboardList className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-              <span className="text-[11px] font-bold text-amber-800 dark:text-amber-200">
+              <span className="marker-live-dot inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+              <ClipboardList className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span className="text-[10.5px] font-black tabular-nums text-amber-800 dark:text-amber-200">
                 {total}
               </span>
               <ChevronDown
-                className={`h-3 w-3 shrink-0 text-amber-500 transition-transform ${
+                className={`h-2.5 w-2.5 shrink-0 text-amber-500 transition-transform ${
                   listaAbierta ? 'rotate-180' : ''
                 }`}
               />

@@ -60,10 +60,10 @@ export function ReportsPage() {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="glass-panel flex flex-col gap-4 rounded-[26px] p-4 sm:p-6 md:flex-row md:items-center md:justify-between">
+      <div className="glass-panel flex flex-col gap-4 rounded-[var(--app-radius-lg)] p-3 sm:p-5 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">Inteligencia operacional</p>
-          <h1 className="text-2xl font-extrabold tracking-[-0.04em] text-slate-950 dark:text-white sm:text-3xl">Reportes Avanzados</h1>
+          <h1 className="text-[19px] font-extrabold tracking-[-0.04em] text-slate-950 dark:text-white sm:text-2xl">Reportes Avanzados</h1>
           <p className="text-sm text-muted-foreground">
             Análisis detallado de inspecciones, trabajadores y rendimiento
           </p>
@@ -72,7 +72,7 @@ export function ReportsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
         <StatsCard
           icon={FileText}
           title="Inspecciones Totales"

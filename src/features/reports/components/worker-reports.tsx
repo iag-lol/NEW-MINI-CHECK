@@ -181,7 +181,7 @@ function WorkerCard({ stats }: WorkerCardProps) {
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-4">
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4">
         <StatItem
           icon={TrendingUp}
           label="Inspecciones"

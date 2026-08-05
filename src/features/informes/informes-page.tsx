@@ -64,10 +64,10 @@ export const InformesPage = () => {
 
   return (
     <div className="space-y-4">
-      <div className="glass-panel flex flex-col gap-4 rounded-[26px] p-4 sm:p-6 md:flex-row md:items-center md:justify-between">
+      <div className="glass-panel flex flex-col gap-4 rounded-[var(--app-radius-lg)] p-3 sm:p-5 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">Resumen ejecutivo</p>
-          <h1 className="text-2xl font-extrabold tracking-[-0.04em] text-slate-950 dark:text-white sm:text-3xl">Informes Semanales</h1>
+          <h1 className="text-[19px] font-extrabold tracking-[-0.04em] text-slate-950 dark:text-white sm:text-2xl">Informes Semanales</h1>
           <p className="text-sm text-muted-foreground">
             Resumen de actividad de la semana seleccionada
           </p>

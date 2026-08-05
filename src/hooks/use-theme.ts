@@ -2,162 +2,108 @@ import { useEffect } from 'react'
 import { useAuthStore } from '@/store/auth-store'
 import { supabase } from '@/lib/supabase'
 import { useQuery } from '@tanstack/react-query'
+import { construirRampa, mixHex } from '@/lib/color'
 
+interface DefinicionTema {
+  nombre: string
+  /** Familia de color, para agrupar en el selector */
+  familia: 'Frío' | 'Cálido' | 'Neutro'
+  colors: {
+    primary: string
+    primaryDark: string
+    primaryLight: string
+    bg: string
+    bgDark: string
+    cardBg: string
+    textPrimary: string
+  }
+}
+
+/**
+ * Construye un tema completo desde un único color de acento.
+ *
+ * El fondo es casi neutro con una gota del acento (4 %): así la interfaz se
+ * lee como papel y el color sólo aparece donde importa —botones, estados,
+ * gráficos—. Los fondos muy saturados de antes competían con los datos.
+ */
+const definirTema = (
+  nombre: string,
+  familia: DefinicionTema['familia'],
+  acento: string
+): DefinicionTema => {
+  const rampa = construirRampa(acento)
+  return {
+    nombre,
+    familia,
+    colors: {
+      primary: rampa[500],
+      primaryDark: rampa[600],
+      primaryLight: rampa[300],
+      bg: mixHex('#F7F8FC', acento, 0.04),
+      bgDark: mixHex('#EDF0F7', acento, 0.06),
+      cardBg: '#FFFFFF',
+      textPrimary: mixHex('#0F172A', acento, 0.1),
+    },
+  }
+}
+
+/**
+ * Las claves se conservan tal cual: son los valores ya guardados en la
+ * columna `usuarios.tema_color`. Sólo cambian los colores y los nombres.
+ */
 export const TEMAS = {
-  original: {
-    nombre: '🔵 Original (Azul)',
-    colors: {
-      primary: '#3B5BFF',
-      primaryDark: '#2947E8',
-      primaryLight: '#6B7FFF',
-      bg: '#FFFFFF',
-      bgDark: '#F8FAFC',
-      cardBg: '#FFFFFF',
-      textPrimary: '#1E293B',
-    },
-  },
-  rosado: {
-    nombre: '💗 Rosado Vibrante',
-    colors: {
-      primary: '#FF1493',
-      primaryDark: '#C71585',
-      primaryLight: '#FF69B4',
-      bg: '#FFF5FA',
-      bgDark: '#FFE4F0',
-      cardBg: '#FFFFFF',
-      textPrimary: '#8B0A50',
-    },
-  },
-  fucsia: {
-    nombre: '💖 Fucsia Intenso',
-    colors: {
-      primary: '#E91E63',
-      primaryDark: '#C2185B',
-      primaryLight: '#F06292',
-      bg: '#FFF0F5',
-      bgDark: '#FCE4EC',
-      cardBg: '#FFFFFF',
-      textPrimary: '#880E4F',
-    },
-  },
-  azul: {
-    nombre: '⚡ Azul Eléctrico',
-    colors: {
-      primary: '#2563EB',
-      primaryDark: '#1E40AF',
-      primaryLight: '#60A5FA',
-      bg: '#EFF6FF',
-      bgDark: '#DBEAFE',
-      cardBg: '#FFFFFF',
-      textPrimary: '#1E3A8A',
-    },
-  },
-  negro: {
-    nombre: '🖤 Negro Profesional',
-    colors: {
-      primary: '#0F172A',
-      primaryDark: '#020617',
-      primaryLight: '#334155',
-      bg: '#F8FAFC',
-      bgDark: '#F1F5F9',
-      cardBg: '#FFFFFF',
-      textPrimary: '#0F172A',
-    },
-  },
-  'rojo-azul': {
-    nombre: '❤️ Rojo Intenso',
-    colors: {
-      primary: '#DC2626',
-      primaryDark: '#B91C1C',
-      primaryLight: '#EF4444',
-      bg: '#FEF2F2',
-      bgDark: '#FEE2E2',
-      cardBg: '#FFFFFF',
-      textPrimary: '#7F1D1D',
-    },
-  },
-  verde: {
-    nombre: '💚 Verde Esmeralda',
-    colors: {
-      primary: '#10B981',
-      primaryDark: '#059669',
-      primaryLight: '#34D399',
-      bg: '#F0FDF4',
-      bgDark: '#DCFCE7',
-      cardBg: '#FFFFFF',
-      textPrimary: '#064E3B',
-    },
-  },
-  morado: {
-    nombre: '💜 Morado Real',
-    colors: {
-      primary: '#7C3AED',
-      primaryDark: '#6D28D9',
-      primaryLight: '#A78BFA',
-      bg: '#F5F3FF',
-      bgDark: '#EDE9FE',
-      cardBg: '#FFFFFF',
-      textPrimary: '#4C1D95',
-    },
-  },
-  naranja: {
-    nombre: '🧡 Naranja Vibrante',
-    colors: {
-      primary: '#F97316',
-      primaryDark: '#EA580C',
-      primaryLight: '#FB923C',
-      bg: '#FFF7ED',
-      bgDark: '#FFEDD5',
-      cardBg: '#FFFFFF',
-      textPrimary: '#7C2D12',
-    },
-  },
+  original: definirTema('Índigo corporativo', 'Frío', '#4F46E5'),
+  azul: definirTema('Azul acero', 'Frío', '#2563EB'),
+  verde: definirTema('Verde esmeralda', 'Frío', '#059669'),
+  teal: definirTema('Turquesa profundo', 'Frío', '#0D9488'),
+  morado: definirTema('Violeta real', 'Frío', '#7C3AED'),
+  fucsia: definirTema('Fucsia sobrio', 'Cálido', '#C026D3'),
+  rosado: definirTema('Rosa ejecutivo', 'Cálido', '#DB2777'),
+  'rojo-azul': definirTema('Rojo señal', 'Cálido', '#DC2626'),
+  naranja: definirTema('Ámbar cobre', 'Cálido', '#EA580C'),
+  bronce: definirTema('Bronce', 'Cálido', '#B45309'),
+  negro: definirTema('Grafito', 'Neutro', '#334155'),
 } as const
 
 export type TemaId = keyof typeof TEMAS
 
-function aplicarTema(temaId: TemaId) {
+export function aplicarTema(temaId: TemaId) {
   const tema = TEMAS[temaId]
   if (!tema) return
 
   const root = document.documentElement
+  const rampa = construirRampa(tema.colors.primary)
 
-  // Aplicar colores primarios/acento con mayor saturación
-  root.style.setProperty('--color-brand-50', tema.colors.primaryLight + '20')
-  root.style.setProperty('--color-brand-100', tema.colors.primaryLight + '40')
-  root.style.setProperty('--color-brand-200', tema.colors.primaryLight + '60')
-  root.style.setProperty('--color-brand-300', tema.colors.primaryLight + '90')
-  root.style.setProperty('--color-brand-400', tema.colors.primary)
-  root.style.setProperty('--color-brand-500', tema.colors.primary)
-  root.style.setProperty('--color-brand-600', tema.colors.primaryDark)
-  root.style.setProperty('--color-brand-700', tema.colors.primaryDark)
-  root.style.setProperty('--color-brand-800', tema.colors.primaryDark + 'DD')
-  root.style.setProperty('--color-brand-900', tema.colors.textPrimary)
-  root.style.setProperty('--color-brand-950', tema.colors.textPrimary)
+  // Rampa sólida completa: nada de hexadecimales con alfa, que sobre las
+  // superficies translúcidas de la app producían colores impredecibles.
+  ;(Object.keys(rampa) as unknown as Array<keyof typeof rampa>).forEach((paso) => {
+    root.style.setProperty(`--color-brand-${paso}`, rampa[paso])
+  })
 
-  // Aplicar fondos y contenedores
   root.style.setProperty('--color-theme-bg', tema.colors.bg)
   root.style.setProperty('--color-theme-bg-dark', tema.colors.bgDark)
   root.style.setProperty('--color-theme-card', tema.colors.cardBg)
   root.style.setProperty('--color-theme-text', tema.colors.textPrimary)
+
+  // La barra de estado del móvil acompaña al tema cuando la app está instalada
+  document
+    .querySelector('meta[name="theme-color"][media*="light"]')
+    ?.setAttribute('content', tema.colors.bg)
 
   // NO pintar el body con estilo inline: eso pisaba el modo noche.
   // El fondo lo maneja index.css vía var(--color-theme-bg) y :root.dark body.
   document.body.style.removeProperty('background-color')
 
   // Limpiar cualquier override antiguo que forzaba fondos claros en modo oscuro
-  // (corrompía el modo noche completo)
   const oldStyle = document.getElementById('custom-theme-override')
   if (oldStyle) oldStyle.remove()
 
-  // Guardar en localStorage para persistencia
   localStorage.setItem('theme', temaId)
 }
 
 export function useTheme() {
   const { user } = useAuthStore()
 
-  // Query para obtener el tema del usuario
   const { data: temaUsuario } = useQuery({
     queryKey: ['user-theme', user?.rut],
     queryFn: async () => {
@@ -170,28 +116,25 @@ export function useTheme() {
         .single()
 
       if (error || !data) return 'original'
-      return data.tema_color as TemaId
+      // Un tema retirado en la base de datos no debe dejar la app sin color
+      const guardado = data.tema_color as TemaId
+      return guardado in TEMAS ? guardado : 'original'
     },
     enabled: !!user,
-    staleTime: 0, // Siempre considera los datos como stale para refrescar
-    gcTime: 1000 * 60 * 5, // Mantener en caché por 5 minutos
-    refetchOnMount: true, // Refrescar al montar el componente
-    refetchOnWindowFocus: false, // No refrescar al enfocar la ventana (evita flickering)
+    staleTime: 0,
+    gcTime: 1000 * 60 * 5,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   })
 
-  // Aplicar tema cuando cambia
   useEffect(() => {
     if (temaUsuario) {
       aplicarTema(temaUsuario)
-    } else {
-      // Si no hay tema, intentar cargar desde localStorage
-      const savedTheme = localStorage.getItem('theme') as TemaId
-      if (savedTheme && TEMAS[savedTheme]) {
-        aplicarTema(savedTheme)
-      } else {
-        aplicarTema('original')
-      }
+      return
     }
+
+    const savedTheme = localStorage.getItem('theme') as TemaId | null
+    aplicarTema(savedTheme && savedTheme in TEMAS ? savedTheme : 'original')
   }, [temaUsuario])
 
   return {

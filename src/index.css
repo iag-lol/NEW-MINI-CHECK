@@ -19,23 +19,35 @@
   --color-brand-950: #1E1B4B;
 
   /* Variables de tema para fondos y contenedores */
-  --color-theme-bg: #F0F4FF;
-  --color-theme-bg-dark: #E0E7FF;
+  --color-theme-bg: #F4F6FB;
+  --color-theme-bg-dark: #E8ECF7;
   --color-theme-card: #FFFFFF;
-  --color-theme-text: #312E81;
+  --color-theme-text: #1E293B;
 
-  /* Sistema de superficies translúcidas */
-  --glass-surface: rgba(255, 255, 255, 0.68);
-  --glass-surface-strong: rgba(255, 255, 255, 0.84);
-  --glass-surface-soft: rgba(255, 255, 255, 0.48);
-  --glass-border: rgba(255, 255, 255, 0.72);
-  --glass-border-muted: rgba(148, 163, 184, 0.22);
-  --glass-shadow: 0 24px 70px -28px rgba(30, 41, 59, 0.28),
-    0 8px 24px -16px rgba(30, 41, 59, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  --glass-shadow-soft: 0 14px 38px -24px rgba(30, 41, 59, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.58);
-  --app-radius: 24px;
+  /* Superficies translúcidas.
+     El fondo lleva menos color y más luz que antes: la interfaz debe leerse
+     como papel, no como un degradado. */
+  --glass-surface: rgba(255, 255, 255, 0.74);
+  --glass-surface-strong: rgba(255, 255, 255, 0.88);
+  --glass-surface-soft: rgba(255, 255, 255, 0.52);
+  --glass-border: rgba(255, 255, 255, 0.80);
+  --glass-border-muted: rgba(148, 163, 184, 0.20);
+
+  /* Sombras contenidas: el desenfoque enorme era lo que hacía "tosca"
+     la vista móvil, porque cada tarjeta pintaba un halo sobre la siguiente. */
+  --glass-shadow: 0 18px 44px -26px rgba(15, 23, 42, 0.22),
+    0 4px 14px -10px rgba(15, 23, 42, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  --glass-shadow-soft: 0 10px 26px -20px rgba(15, 23, 42, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+
+  /* Escala de radios: un único origen para toda la app */
+  --app-radius: 20px;
+  --app-radius-lg: 24px;
+  --app-radius-sm: 14px;
+
+  /* Intensidad del ambiente de fondo (se baja en móvil) */
+  --ambient-strength: 1;
 
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
     'Inter', 'Segoe UI', system-ui, sans-serif;
@@ -52,10 +64,10 @@ body {
   color: #172033;
   background-color: var(--color-theme-bg);
   background-image:
-    radial-gradient(circle at 8% -8%, color-mix(in srgb, var(--color-brand-400) 22%, transparent) 0, transparent 34rem),
-    radial-gradient(circle at 94% 4%, rgba(168, 85, 247, 0.12) 0, transparent 30rem),
-    radial-gradient(circle at 72% 94%, rgba(14, 165, 233, 0.1) 0, transparent 36rem),
-    linear-gradient(145deg, color-mix(in srgb, var(--color-theme-bg) 92%, white), var(--color-theme-bg));
+    radial-gradient(circle at 8% -10%, color-mix(in srgb, var(--color-brand-400) calc(15% * var(--ambient-strength)), transparent) 0, transparent 32rem),
+    radial-gradient(circle at 96% 2%, color-mix(in srgb, #a855f7 calc(8% * var(--ambient-strength)), transparent) 0, transparent 28rem),
+    radial-gradient(circle at 70% 96%, color-mix(in srgb, #0ea5e9 calc(7% * var(--ambient-strength)), transparent) 0, transparent 34rem),
+    linear-gradient(150deg, color-mix(in srgb, var(--color-theme-bg) 88%, white), var(--color-theme-bg));
   background-attachment: fixed;
   transition: background-color 0.35s ease, color 0.2s ease;
 }
@@ -63,23 +75,23 @@ body {
 /* En modo noche el fondo del body SIEMPRE es oscuro,
    por encima de cualquier tema de color personalizado */
 :root.dark body {
-  --glass-surface: rgba(10, 18, 34, 0.67);
-  --glass-surface-strong: rgba(10, 18, 34, 0.84);
-  --glass-surface-soft: rgba(15, 23, 42, 0.48);
-  --glass-border: rgba(148, 163, 184, 0.16);
-  --glass-border-muted: rgba(148, 163, 184, 0.14);
-  --glass-shadow: 0 28px 80px -30px rgba(0, 0, 0, 0.72),
-    0 10px 28px -18px rgba(0, 0, 0, 0.7),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  --glass-shadow-soft: 0 18px 42px -24px rgba(0, 0, 0, 0.75),
-    inset 0 1px 0 rgba(255, 255, 255, 0.055);
-  color: #e7edf8;
-  background-color: #050914 !important;
+  --glass-surface: rgba(13, 20, 36, 0.72);
+  --glass-surface-strong: rgba(13, 20, 36, 0.88);
+  --glass-surface-soft: rgba(18, 26, 44, 0.5);
+  --glass-border: rgba(148, 163, 184, 0.14);
+  --glass-border-muted: rgba(148, 163, 184, 0.12);
+  --glass-shadow: 0 20px 52px -28px rgba(0, 0, 0, 0.7),
+    0 6px 18px -14px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --glass-shadow-soft: 0 12px 30px -22px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  color: #e6ecf7;
+  background-color: #070b16 !important;
   background-image:
-    radial-gradient(circle at 8% -8%, color-mix(in srgb, var(--color-brand-500) 22%, transparent) 0, transparent 34rem),
-    radial-gradient(circle at 94% 6%, rgba(124, 58, 237, 0.14) 0, transparent 30rem),
-    radial-gradient(circle at 72% 94%, rgba(14, 165, 233, 0.08) 0, transparent 36rem),
-    linear-gradient(145deg, #060b17, #030611);
+    radial-gradient(circle at 8% -10%, color-mix(in srgb, var(--color-brand-500) calc(18% * var(--ambient-strength)), transparent) 0, transparent 32rem),
+    radial-gradient(circle at 96% 4%, color-mix(in srgb, #7c3aed calc(11% * var(--ambient-strength)), transparent) 0, transparent 28rem),
+    radial-gradient(circle at 70% 96%, color-mix(in srgb, #0ea5e9 calc(6% * var(--ambient-strength)), transparent) 0, transparent 34rem),
+    linear-gradient(150deg, #080d1a, #04070f);
 }
 
 #root {
@@ -135,7 +147,7 @@ th {
   z-index: -1;
   border-radius: 9999px;
   filter: blur(2px);
-  opacity: 0.72;
+  opacity: calc(0.55 * var(--ambient-strength));
 }
 
 .app-ambient--one {
@@ -143,7 +155,7 @@ th {
   top: 5rem;
   width: min(35rem, 56vw);
   height: min(35rem, 56vw);
-  background: radial-gradient(circle, color-mix(in srgb, var(--color-brand-300) 22%, transparent), transparent 68%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-brand-300) 18%, transparent), transparent 68%);
 }
 
 .app-ambient--two {
@@ -151,30 +163,30 @@ th {
   bottom: -6rem;
   width: min(42rem, 70vw);
   height: min(42rem, 70vw);
-  background: radial-gradient(circle, rgba(129, 140, 248, 0.14), transparent 68%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-brand-400) 11%, transparent), transparent 68%);
 }
 
 .glass-panel {
   border: 1px solid var(--glass-border);
   background: var(--glass-surface);
   box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: saturate(145%) blur(24px);
-  backdrop-filter: saturate(145%) blur(24px);
+  -webkit-backdrop-filter: saturate(140%) blur(20px);
+  backdrop-filter: saturate(140%) blur(20px);
 }
 
 .glass-panel-strong {
   border: 1px solid var(--glass-border);
   background: var(--glass-surface-strong);
   box-shadow: var(--glass-shadow-soft);
-  -webkit-backdrop-filter: saturate(150%) blur(28px);
-  backdrop-filter: saturate(150%) blur(28px);
+  -webkit-backdrop-filter: saturate(145%) blur(24px);
+  backdrop-filter: saturate(145%) blur(24px);
 }
 
 .glass-control {
   border-color: var(--glass-border-muted);
   background: var(--glass-surface-soft);
-  -webkit-backdrop-filter: saturate(140%) blur(16px);
-  backdrop-filter: saturate(140%) blur(16px);
+  -webkit-backdrop-filter: saturate(135%) blur(14px);
+  backdrop-filter: saturate(135%) blur(14px);
 }
 
 .login-control {
@@ -186,8 +198,8 @@ th {
 }
 
 [data-ui='card'] {
-  -webkit-backdrop-filter: saturate(135%) blur(14px);
-  backdrop-filter: saturate(135%) blur(14px);
+  -webkit-backdrop-filter: saturate(130%) blur(12px);
+  backdrop-filter: saturate(130%) blur(12px);
 }
 
 .text-muted-foreground {
@@ -208,7 +220,7 @@ th {
   .dark .glass-panel,
   .dark .glass-panel-strong,
   .dark .glass-control {
-    background: rgba(10, 18, 34, 0.96);
+    background: rgba(13, 20, 36, 0.96);
   }
 }
 
@@ -219,7 +231,7 @@ th {
 }
 
 .app-content > * {
-  animation: page-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: page-enter 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .app-content select:not([data-ui]) {
@@ -242,11 +254,11 @@ th {
 }
 
 .mobile-dock {
-  padding-bottom: max(0.45rem, env(safe-area-inset-bottom));
+  padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
 }
 
 .safe-bottom {
-  padding-bottom: max(7.5rem, calc(6.5rem + env(safe-area-inset-bottom)));
+  padding-bottom: max(6.25rem, calc(5.25rem + env(safe-area-inset-bottom)));
 }
 
 @media (min-width: 1024px) {
@@ -258,7 +270,7 @@ th {
 @keyframes page-enter {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -331,8 +343,8 @@ textarea,
    Selection Colors
    =================================== */
 ::selection {
-  background-color: rgba(59, 91, 255, 0.3);
-  color: white;
+  background-color: color-mix(in srgb, var(--color-brand-500) 32%, transparent);
+  color: inherit;
 }
 
 /* ===================================
@@ -343,7 +355,72 @@ textarea,
   outline-offset: 3px;
 }
 
+/* ===================================
+   Interacción táctil
+   Feedback físico en cada pulsación: la app se siente viva sin animaciones
+   caras. Se aplica a lo que ya declara ser pulsable.
+   =================================== */
+@media (hover: none) {
+  button:not(:disabled):active,
+  [role='button']:not([aria-disabled='true']):active,
+  a[href]:active {
+    transform: scale(0.977);
+  }
+
+  button,
+  [role='button'],
+  a[href] {
+    transition: transform 130ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+.press-feedback {
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.press-feedback:active {
+  transform: scale(0.97);
+}
+
+/* Deslizamiento horizontal con anclaje: chips, filtros y carruseles */
+.snap-row {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+.snap-row::-webkit-scrollbar {
+  display: none;
+}
+
+.snap-row > * {
+  scroll-snap-align: start;
+  flex: 0 0 auto;
+}
+
+/* ===================================
+   Vista móvil
+   Se reduce la raíz tipográfica: todas las utilidades de Tailwind (texto,
+   espaciado, alturas) están en rem, así que un único cambio compacta la
+   interfaz entera de forma proporcionada, sin romper ninguna proporción.
+   =================================== */
 @media (max-width: 767px) {
+  html {
+    font-size: 14.5px;
+  }
+
+  :root {
+    --app-radius: 16px;
+    --app-radius-lg: 20px;
+    --app-radius-sm: 12px;
+    /* Menos color de ambiente: en pantalla pequeña saturaba la vista */
+    --ambient-strength: 0.55;
+  }
+
   body {
     background-attachment: scroll;
   }
@@ -351,7 +428,8 @@ textarea,
   input,
   select,
   textarea {
-    /* Evita el zoom automático de Safari al enfocar formularios */
+    /* Evita el zoom automático de Safari al enfocar formularios.
+       En px porque la raíz ya está reducida. */
     font-size: 16px !important;
   }
 
@@ -359,15 +437,35 @@ textarea,
     max-width: 100%;
   }
 
+  /* Desenfoques y sombras más suaves: el coste de GPU y el "ruido" visual
+     de las capas translúcidas es lo que hacía pesada la vista móvil. */
   .glass-panel,
   .glass-panel-strong {
-    -webkit-backdrop-filter: saturate(135%) blur(18px);
-    backdrop-filter: saturate(135%) blur(18px);
+    -webkit-backdrop-filter: saturate(125%) blur(14px);
+    backdrop-filter: saturate(125%) blur(14px);
+  }
+
+  :root {
+    --glass-shadow: 0 12px 30px -22px rgba(15, 23, 42, 0.24),
+      inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    --glass-shadow-soft: 0 8px 20px -18px rgba(15, 23, 42, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.5);
   }
 
   [data-ui='card'] {
-    -webkit-backdrop-filter: saturate(125%) blur(9px);
-    backdrop-filter: saturate(125%) blur(9px);
+    -webkit-backdrop-filter: saturate(120%) blur(8px);
+    backdrop-filter: saturate(120%) blur(8px);
+  }
+
+  .app-ambient {
+    opacity: calc(0.35 * var(--ambient-strength));
+  }
+}
+
+/* Teléfonos compactos (iPhone SE / mini): un punto más de reducción */
+@media (max-width: 380px) {
+  html {
+    font-size: 13.8px;
   }
 }
 
@@ -383,7 +481,7 @@ textarea,
   .dark .glass-panel,
   .dark .glass-panel-strong,
   .dark .glass-control {
-    background: rgba(10, 18, 34, 0.97);
+    background: rgba(13, 20, 36, 0.97);
   }
 }
 

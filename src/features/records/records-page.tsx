@@ -137,8 +137,9 @@ export const RecordsPage = () => {
 
   return (
     <div className="space-y-6">
-      <Card className="p-6">
-        <div className="grid gap-4 md:grid-cols-4">
+      <Card>
+        {/* Rejilla de filtros: el buscador necesita el ancho completo en móvil */}
+        <div className="grid gap-2 sm:gap-3 md:grid-cols-4">
           <div className="md:col-span-2">
             <Input
               placeholder="Buscar por PPU o interno"
@@ -279,7 +280,7 @@ export const RecordsPage = () => {
           }
         }}
       >
-        <SheetContent className="w-full max-w-4xl">
+        <SheetContent className="sm:w-[calc(100%-1.5rem)] sm:max-w-4xl">
           {selectedRevisionId && (
             <RevisionDetailSheet
               revisionId={selectedRevisionId}
