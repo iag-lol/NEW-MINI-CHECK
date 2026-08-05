@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 
 export const NotFoundPage = () => (
-  <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
+  <div className="glass-panel flex min-h-[60vh] flex-col items-center justify-center rounded-[28px] p-6 text-center">
     <p className="text-sm font-semibold uppercase tracking-wider text-brand-500">404</p>
     <h2 className="mt-4 text-3xl font-black text-slate-900 dark:text-white">
       Ruta no disponible
@@ -12,7 +12,7 @@ export const NotFoundPage = () => (
       lateral para retomar tu trabajo.
     </p>
     <Button asChild className="mt-6">
-      <Link to="/app/dashboard">Volver al dashboard</Link>
+      <Link to="/app/formulario">Volver al inicio</Link>
     </Button>
   </div>
 )

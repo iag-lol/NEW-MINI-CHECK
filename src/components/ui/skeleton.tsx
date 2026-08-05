@@ -27,7 +27,7 @@ export const SkeletonCard = ({ className, ...props }: HTMLAttributes<HTMLDivElem
   return (
     <div
       className={cn(
-        'rounded-2xl border border-slate-200/60 bg-white/95 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950/80',
+        'glass-panel rounded-[22px] p-5 sm:p-6',
         className
       )}
       {...props}

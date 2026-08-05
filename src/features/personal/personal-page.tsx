@@ -18,6 +18,18 @@ import type { Role, Tables } from '@/types/database'
 const cargoOptions: Role[] = ['INSPECTOR', 'SUPERVISOR', 'JEFE DE TERMINAL']
 const terminalOptions: TerminalSlug[] = TERMINAL_GEOFENCES.map((terminal) => terminal.name)
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof error.message === 'string'
+  ) {
+    return error.message
+  }
+  return fallback
+}
+
 export const PersonalPage = () => {
   const [form, setForm] = useState<{
     nombre: string
@@ -131,11 +143,11 @@ export const PersonalPage = () => {
         password: '',
       })
       await Promise.all([refetchUsuarios(), refetchPersonal()])
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error creando usuario', error)
       setFeedback({
         type: 'error',
-        message: error?.message ?? 'No pudimos crear el acceso. Intenta nuevamente.',
+        message: getErrorMessage(error, 'No pudimos crear el acceso. Intenta nuevamente.'),
       })
     } finally {
       setSaving(false)
@@ -172,11 +184,11 @@ export const PersonalPage = () => {
         message: `Acceso de ${usuario.nombre} eliminado definitivamente de la base de datos.`,
       })
       await Promise.all([refetchUsuarios(), refetchPersonal()])
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error eliminando usuario', error)
       setFeedback({
         type: 'error',
-        message: error?.message ?? 'No se pudo eliminar el acceso. Intenta nuevamente.',
+        message: getErrorMessage(error, 'No se pudo eliminar el acceso. Intenta nuevamente.'),
       })
     } finally {
       setDeletingRut(null)

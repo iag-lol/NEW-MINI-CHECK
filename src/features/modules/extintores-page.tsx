@@ -4,6 +4,7 @@ import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
 import { BadgeCheck, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import type { PieLabelRenderProps } from 'recharts'
 
 type ExtintoresRow = Database['public']['Tables']['extintores']['Row']
 
@@ -202,7 +203,7 @@ export const ExtintoresModulePage = () => {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={(entry: any) => `${entry.name}: ${entry.value}`}
+                    label={(entry: PieLabelRenderProps) => `${entry.name}: ${entry.value}`}
                     outerRadius={90}
                     dataKey="value"
                   >

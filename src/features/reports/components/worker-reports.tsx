@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Users, TrendingUp, Clock, Award, MapPin } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabase'
@@ -24,11 +24,7 @@ export function WorkerReports({ startDate, endDate }: WorkerReportsProps) {
   const [workers, setWorkers] = useState<WorkerStats[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadWorkerStats()
-  }, [startDate, endDate])
-
-  const loadWorkerStats = async () => {
+  const loadWorkerStats = useCallback(async () => {
     try {
       // Obtener todos los inspectores
       const { data: usuariosData } = await supabase
@@ -80,7 +76,11 @@ export function WorkerReports({ startDate, endDate }: WorkerReportsProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [startDate, endDate])
+
+  useEffect(() => {
+    void loadWorkerStats()
+  }, [loadWorkerStats])
 
   if (loading) {
     return (

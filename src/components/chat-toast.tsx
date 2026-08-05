@@ -17,7 +17,7 @@ interface ChatToastContainerProps {
 
 export function ChatToastContainer({ toasts, onDismiss }: ChatToastContainerProps) {
   return (
-    <div className="pointer-events-none fixed right-4 top-20 z-50 flex max-w-sm flex-col gap-2">
+    <div aria-live="polite" className="pointer-events-none fixed left-3 right-3 top-24 z-50 flex flex-col gap-2 sm:left-auto sm:right-4 sm:w-[24rem]">
       <AnimatePresence>
         {toasts.map((toast) => (
           <ChatToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
@@ -59,7 +59,8 @@ function ChatToastItem({ toast, onDismiss }: ChatToastItemProps) {
       initial={{ opacity: 0, y: -20, scale: 0.9 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, x: 100, scale: 0.9 }}
-      className="pointer-events-auto relative overflow-hidden rounded-xl border border-brand-200 bg-white shadow-2xl dark:border-brand-800 dark:bg-slate-900"
+      role="status"
+      className="glass-panel-strong pointer-events-auto relative overflow-hidden rounded-2xl border-brand-200/60 dark:border-brand-500/20"
     >
       {/* Barra de progreso */}
       <div className="absolute bottom-0 left-0 h-1 bg-brand-500" style={{ width: `${progress}%` }} />
@@ -100,8 +101,10 @@ function ChatToastItem({ toast, onDismiss }: ChatToastItemProps) {
 
         {/* Botón cerrar */}
         <button
+          type="button"
           onClick={() => onDismiss(toast.id)}
           className="absolute right-2 top-2 rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+          aria-label="Cerrar notificación de chat"
         >
           <X className="h-4 w-4" />
         </button>

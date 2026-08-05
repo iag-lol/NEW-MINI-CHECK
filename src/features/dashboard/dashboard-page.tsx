@@ -370,7 +370,7 @@ export const DashboardPage = () => {
           ))}
         </div>
         <div className="grid gap-6 lg:grid-cols-3">
-          <Card className="col-span-2">
+          <Card className="lg:col-span-2">
             <Skeleton className="mb-2 h-6 w-1/3" />
             <Skeleton className="mb-4 h-4 w-1/2" />
             <SkeletonChart />
@@ -384,16 +384,18 @@ export const DashboardPage = () => {
   const operationalRate = stats.total > 0 ? (stats.operativo / stats.total) * 100 : 0
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 sm:space-y-8">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl border border-slate-200/60 bg-gradient-to-br from-brand-50 to-white p-6 dark:border-slate-800 dark:from-brand-950/20 dark:to-slate-950"
+        className="glass-panel relative overflow-hidden rounded-[26px] p-4 sm:p-6"
       >
+        <div aria-hidden="true" className="pointer-events-none absolute -right-12 -top-20 h-52 w-52 rounded-full bg-brand-400/15 blur-3xl" />
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">
+          <div className="relative min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">Centro de control</p>
+            <h1 className="text-2xl font-extrabold tracking-[-0.04em] text-slate-950 dark:text-white sm:text-3xl">
               Dashboard de Supervisión
             </h1>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
@@ -401,22 +403,24 @@ export const DashboardPage = () => {
             </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center lg:max-w-[48rem] lg:justify-end">
             {/* Buscador de PPU */}
-            <div className="relative">
-              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 transition focus-within:border-brand-400 focus-within:ring-2 focus-within:ring-brand-300/40 dark:border-slate-700 dark:bg-slate-900">
+            <div className="relative w-full sm:w-auto">
+              <div className="glass-control flex h-11 items-center gap-2 rounded-xl border px-3 transition focus-within:border-brand-400 focus-within:ring-4 focus-within:ring-brand-300/20">
                 <Search className="h-4 w-4 shrink-0 text-slate-400" />
                 <input
                   value={busSearch}
                   onChange={(event) => setBusSearch(event.target.value)}
                   placeholder="Buscar PPU o N° bus…"
-                  className="w-40 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100"
+                  aria-label="Buscar bus por PPU o número interno"
+                  className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400 sm:w-40 dark:text-slate-100"
                   spellCheck={false}
                 />
                 {busSearch && (
                   <button
                     type="button"
                     onClick={() => setBusSearch('')}
+                    aria-label="Limpiar búsqueda"
                     className="text-xs text-slate-400 hover:text-slate-600"
                   >
                     ✕
@@ -424,7 +428,7 @@ export const DashboardPage = () => {
                 )}
               </div>
               {busMatches.length > 0 && (
-                <div className="absolute left-0 top-full z-[1100] mt-2 w-72 overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-xl dark:border-slate-800 dark:bg-slate-950">
+                <div className="glass-panel-strong absolute left-0 top-full z-[1100] mt-2 w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-2xl">
                   {busMatches.map((bus) => (
                     <button
                       key={bus.ppu}
@@ -454,7 +458,7 @@ export const DashboardPage = () => {
                 </div>
               )}
               {busSearch.trim().length >= 2 && busMatches.length === 0 && (
-                <div className="absolute left-0 top-full z-[1100] mt-2 w-72 rounded-2xl border border-slate-200/70 bg-white px-4 py-3 text-xs text-slate-400 shadow-xl dark:border-slate-800 dark:bg-slate-950">
+                <div className="glass-panel-strong absolute left-0 top-full z-[1100] mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-2xl px-4 py-3 text-xs text-slate-400">
                   Sin coincidencias para "{busSearch.trim()}"
                 </div>
               )}
@@ -473,7 +477,7 @@ export const DashboardPage = () => {
             <WeekSelector />
 
             {/* Última actualización */}
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+            <div className="glass-control flex h-10 items-center gap-2 rounded-xl border px-3">
               <Clock className="h-4 w-4 text-slate-400" />
               <span className="text-xs text-slate-600 dark:text-slate-400">
                 {dayjs().format('HH:mm')}
@@ -516,7 +520,7 @@ export const DashboardPage = () => {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="col-span-2">
+        <Card className="lg:col-span-2">
           <CardTitle>Actividad diaria</CardTitle>
           <p className="text-sm text-slate-500">Conteo por día · lunes a domingo</p>
           <div className="mt-6 h-64">
@@ -569,7 +573,7 @@ export const DashboardPage = () => {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="col-span-2">
+        <Card className="lg:col-span-2">
           <CardTitle>Terminales</CardTitle>
           <p className="text-sm text-slate-500">Comparativo por terminal en la semana</p>
           <div className="mt-6 h-72">

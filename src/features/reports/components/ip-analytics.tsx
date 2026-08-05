@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Globe, MapPin, Wifi, TrendingUp } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabase'
@@ -22,11 +22,7 @@ export function IPAnalytics({ startDate, endDate }: IPAnalyticsProps) {
   const [ipStats, setIpStats] = useState<IPStats[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadIPStats()
-  }, [startDate, endDate])
-
-  const loadIPStats = async () => {
+  const loadIPStats = useCallback(async () => {
     try {
       const { data: revisionesData } = await supabase
         .from('revisiones')
@@ -89,7 +85,11 @@ export function IPAnalytics({ startDate, endDate }: IPAnalyticsProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [startDate, endDate])
+
+  useEffect(() => {
+    void loadIPStats()
+  }, [loadIPStats])
 
   if (loading) {
     return (

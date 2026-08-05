@@ -52,7 +52,7 @@ export const ConsolidadosDialog = ({
     [pastedText]
   )
 
-  const storedCount = useMemo(() => loadRevisionSemanal().length, [open, result])
+  const storedCount = loadRevisionSemanal().length
 
   // Bloquear el scroll de la página mientras el modal está abierto
   useEffect(() => {
@@ -101,7 +101,7 @@ export const ConsolidadosDialog = ({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.97 }}
             transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-            className="flex h-[100dvh] w-full flex-col overflow-hidden border border-slate-200/60 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:h-auto sm:max-h-[92vh] sm:max-w-2xl sm:rounded-3xl"
+            className="glass-panel-strong flex h-[100dvh] w-full flex-col overflow-hidden shadow-2xl sm:h-auto sm:max-h-[92vh] sm:max-w-2xl sm:rounded-[28px]"
             onClick={(event) => event.stopPropagation()}
           >
             {/* Encabezado */}
@@ -109,6 +109,7 @@ export const ConsolidadosDialog = ({
               <button
                 type="button"
                 onClick={onClose}
+                aria-label="Cerrar consolidados semanales"
                 className="absolute right-4 top-4 rounded-full p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white"
               >
                 <X className="h-5 w-5" />

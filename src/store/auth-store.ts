@@ -20,6 +20,7 @@ interface AuthState {
   lastVisitedPath: string
   login: (rut: string, password: string) => Promise<void>
   logout: () => Promise<void>
+  updateUser: (updates: Partial<AuthUser>) => void
   setLastVisitedPath: (path: string) => void
 }
 
@@ -77,6 +78,10 @@ export const useAuthStore = create<AuthState>()(
         await supabase.auth.signOut().catch(() => undefined)
         set({ user: null, lastVisitedPath: '/app/formulario' })
       },
+      updateUser: (updates) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, ...updates } : null,
+        })),
       setLastVisitedPath: (path: string) => set({ lastVisitedPath: path }),
     }),
     {

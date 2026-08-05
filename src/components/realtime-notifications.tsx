@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Bell, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth-store'
@@ -19,14 +19,10 @@ interface NotificationData {
 export function RealtimeNotifications() {
   const { user } = useAuthStore()
   const [notifications, setNotifications] = useState<NotificationData[]>([])
-  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
     // Solo supervisores y jefes de terminal reciben notificaciones
     if (!user || (user.cargo !== 'SUPERVISOR' && user.cargo !== 'JEFE DE TERMINAL')) return
-
-    // Crear elemento de audio para notificaciones
-    audioRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZTA0PVKno8a1aGAg+lt7yuHEiBSl+zPLaizsIGGS57OihUBELTqPl8LNfGg4=')
 
     // Suscribirse a cambios en la tabla revisiones
     const channel = supabase
@@ -53,11 +49,6 @@ export function RealtimeNotifications() {
 
           setNotifications((prev) => [notif, ...prev])
 
-          // Reproducir sonido
-          audioRef.current?.play().catch(() => {
-            // Silently fail si el navegador bloquea autoplay
-          })
-
           // Auto-remover después de 10 segundos
           setTimeout(() => {
             setNotifications((prev) => prev.filter((n) => n.id !== notif.id))
@@ -78,7 +69,7 @@ export function RealtimeNotifications() {
   if (!user || (user.cargo !== 'SUPERVISOR' && user.cargo !== 'JEFE DE TERMINAL')) return null
 
   return (
-    <div className="pointer-events-none fixed right-6 top-6 z-50 flex w-96 max-w-full flex-col gap-3">
+    <div aria-live="polite" className="pointer-events-none fixed left-3 right-3 top-24 z-50 flex flex-col gap-3 sm:left-auto sm:right-5 sm:w-96">
       <AnimatePresence>
         {notifications.map((notif) => (
           <motion.div
@@ -87,17 +78,20 @@ export function RealtimeNotifications() {
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 100, scale: 0.8 }}
             className="pointer-events-auto"
+            role="status"
           >
             <div
-              className={`relative rounded-2xl border p-4 shadow-2xl ${
+              className={`glass-panel-strong relative rounded-[20px] border p-4 shadow-2xl ${
                 notif.estadoBus === 'EN_PANNE'
-                  ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950'
-                  : 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950'
+                  ? 'border-red-300/70 bg-red-50/80 dark:border-red-500/25 dark:bg-red-950/75'
+                  : 'border-emerald-300/70 bg-emerald-50/80 dark:border-emerald-500/25 dark:bg-emerald-950/75'
               }`}
             >
               <button
+                type="button"
                 onClick={() => removeNotification(notif.id)}
                 className="absolute right-2 top-2 rounded-full p-1 hover:bg-white/50 dark:hover:bg-slate-800"
+                aria-label="Cerrar notificación"
               >
                 <X className="h-4 w-4" />
               </button>

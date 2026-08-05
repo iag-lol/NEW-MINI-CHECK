@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Calendar, User, MapPin, CheckCircle, XCircle } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { supabase } from '@/lib/supabase'
@@ -16,11 +16,7 @@ export function TimelineReport({ startDate, endDate }: TimelineReportProps) {
   const [revisiones, setRevisiones] = useState<Revision[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadTimeline()
-  }, [startDate, endDate])
-
-  const loadTimeline = async () => {
+  const loadTimeline = useCallback(async () => {
     setLoading(true)
     try {
       const { data } = await supabase
@@ -36,7 +32,11 @@ export function TimelineReport({ startDate, endDate }: TimelineReportProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [startDate, endDate])
+
+  useEffect(() => {
+    void loadTimeline()
+  }, [loadTimeline])
 
   if (loading) {
     return (

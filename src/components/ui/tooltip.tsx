@@ -16,7 +16,7 @@ export const TooltipContent = ({
     <TooltipPrimitive.Content
       sideOffset={8}
       className={cn(
-        'z-50 rounded-xl border border-slate-200/70 bg-white/95 px-3 py-1.5 text-sm font-medium text-slate-700 shadow-lg backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 dark:text-slate-100',
+        'glass-panel-strong z-50 rounded-xl px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-100',
         className
       )}
       side={side}

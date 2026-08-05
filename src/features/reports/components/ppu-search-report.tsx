@@ -186,18 +186,16 @@ interface RevisionCardProps {
 function RevisionCard({ revision, expanded, onToggle }: RevisionCardProps) {
   const [moduleData, setModuleData] = useState<Record<string, unknown> | null>(null)
 
-  const loadModuleData = async () => {
-    if (!moduleData && expanded) {
+  useEffect(() => {
+    if (!expanded || moduleData) return
+
+    const loadModuleData = async () => {
       const data = await getModuleData(revision.id)
       setModuleData(data)
     }
-  }
 
-  useEffect(() => {
-    if (expanded) {
-      loadModuleData()
-    }
-  }, [expanded])
+    void loadModuleData()
+  }, [expanded, moduleData, revision.id])
 
   return (
     <Card className="overflow-hidden">

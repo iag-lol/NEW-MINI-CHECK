@@ -17,10 +17,14 @@ interface NotificationState {
   notifications: SystemNotification[]
   unread: number
   permissionGranted: boolean
+  browserNotificationsEnabled: boolean
+  soundEnabled: boolean
   push: (notification: Omit<SystemNotification, 'createdAt' | 'read'>) => void
   markAsRead: (id: string) => void
   markAll: () => void
   requestPermission: () => Promise<boolean>
+  setBrowserNotificationsEnabled: (enabled: boolean) => void
+  setSoundEnabled: (enabled: boolean) => void
   clear: () => void
 }
 
@@ -83,18 +87,29 @@ export const useNotificationStore = create<NotificationState>()(
     (set, get) => ({
       notifications: [],
       unread: 0,
-      permissionGranted: false,
+      permissionGranted:
+        typeof Notification !== 'undefined' && Notification.permission === 'granted',
+      browserNotificationsEnabled: false,
+      soundEnabled: true,
 
       push: ({ id, title, body, type = 'info', metadata }) => {
-        const { permissionGranted } = get()
+        const {
+          permissionGranted,
+          browserNotificationsEnabled,
+          soundEnabled,
+          notifications,
+        } = get()
+
+        // Los canales realtime pueden informar el mismo evento más de una vez.
+        if (notifications.some((notification) => notification.id === id)) return
 
         // Show browser notification
-        if (permissionGranted) {
+        if (permissionGranted && browserNotificationsEnabled) {
           showBrowserNotification(title, body, type)
         }
 
         // Play sound
-        playNotificationTone()
+        if (soundEnabled) playNotificationTone()
 
         const payload: SystemNotification = {
           id,
@@ -136,9 +151,19 @@ export const useNotificationStore = create<NotificationState>()(
 
       requestPermission: async () => {
         const granted = await requestBrowserPermission()
-        set({ permissionGranted: granted })
+        set({
+          permissionGranted: granted,
+          browserNotificationsEnabled: granted,
+        })
         return granted
       },
+
+      setBrowserNotificationsEnabled: (enabled) =>
+        set((state) => ({
+          browserNotificationsEnabled: enabled && state.permissionGranted,
+        })),
+
+      setSoundEnabled: (enabled) => set({ soundEnabled: enabled }),
 
       clear: () =>
         set({
@@ -151,6 +176,8 @@ export const useNotificationStore = create<NotificationState>()(
       partialize: (state) => ({
         notifications: state.notifications,
         unread: state.unread,
+        browserNotificationsEnabled: state.browserNotificationsEnabled,
+        soundEnabled: state.soundEnabled,
       }),
     }
   )

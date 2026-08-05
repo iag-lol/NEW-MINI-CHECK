@@ -10,7 +10,7 @@ export const Avatar = forwardRef<
   <AvatarPrimitive.Root
     ref={ref}
     className={cn(
-      'relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full border border-slate-200/70 bg-slate-100 dark:border-slate-800 dark:bg-slate-900',
+      'relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/70 bg-white/55 shadow-sm dark:border-white/10 dark:bg-white/[0.06]',
       className
     )}
     {...props}

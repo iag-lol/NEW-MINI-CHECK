@@ -1,9 +1,9 @@
 import { Moon, SunMedium } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useTheme } from '@/providers/theme-provider'
+import { useColorMode } from '@/hooks/use-color-mode'
 
 export const ThemeToggle = () => {
-  const { theme, toggleTheme } = useTheme()
+  const { theme, toggleTheme } = useColorMode()
   return (
     <Button
       variant="ghost"

@@ -1,6 +1,6 @@
 import { useState, useMemo, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { RefreshCcw, Search, Filter } from 'lucide-react'
+import { RefreshCcw, Search, Filter, MoveHorizontal, type LucideIcon } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { supabase } from '@/lib/supabase'
 import type { Database } from '@/types/database'
@@ -26,7 +26,7 @@ export interface StatConfig {
   title: string
   value: string | number
   description?: string
-  icon?: any
+  icon?: LucideIcon
   trend?: { value: number; label: string }
   variant?: 'default' | 'success' | 'warning' | 'danger' | 'info'
 }
@@ -145,32 +145,33 @@ export const ModuleLayout = <T extends TableName>({
   }, [filteredData, getCharts, charts])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl border border-slate-200/60 bg-gradient-to-r from-brand-50/50 to-purple-50/30 p-8 dark:border-slate-800 dark:from-brand-950/30 dark:to-purple-950/20">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDk5LDEwMiwyNDEsMC4wNSkiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-30" />
-        <div className="relative flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className="glass-panel relative overflow-hidden rounded-[26px] p-4 sm:p-6">
+        <div className="pointer-events-none absolute -right-12 -top-20 h-52 w-52 rounded-full bg-brand-400/15 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-0 left-1/3 h-24 w-64 rounded-full bg-violet-400/10 blur-3xl" />
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             {Icon && (
-              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-purple-600 text-white shadow-lg shadow-brand-500/20">
-                <Icon className="h-7 w-7" />
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] border border-white/30 bg-gradient-to-br from-brand-500 to-violet-600 text-white shadow-[0_14px_30px_-14px_var(--color-brand-600)] sm:h-14 sm:w-14 sm:rounded-[18px]">
+                <Icon className="h-6 w-6 sm:h-7 sm:w-7" />
               </div>
             )}
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-brand-600 dark:text-brand-400">
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-bold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">
                 {table}
               </p>
-              <h1 className="text-3xl font-black text-slate-900 dark:text-white">{title}</h1>
-              <p className="text-sm text-slate-600 dark:text-slate-400">{description}</p>
+              <h1 className="truncate text-2xl font-extrabold tracking-[-0.04em] text-slate-950 dark:text-white sm:text-3xl">{title}</h1>
+              <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-slate-600 dark:text-slate-400 sm:text-sm">{description}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
             {!disableWeekFilter && <WeekSelector />}
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => refetch()}
-              className="gap-2"
+              className="w-full gap-2 sm:w-auto"
               disabled={isFetching}
             >
               <RefreshCcw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
@@ -182,13 +183,13 @@ export const ModuleLayout = <T extends TableName>({
 
       {/* Statistics */}
       {isFetching && !data ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat, index) => (
             <StatCard
               key={index}
@@ -207,7 +208,7 @@ export const ModuleLayout = <T extends TableName>({
       {(filters.length > 0 || searchFields.length > 0) && (
         <Card className="p-4">
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Filter className="h-4 w-4 text-slate-500" />
                 <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
@@ -220,6 +221,7 @@ export const ModuleLayout = <T extends TableName>({
                   size="sm"
                   onClick={() => setShowFilters(!showFilters)}
                   className="gap-2"
+                  aria-expanded={showFilters}
                 >
                   {showFilters ? 'Ocultar' : 'Mostrar'} filtros
                 </Button>
@@ -257,7 +259,7 @@ export const ModuleLayout = <T extends TableName>({
                       onChange={(e) =>
                         setFilterValues((prev) => ({ ...prev, [filter.key]: e.target.value }))
                       }
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-800 dark:bg-slate-900"
+                      className="glass-control h-11 w-full rounded-xl border px-3 text-sm text-slate-900 outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-300/20 dark:text-white"
                     >
                       <option value="">Todos</option>
                       {filter.options?.map((option) => (
@@ -302,22 +304,26 @@ export const ModuleLayout = <T extends TableName>({
       )}
 
       {/* Data Table */}
-      <Card className="p-0">
+      <Card className="overflow-hidden p-0">
+        <div className="flex items-center gap-2 border-b border-white/50 bg-white/25 px-4 py-2 text-[11px] font-medium text-slate-500 sm:hidden dark:border-white/5 dark:bg-white/[0.025]">
+          <MoveHorizontal className="h-3.5 w-3.5" />
+          Desliza para consultar todas las columnas
+        </div>
         <div className={cn(tableScrollClassName ?? 'max-h-[60vh]', 'overflow-auto')}>
           <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
-            <thead className="sticky top-0 z-10 bg-slate-50/95 text-left uppercase tracking-wide text-slate-500 backdrop-blur-sm dark:bg-slate-900/95">
+            <thead className="sticky top-0 z-10 bg-white/85 text-left uppercase tracking-wide text-slate-500 backdrop-blur-xl dark:bg-slate-900/85">
               <tr>
                 {columns.map((column) => (
                   <th
                     key={column.label}
-                    className={cn('px-6 py-4 font-semibold whitespace-nowrap', column.className)}
+                    className={cn('whitespace-nowrap px-4 py-3.5 text-[11px] font-bold tracking-[0.08em] sm:px-6 sm:py-4', column.className)}
                   >
                     {column.label}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100/70 bg-white dark:divide-slate-900/70 dark:bg-slate-950">
+            <tbody className="divide-y divide-slate-100/70 bg-white/25 dark:divide-slate-900/70 dark:bg-slate-950/20">
               {filteredData?.map((row) => {
                 const rowKey = 'id' in row && row.id ? (row.id as string) : JSON.stringify(row)
                 return (
@@ -326,7 +332,7 @@ export const ModuleLayout = <T extends TableName>({
                     className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-900/50"
                   >
                     {columns.map((column) => (
-                      <td key={column.label} className={cn('px-6 py-4', column.className)}>
+                      <td key={column.label} className={cn('px-4 py-3.5 sm:px-6 sm:py-4', column.className)}>
                         {column.render(row)}
                       </td>
                     ))}

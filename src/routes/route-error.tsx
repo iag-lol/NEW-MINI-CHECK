@@ -20,8 +20,8 @@ export const RouteErrorPage = () => {
       : 'Error inesperado'
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4 dark:bg-slate-950">
-      <div className="w-full max-w-lg rounded-3xl border border-slate-200/70 bg-white p-6 shadow-xl dark:border-slate-800 dark:bg-slate-900 sm:p-8">
+    <div className="flex min-h-[100dvh] items-center justify-center p-4">
+      <div className="glass-panel-strong w-full max-w-lg rounded-[28px] p-6 sm:p-8">
         <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-red-100 p-3 dark:bg-red-950/50">
             <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />

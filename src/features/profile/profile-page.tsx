@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { User, Camera, Lock, Palette, Save, Loader2, LogOut } from 'lucide-react'
+import bcrypt from 'bcryptjs'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth-store'
 import { Card } from '@/components/ui/card'
@@ -13,9 +14,13 @@ import { useTheme, TEMAS, type TemaId } from '@/hooks/use-theme'
 import type { Tables } from '@/types/database'
 
 type Usuario = Tables<'usuarios'>
+type Perfil = Pick<
+  Usuario,
+  'rut' | 'nombre' | 'cargo' | 'terminal' | 'foto_url' | 'foto_perfil' | 'tema_color'
+>
 
 export function ProfilePage() {
-  const { user, logout } = useAuthStore()
+  const { user, logout, updateUser } = useAuthStore()
   const { push } = useNotificationStore()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -35,12 +40,12 @@ export function ProfilePage() {
       if (!user) return null
       const { data, error } = await supabase
         .from('usuarios')
-        .select('*')
+        .select('rut, nombre, cargo, terminal, foto_url, foto_perfil, tema_color')
         .eq('rut', user.rut)
         .single()
 
       if (error) throw error
-      return data as Usuario
+      return data as Perfil
     },
     enabled: !!user,
   })
@@ -57,8 +62,12 @@ export function ProfilePage() {
 
       if (error) throw error
     },
-    onSuccess: () => {
+    onSuccess: (_, updates) => {
       queryClient.invalidateQueries({ queryKey: ['perfil', user?.rut] })
+      updateUser({
+        ...(updates.nombre ? { nombre: updates.nombre } : {}),
+        ...(updates.foto_url ? { foto_url: updates.foto_url } : {}),
+      })
       push({
         id: Date.now().toString(),
         title: 'Perfil actualizado',
@@ -76,14 +85,29 @@ export function ProfilePage() {
 
   // Mutation para cambiar contraseña
   const changePasswordMutation = useMutation({
-    mutationFn: async ({ newPassword }: { newPassword: string }) => {
+    mutationFn: async ({ currentPassword, newPassword }: { currentPassword: string; newPassword: string }) => {
       if (!user) throw new Error('Usuario no autenticado')
 
-      // Actualizar contraseña directamente
-      // Nota: En producción deberías validar la contraseña actual
+      const { data: credentials, error: credentialsError } = await supabase
+        .from('usuarios')
+        .select('password')
+        .eq('rut', user.rut)
+        .single()
+
+      if (credentialsError) throw credentialsError
+
+      const currentPasswordMatches = await bcrypt.compare(
+        currentPassword,
+        credentials.password
+      )
+      if (!currentPasswordMatches) {
+        throw new Error('La contraseña actual no es correcta')
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 10)
       const { error } = await supabase
         .from('usuarios')
-        .update({ password: newPassword })
+        .update({ password: passwordHash })
         .eq('rut', user.rut)
 
       if (error) throw error
@@ -102,7 +126,7 @@ export function ProfilePage() {
       push({
         id: Date.now().toString(),
         title: 'Error',
-        body: `No se pudo cambiar la contraseña: ${error}`,
+        body: error instanceof Error ? error.message : 'No se pudo cambiar la contraseña',
       })
     },
   })
@@ -140,11 +164,21 @@ export function ProfilePage() {
   }
 
   const handleLogout = () => {
-    logout()
+    void logout()
     navigate('/login')
   }
 
   const handleCambiarPassword = () => {
+    if (!passwordActual) {
+      push({
+        id: Date.now().toString(),
+        title: 'Contraseña actual requerida',
+        body: 'Ingresa tu contraseña actual para confirmar el cambio',
+        type: 'warning',
+      })
+      return
+    }
+
     if (passwordNueva !== passwordConfirm) {
       push({
         id: Date.now().toString(),
@@ -164,6 +198,7 @@ export function ProfilePage() {
     }
 
     changePasswordMutation.mutate({
+      currentPassword: passwordActual,
       newPassword: passwordNueva,
     })
   }
@@ -225,6 +260,7 @@ export function ProfilePage() {
       // Actualizar perfil con la nueva URL
       await updateProfileMutation.mutateAsync({
         foto_perfil: publicUrl,
+        foto_url: publicUrl,
       })
 
       console.log('✅ Perfil actualizado en BD con URL:', publicUrl)
@@ -255,28 +291,33 @@ export function ProfilePage() {
 
   if (!user || !perfil) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p>Cargando perfil...</p>
+      <div className="glass-panel flex min-h-72 items-center justify-center rounded-[26px]">
+        <div className="flex items-center gap-3 text-sm font-semibold text-slate-500">
+          <Loader2 className="h-5 w-5 animate-spin text-brand-500" />
+          Cargando perfil...
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 dark:bg-slate-950">
-      <div className="mx-auto max-w-4xl space-y-6">
+    <div>
+      <div className="mx-auto max-w-5xl space-y-4 sm:space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold">Mi Perfil</h1>
-          <p className="text-slate-600 dark:text-slate-400">
+        <div className="glass-panel relative overflow-hidden rounded-[26px] p-5 sm:p-6">
+          <div className="pointer-events-none absolute -right-12 -top-20 h-48 w-48 rounded-full bg-brand-400/15 blur-3xl" />
+          <p className="relative text-[10px] font-bold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">Cuenta personal</p>
+          <h1 className="relative text-2xl font-extrabold tracking-[-0.04em] text-slate-950 dark:text-white sm:text-3xl">Mi Perfil</h1>
+          <p className="relative mt-1 text-sm text-slate-600 dark:text-slate-400">
             Personaliza tu experiencia en New Mini-Check
           </p>
         </div>
 
         {/* Foto y datos básicos */}
-        <Card className="p-8">
-          <div className="flex items-center gap-6">
-            <div className="relative">
-              <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-brand-100 dark:bg-brand-900">
+        <Card className="p-5 sm:p-7">
+          <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:gap-6">
+            <div className="relative shrink-0">
+              <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-white/70 bg-brand-100 shadow-xl dark:border-white/10 dark:bg-brand-900">
                 {uploadingPhoto ? (
                   <Loader2 className="h-8 w-8 animate-spin text-brand-600" />
                 ) : perfil.foto_perfil ? (
@@ -309,14 +350,15 @@ export function ProfilePage() {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingPhoto}
-                className="absolute bottom-0 right-0 rounded-full bg-brand-500 p-2 text-white shadow-lg hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Cambiar foto de perfil"
+                className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-brand-500 text-white shadow-lg hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-900"
                 title="Cambiar foto de perfil"
               >
                 <Camera className="h-4 w-4" />
               </button>
             </div>
-            <div>
-              <h2 className="text-2xl font-bold">{perfil.nombre}</h2>
+            <div className="min-w-0">
+              <h2 className="break-words text-2xl font-extrabold tracking-[-0.03em] text-slate-950 dark:text-white">{perfil.nombre}</h2>
               <p className="text-slate-600 dark:text-slate-400">
                 {perfil.cargo} · {perfil.terminal}
               </p>
@@ -324,7 +366,7 @@ export function ProfilePage() {
             </div>
           </div>
 
-          <div className="mt-8 space-y-4">
+          <div className="mt-7 space-y-4 border-t border-white/60 pt-6 dark:border-white/[0.06]">
             <div>
               <Label htmlFor="nombre">Nombre</Label>
               <Input
@@ -338,7 +380,7 @@ export function ProfilePage() {
             <Button
               onClick={handleGuardarPerfil}
               disabled={updateProfileMutation.isPending}
-              className="gap-2"
+              className="w-full gap-2 sm:w-auto"
             >
               <Save className="h-4 w-4" />
               {updateProfileMutation.isPending ? 'Guardando...' : 'Guardar Nombre'}
@@ -347,7 +389,7 @@ export function ProfilePage() {
         </Card>
 
         {/* Cambiar contraseña */}
-        <Card className="p-8">
+        <Card className="p-5 sm:p-7">
           <div className="mb-6 flex items-center gap-3">
             <Lock className="h-6 w-6 text-brand-500" />
             <h3 className="text-xl font-bold">Cambiar Contraseña</h3>
@@ -359,6 +401,7 @@ export function ProfilePage() {
               <Input
                 id="password-actual"
                 type="password"
+                autoComplete="current-password"
                 value={passwordActual}
                 onChange={(e) => setPasswordActual(e.target.value)}
                 className="mt-2"
@@ -370,6 +413,7 @@ export function ProfilePage() {
               <Input
                 id="password-nueva"
                 type="password"
+                autoComplete="new-password"
                 value={passwordNueva}
                 onChange={(e) => setPasswordNueva(e.target.value)}
                 className="mt-2"
@@ -381,6 +425,7 @@ export function ProfilePage() {
               <Input
                 id="password-confirm"
                 type="password"
+                autoComplete="new-password"
                 value={passwordConfirm}
                 onChange={(e) => setPasswordConfirm(e.target.value)}
                 className="mt-2"
@@ -391,7 +436,7 @@ export function ProfilePage() {
               onClick={handleCambiarPassword}
               disabled={changePasswordMutation.isPending}
               variant="outline"
-              className="gap-2"
+              className="w-full gap-2 sm:w-auto"
             >
               <Lock className="h-4 w-4" />
               {changePasswordMutation.isPending ? 'Cambiando...' : 'Cambiar Contraseña'}
@@ -400,7 +445,7 @@ export function ProfilePage() {
         </Card>
 
         {/* Temas de color */}
-        <Card className="p-8">
+        <Card className="p-5 sm:p-7">
           <div className="mb-6 flex items-center gap-3">
             <Palette className="h-6 w-6 text-brand-500" />
             <h3 className="text-xl font-bold">Tema de Color</h3>
@@ -410,17 +455,19 @@ export function ProfilePage() {
             {Object.entries(TEMAS).map(([id, tema]) => (
               <button
                 key={id}
+                type="button"
                 onClick={() => handleCambiarTema(id as TemaId)}
-                className={`rounded-xl border-2 p-4 text-left transition ${
+                aria-pressed={temaActual === id}
+                className={`rounded-[20px] border p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
                   temaActual === id
-                    ? 'border-brand-500 shadow-lg'
-                    : 'border-slate-200 hover:border-brand-300 dark:border-slate-800 hover:shadow-md'
+                    ? 'border-brand-500 bg-brand-50/45 shadow-lg ring-2 ring-brand-500/10 dark:bg-brand-500/10'
+                    : 'border-white/70 bg-white/35 hover:border-brand-300 dark:border-white/[0.07] dark:bg-white/[0.025]'
                 }`}
               >
                 <div className="mb-3 space-y-2">
                   {/* Fondo del tema */}
                   <div
-                    className="h-12 w-full rounded-lg shadow-sm border border-slate-200"
+                    className="h-12 w-full rounded-xl border border-slate-200 shadow-sm"
                     style={{ backgroundColor: tema.colors.bg }}
                   />
                   {/* Colores de acento */}
@@ -435,7 +482,7 @@ export function ProfilePage() {
                     />
                   </div>
                 </div>
-                <p className="font-semibold">{tema.nombre}</p>
+                <p className="font-semibold text-slate-800 dark:text-slate-100">{tema.nombre}</p>
                 {temaActual === id && (
                   <p className="text-sm text-brand-600 font-medium">✓ Tema activo</p>
                 )}

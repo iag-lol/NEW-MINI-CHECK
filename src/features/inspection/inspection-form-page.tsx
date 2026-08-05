@@ -42,7 +42,7 @@ import { useAuthStore } from '@/store/auth-store'
 import { useAnunciarInspeccion } from '@/hooks/use-inspeccion-presence'
 import type { Tables, Database } from '@/types/database'
 import { useNotificationStore } from '@/store/notification-store'
-import { useTracking } from '@/context/tracking-context'
+import { useTracking } from '@/hooks/use-tracking'
 
 const publicidadAreaSchema = z
   .object({
@@ -86,6 +86,8 @@ const publicidadAreaSchema = z
     }
   })
 
+// El flujo usa validación contextual por paso; el esquema mantiene el contrato tipado completo.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const inspectionSchema = z
   .object({
     estadoBus: z.enum(['OPERATIVO', 'EN_PANNE']),

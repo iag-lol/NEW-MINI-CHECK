@@ -4,6 +4,7 @@ import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
 import { ShieldCheck, CheckCircle2, XCircle, Hash } from 'lucide-react'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import type { PieLabelRenderProps } from 'recharts'
 
 type TagsRow = Database['public']['Tables']['tags']['Row']
 
@@ -123,7 +124,7 @@ export const TagModulePage = () => {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={(entry: any) => `${entry.name}: ${entry.value}`}
+                    label={(entry: PieLabelRenderProps) => `${entry.name}: ${entry.value}`}
                     outerRadius={90}
                     dataKey="value"
                   >

@@ -1,15 +1,19 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { FileText } from 'lucide-react'
+import { FileText, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { WeekSelector } from '@/components/week-selector'
 import { useWeekFilter } from '@/hooks/use-week-filter'
 import type { Tables } from '@/types/database'
+import { exportExecutivePdf } from '@/lib/exporters'
+import { useNotificationStore } from '@/store/notification-store'
 
 export const InformesPage = () => {
   const { weekInfo } = useWeekFilter()
+  const { push } = useNotificationStore()
+  const [downloading, setDownloading] = useState(false)
 
   const { data } = useQuery({
     queryKey: ['informes', weekInfo.startISO, weekInfo.endISO],
@@ -35,12 +39,36 @@ export const InformesPage = () => {
     }
   }, [data, weekInfo])
 
+  const downloadReport = async () => {
+    setDownloading(true)
+    try {
+      await exportExecutivePdf(weekInfo.startISO, weekInfo.endISO)
+      push({
+        id: `weekly-report-${Date.now()}`,
+        title: 'Informe generado',
+        body: `El informe de ${weekInfo.label} se descargó correctamente.`,
+        type: 'success',
+      })
+    } catch (error) {
+      console.error('No pudimos generar el informe semanal', error)
+      push({
+        id: `weekly-report-error-${Date.now()}`,
+        title: 'No se pudo generar el informe',
+        body: 'Intenta nuevamente en unos momentos.',
+        type: 'error',
+      })
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Informes Semanales</h1>
-          <p className="text-muted-foreground">
+      <div className="glass-panel flex flex-col gap-4 rounded-[26px] p-4 sm:p-6 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">Resumen ejecutivo</p>
+          <h1 className="text-2xl font-extrabold tracking-[-0.04em] text-slate-950 dark:text-white sm:text-3xl">Informes Semanales</h1>
+          <p className="text-sm text-muted-foreground">
             Resumen de actividad de la semana seleccionada
           </p>
         </div>
@@ -58,9 +86,14 @@ export const InformesPage = () => {
               {report.panne} buses en panne · {report.operativo} operativos · {report.terminales} terminales
             </p>
           </div>
-          <Button variant="outline" className="gap-2 rounded-2xl">
-            <FileText className="h-4 w-4" />
-            Descargar informe
+          <Button
+            variant="outline"
+            className="w-full gap-2 rounded-2xl sm:w-auto"
+            onClick={() => void downloadReport()}
+            disabled={downloading}
+          >
+            {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+            {downloading ? 'Generando...' : 'Descargar informe'}
           </Button>
         </Card>
       ) : (

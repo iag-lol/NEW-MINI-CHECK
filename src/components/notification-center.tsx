@@ -1,12 +1,11 @@
 import { Bell, CheckCircle2, AlertCircle, Info, CheckCheck } from 'lucide-react'
-import { useMemo, useEffect } from 'react'
+import { useMemo } from 'react'
 import dayjs from '@/lib/dayjs'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { useNotificationStore } from '@/store/notification-store'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { useAuthStore } from '@/store/auth-store'
 
 const NotificationIcon = ({ type }: { type?: string }) => {
   switch (type) {
@@ -22,15 +21,7 @@ const NotificationIcon = ({ type }: { type?: string }) => {
 }
 
 export const NotificationCenter = () => {
-  const { notifications, unread, markAll, requestPermission, permissionGranted } = useNotificationStore()
-  const { user } = useAuthStore()
-
-  // Request notification permission for supervisors and jefes de terminal
-  useEffect(() => {
-    if ((user?.cargo === 'SUPERVISOR' || user?.cargo === 'JEFE DE TERMINAL') && !permissionGranted) {
-      requestPermission()
-    }
-  }, [user, permissionGranted, requestPermission])
+  const { notifications, unread, markAll } = useNotificationStore()
 
   const grouped = useMemo(() => {
     const groups: Record<string, typeof notifications> = {}
@@ -78,7 +69,7 @@ export const NotificationCenter = () => {
             Marcar todo leído
           </Button>
         </div>
-        <ScrollArea className="mt-6 h-[calc(100vh-200px)] pr-4">
+        <ScrollArea className="mt-6 h-[calc(100dvh-200px)] pr-4">
           {notifications.length === 0 && (
             <div className="rounded-2xl border border-dashed border-slate-200/70 p-6 text-center text-sm text-slate-500 dark:border-slate-800">
               Aún no hay notificaciones. Cuando se envíe una revisión, los supervisores

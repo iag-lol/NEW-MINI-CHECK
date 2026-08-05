@@ -37,8 +37,8 @@ export default {
         'theme-card': 'var(--color-theme-card)',
       },
       fontFamily: {
-        sans: ['"Inter Tight"', ...defaultTheme.fontFamily.sans],
-        mono: ['"JetBrains Mono"', ...defaultTheme.fontFamily.mono],
+        sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"SF Pro Text"', ...defaultTheme.fontFamily.sans],
+        mono: ['"SFMono-Regular"', '"SF Mono"', ...defaultTheme.fontFamily.mono],
       },
       boxShadow: {
         focus: '0 0 0 3px rgba(59, 91, 255, 0.35)',

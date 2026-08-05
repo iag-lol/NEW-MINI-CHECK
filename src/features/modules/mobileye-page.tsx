@@ -4,6 +4,7 @@ import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
 import { Radar, CheckCircle2, XCircle, AlertTriangle, Monitor } from 'lucide-react'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import type { PieLabelRenderProps } from 'recharts'
 
 type MobileyeRow = Database['public']['Tables']['mobileye']['Row']
 
@@ -145,7 +146,7 @@ export const MobileyeModulePage = () => {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={(entry: any) => `${entry.name}: ${entry.value}`}
+                    label={(entry: PieLabelRenderProps) => `${entry.name}: ${entry.value}`}
                     outerRadius={90}
                     dataKey="value"
                   >

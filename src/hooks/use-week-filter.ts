@@ -6,7 +6,11 @@ export function useWeekFilter() {
   const { selectedDate, goToPreviousWeek, goToNextWeek, goToCurrentWeek, getWeekInfo } =
     useWeekStore()
 
-  const weekInfo = useMemo((): WeekInfo => getWeekInfo(), [selectedDate])
+  const weekInfo = useMemo((): WeekInfo => {
+    // getWeekInfo consulta la fecha del store; esta referencia mantiene el caché sincronizado.
+    void selectedDate
+    return getWeekInfo()
+  }, [getWeekInfo, selectedDate])
 
   const canGoNext = useMemo(() => {
     const nextWeek = selectedDate.add(1, 'week')

@@ -119,7 +119,9 @@ export const TicketsPage = () => {
           case 'publicidad': {
             const record = pubMap.get(ticket.revision_id ?? '')
             if (record) {
-              const detalle = record.detalle_lados as Record<string, any> | null
+              type PublicidadDetalle = NonNullable<Tables<'publicidad'>['detalle_lados']>
+              type PublicidadLado = PublicidadDetalle[keyof PublicidadDetalle]
+              const detalle = record.detalle_lados as Record<string, PublicidadLado> | null
               const ladosConDanio =
                 detalle &&
                 Object.entries(detalle)
@@ -279,10 +281,11 @@ export const TicketsPage = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Tickets</h1>
-          <p className="text-muted-foreground">
+      <div className="glass-panel flex flex-col gap-4 rounded-[26px] p-4 sm:p-6 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">Gestión de incidencias</p>
+          <h1 className="text-2xl font-extrabold tracking-[-0.04em] text-slate-950 dark:text-white sm:text-3xl">Tickets</h1>
+          <p className="text-sm text-muted-foreground">
             Gestión de incidencias y problemas reportados
           </p>
         </div>
@@ -363,7 +366,8 @@ export const TicketsPage = () => {
           <select
             value={estadoFilter}
             onChange={(e) => setEstadoFilter(e.target.value as TicketEstado | 'TODOS')}
-            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-slate-800 dark:bg-slate-950"
+            aria-label="Filtrar por estado"
+            className="glass-control h-11 rounded-xl border px-3 text-sm text-slate-900 outline-none dark:text-white"
           >
             <option value="TODOS">Todos los estados</option>
             <option value="PENDIENTE">Pendiente</option>
@@ -373,7 +377,8 @@ export const TicketsPage = () => {
           <select
             value={prioridadFilter}
             onChange={(e) => setPrioridadFilter(e.target.value as TicketPrioridad | 'TODOS')}
-            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-slate-800 dark:bg-slate-950"
+            aria-label="Filtrar por prioridad"
+            className="glass-control h-11 rounded-xl border px-3 text-sm text-slate-900 outline-none dark:text-white"
           >
             <option value="TODOS">Todas las prioridades</option>
             <option value="ALTA">Alta</option>
@@ -383,7 +388,8 @@ export const TicketsPage = () => {
           <select
             value={moduloFilter}
             onChange={(e) => setModuloFilter(e.target.value)}
-            className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm dark:border-slate-800 dark:bg-slate-950"
+            aria-label="Filtrar por módulo"
+            className="glass-control h-11 rounded-xl border px-3 text-sm text-slate-900 outline-none dark:text-white"
           >
             <option value="TODOS">Todos los módulos</option>
             {modulos.map((modulo) => (

@@ -4,27 +4,27 @@ import { type ButtonHTMLAttributes, forwardRef } from 'react'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-60 active:scale-[0.98]',
+  'relative inline-flex items-center justify-center whitespace-nowrap rounded-xl text-sm font-semibold tracking-[-0.01em] transition-[transform,box-shadow,background-color,border-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/60 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.97]',
   {
     variants: {
       variant: {
         default:
-          'bg-brand-600 text-white shadow focus-visible:ring-offset-slate-900 hover:bg-brand-500',
+          'border border-white/20 bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-[0_10px_24px_-12px_var(--color-brand-600)] hover:-translate-y-0.5 hover:brightness-105 hover:shadow-[0_14px_30px_-12px_var(--color-brand-600)] dark:border-white/10',
         success:
-          'bg-emerald-600 text-white shadow focus-visible:ring-offset-slate-900 hover:bg-emerald-500',
+          'border border-white/20 bg-gradient-to-b from-emerald-500 to-emerald-600 text-white shadow-[0_10px_24px_-12px_rgba(5,150,105,.9)] hover:-translate-y-0.5 hover:brightness-105',
         outline:
-          'border border-slate-200/60 bg-transparent text-slate-900 hover:bg-slate-100 dark:border-slate-800 dark:text-slate-100 dark:hover:bg-slate-900',
+          'glass-control border text-slate-800 shadow-sm hover:-translate-y-0.5 hover:border-brand-300/60 hover:bg-white/80 dark:text-slate-100 dark:hover:border-brand-500/40 dark:hover:bg-slate-800/70',
         subtle:
-          'bg-slate-100 text-slate-900 hover:bg-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800',
+          'border border-white/40 bg-white/55 text-slate-800 shadow-sm backdrop-blur-xl hover:bg-white/85 dark:border-white/5 dark:bg-slate-800/60 dark:text-slate-100 dark:hover:bg-slate-800',
         ghost:
-          'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-200 dark:hover:bg-slate-900',
-        destructive: 'bg-red-600 text-white hover:bg-red-500',
+          'text-slate-600 hover:bg-white/60 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white',
+        destructive: 'border border-white/20 bg-gradient-to-b from-red-500 to-red-600 text-white shadow-[0_10px_24px_-12px_rgba(220,38,38,.9)] hover:-translate-y-0.5 hover:brightness-105',
       },
       size: {
-        default: 'h-11 px-5',
-        sm: 'h-9 px-4 text-xs',
-        lg: 'h-12 px-6 text-base',
-        icon: 'h-10 w-10 p-0',
+        default: 'h-11 min-h-11 px-5',
+        sm: 'h-9 min-h-9 px-4 text-xs',
+        lg: 'h-12 min-h-12 px-6 text-base',
+        icon: 'h-10 min-h-10 w-10 p-0',
       },
     },
     defaultVariants: {

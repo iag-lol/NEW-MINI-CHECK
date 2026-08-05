@@ -794,7 +794,9 @@ const RevisionDetailSheet = ({ revisionId, onSaved }: RevisionDetailSheetProps) 
 
       {details.publicidad && (() => {
         const publicity = details.publicidad
-        const detalleLados = publicity.detalle_lados as Record<string, any> | null
+        type PublicidadDetalle = NonNullable<Tables<'publicidad'>['detalle_lados']>
+        type PublicidadLado = PublicidadDetalle[keyof PublicidadDetalle]
+        const detalleLados = publicity.detalle_lados as Record<string, PublicidadLado> | null
         return (
           <div className="space-y-3 rounded-2xl border border-slate-100/80 p-4 text-sm dark:border-slate-800">
             <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Publicidad</h3>

@@ -4,6 +4,7 @@ import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
 import { Camera, Monitor, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import type { PieLabelRenderProps } from 'recharts'
 
 type CamarasRow = Database['public']['Tables']['camaras']['Row']
 
@@ -135,7 +136,7 @@ export const CamarasModulePage = () => {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={(entry: any) => `${entry.name}: ${entry.value}`}
+                    label={(entry: PieLabelRenderProps) => `${entry.name}: ${entry.value}`}
                     outerRadius={90}
                     dataKey="value"
                   >
@@ -178,7 +179,7 @@ export const CamarasModulePage = () => {
         {
           label: 'Detalle Cámaras',
           render: (row) => {
-            const detalle = row.detalle as Record<string, any> ?? {}
+            const detalle: Record<string, unknown> = row.detalle ?? {}
             return (
               <div className="space-y-1">
                 <div className="flex gap-2 text-xs">

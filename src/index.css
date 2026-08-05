@@ -1,11 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --sidebar-width: 280px;
+  --sidebar-width: 304px;
 
   /* Colores del tema (dinámicos) */
   --color-brand-50: #EEF2FF;
@@ -26,8 +24,21 @@
   --color-theme-card: #FFFFFF;
   --color-theme-text: #312E81;
 
-  font-family: 'Inter Tight', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    sans-serif;
+  /* Sistema de superficies translúcidas */
+  --glass-surface: rgba(255, 255, 255, 0.68);
+  --glass-surface-strong: rgba(255, 255, 255, 0.84);
+  --glass-surface-soft: rgba(255, 255, 255, 0.48);
+  --glass-border: rgba(255, 255, 255, 0.72);
+  --glass-border-muted: rgba(148, 163, 184, 0.22);
+  --glass-shadow: 0 24px 70px -28px rgba(30, 41, 59, 0.28),
+    0 8px 24px -16px rgba(30, 41, 59, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --glass-shadow-soft: 0 14px 38px -24px rgba(30, 41, 59, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.58);
+  --app-radius: 24px;
+
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+    'Inter', 'Segoe UI', system-ui, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -37,18 +48,43 @@
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
+  color: #172033;
   background-color: var(--color-theme-bg);
-  transition: background-color 0.3s ease;
+  background-image:
+    radial-gradient(circle at 8% -8%, color-mix(in srgb, var(--color-brand-400) 22%, transparent) 0, transparent 34rem),
+    radial-gradient(circle at 94% 4%, rgba(168, 85, 247, 0.12) 0, transparent 30rem),
+    radial-gradient(circle at 72% 94%, rgba(14, 165, 233, 0.1) 0, transparent 36rem),
+    linear-gradient(145deg, color-mix(in srgb, var(--color-theme-bg) 92%, white), var(--color-theme-bg));
+  background-attachment: fixed;
+  transition: background-color 0.35s ease, color 0.2s ease;
 }
 
 /* En modo noche el fondo del body SIEMPRE es oscuro,
    por encima de cualquier tema de color personalizado */
 :root.dark body {
-  background-color: #020617 !important;
+  --glass-surface: rgba(10, 18, 34, 0.67);
+  --glass-surface-strong: rgba(10, 18, 34, 0.84);
+  --glass-surface-soft: rgba(15, 23, 42, 0.48);
+  --glass-border: rgba(148, 163, 184, 0.16);
+  --glass-border-muted: rgba(148, 163, 184, 0.14);
+  --glass-shadow: 0 28px 80px -30px rgba(0, 0, 0, 0.72),
+    0 10px 28px -18px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --glass-shadow-soft: 0 18px 42px -24px rgba(0, 0, 0, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  color: #e7edf8;
+  background-color: #050914 !important;
+  background-image:
+    radial-gradient(circle at 8% -8%, color-mix(in srgb, var(--color-brand-500) 22%, transparent) 0, transparent 34rem),
+    radial-gradient(circle at 94% 6%, rgba(124, 58, 237, 0.14) 0, transparent 30rem),
+    radial-gradient(circle at 72% 94%, rgba(14, 165, 233, 0.08) 0, transparent 36rem),
+    linear-gradient(145deg, #060b17, #030611);
 }
 
 #root {
   min-height: 100vh;
+  isolation: isolate;
 }
 
 /* Red de seguridad: ningún contenido puede provocar scroll horizontal
@@ -56,6 +92,178 @@ body {
 html,
 body {
   overflow-x: clip;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+[role='button'] {
+  touch-action: manipulation;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+  letter-spacing: -0.025em;
+}
+
+p,
+td,
+th {
+  overflow-wrap: anywhere;
+}
+
+.app-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.app-ambient {
+  pointer-events: none;
+  position: fixed;
+  z-index: -1;
+  border-radius: 9999px;
+  filter: blur(2px);
+  opacity: 0.72;
+}
+
+.app-ambient--one {
+  left: 18%;
+  top: 5rem;
+  width: min(35rem, 56vw);
+  height: min(35rem, 56vw);
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-brand-300) 22%, transparent), transparent 68%);
+}
+
+.app-ambient--two {
+  right: -8rem;
+  bottom: -6rem;
+  width: min(42rem, 70vw);
+  height: min(42rem, 70vw);
+  background: radial-gradient(circle, rgba(129, 140, 248, 0.14), transparent 68%);
+}
+
+.glass-panel {
+  border: 1px solid var(--glass-border);
+  background: var(--glass-surface);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: saturate(145%) blur(24px);
+  backdrop-filter: saturate(145%) blur(24px);
+}
+
+.glass-panel-strong {
+  border: 1px solid var(--glass-border);
+  background: var(--glass-surface-strong);
+  box-shadow: var(--glass-shadow-soft);
+  -webkit-backdrop-filter: saturate(150%) blur(28px);
+  backdrop-filter: saturate(150%) blur(28px);
+}
+
+.glass-control {
+  border-color: var(--glass-border-muted);
+  background: var(--glass-surface-soft);
+  -webkit-backdrop-filter: saturate(140%) blur(16px);
+  backdrop-filter: saturate(140%) blur(16px);
+}
+
+.login-control {
+  border-color: rgba(255, 255, 255, 0.11);
+  color: white;
+  background: rgba(255, 255, 255, 0.07);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+[data-ui='card'] {
+  -webkit-backdrop-filter: saturate(135%) blur(14px);
+  backdrop-filter: saturate(135%) blur(14px);
+}
+
+.text-muted-foreground {
+  color: rgb(100 116 139);
+}
+
+.dark .text-muted-foreground {
+  color: rgb(148 163 184);
+}
+
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .glass-panel,
+  .glass-panel-strong,
+  .glass-control {
+    background: rgba(255, 255, 255, 0.94);
+  }
+
+  .dark .glass-panel,
+  .dark .glass-panel-strong,
+  .dark .glass-control {
+    background: rgba(10, 18, 34, 0.96);
+  }
+}
+
+.app-content {
+  width: 100%;
+  max-width: 1600px;
+  margin-inline: auto;
+}
+
+.app-content > * {
+  animation: page-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.app-content select:not([data-ui]) {
+  border-color: var(--glass-border-muted);
+  border-radius: 0.75rem;
+  color: #172033;
+  background-color: var(--glass-surface-soft);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: saturate(135%) blur(12px);
+  backdrop-filter: saturate(135%) blur(12px);
+}
+
+.dark .app-content select:not([data-ui]) {
+  color: #f8fafc;
+}
+
+.dark .app-content select:not([data-ui]) option {
+  color: #f8fafc;
+  background: #0f172a;
+}
+
+.mobile-dock {
+  padding-bottom: max(0.45rem, env(safe-area-inset-bottom));
+}
+
+.safe-bottom {
+  padding-bottom: max(7.5rem, calc(6.5rem + env(safe-area-inset-bottom)));
+}
+
+@media (min-width: 1024px) {
+  .safe-bottom {
+    padding-bottom: 2rem;
+  }
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .leaflet-container {
@@ -77,28 +285,16 @@ body {
 /* ===================================
    Smooth Transitions
    =================================== */
-* {
+button,
+a,
+input,
+select,
+textarea,
+[class*='border-'],
+[class*='bg-'] {
   transition-property: background-color, border-color, color, fill, stroke;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
-}
-
-/* ===================================
-   Temas Dinámicos - Override Cards
-   SOLO en modo claro: estas reglas con !important pisaban
-   los estilos dark: y corrompían el modo noche completo.
-   Se excluyen las utilidades con opacidad (bg-white/10, etc.)
-   =================================== */
-:root:not(.dark) [class*="bg-white"]:not([class*="bg-white/"]) {
-  background-color: var(--color-theme-card) !important;
-}
-
-:root:not(.dark) [class*="bg-slate-50"]:not([class*="bg-slate-50/"]) {
-  background-color: var(--color-theme-bg) !important;
-}
-
-:root:not(.dark) [class*="bg-slate-100"]:not([class*="bg-slate-100/"]) {
-  background-color: var(--color-theme-bg-dark) !important;
 }
 
 /* ===================================
@@ -143,8 +339,67 @@ body {
    Focus Visible (Accessibility)
    =================================== */
 :focus-visible {
-  outline: 2px solid rgb(59, 91, 255);
-  outline-offset: 2px;
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 3px;
+}
+
+@media (max-width: 767px) {
+  body {
+    background-attachment: scroll;
+  }
+
+  input,
+  select,
+  textarea {
+    /* Evita el zoom automático de Safari al enfocar formularios */
+    font-size: 16px !important;
+  }
+
+  .app-content {
+    max-width: 100%;
+  }
+
+  .glass-panel,
+  .glass-panel-strong {
+    -webkit-backdrop-filter: saturate(135%) blur(18px);
+    backdrop-filter: saturate(135%) blur(18px);
+  }
+
+  [data-ui='card'] {
+    -webkit-backdrop-filter: saturate(125%) blur(9px);
+    backdrop-filter: saturate(125%) blur(9px);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-panel,
+  .glass-panel-strong,
+  .glass-control {
+    background: rgba(255, 255, 255, 0.96);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .dark .glass-panel,
+  .dark .glass-panel-strong,
+  .dark .glass-control {
+    background: rgba(10, 18, 34, 0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ===================================
@@ -153,10 +408,19 @@ body {
 @media print {
   body {
     background-color: white;
+    background-image: none;
   }
 
   .no-print {
     display: none !important;
+  }
+
+  .glass-panel,
+  .glass-panel-strong {
+    background: white;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
 }
 

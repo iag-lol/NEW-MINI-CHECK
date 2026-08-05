@@ -4,6 +4,7 @@ import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
 import { Wifi, CheckCircle2, WifiOff } from 'lucide-react'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import type { PieLabelRenderProps } from 'recharts'
 
 type WifiRow = Database['public']['Tables']['wifi']['Row']
 
@@ -158,7 +159,7 @@ export const WifiModulePage = () => {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={(entry: any) => `${entry.name}: ${entry.value}`}
+                    label={(entry: PieLabelRenderProps) => `${entry.name}: ${entry.value}`}
                     outerRadius={90}
                     dataKey="value"
                   >
@@ -253,4 +254,3 @@ export const WifiModulePage = () => {
     />
   )
 }
-

@@ -87,8 +87,7 @@ export function useRealtimeLocation(options: UseRealtimeLocationOptions = {}) {
               errorMessage = error.message || 'Error de GPS'
           }
 
-          const enhancedError = new Error(errorMessage)
-          ;(enhancedError as any).code = error.code
+          const enhancedError = Object.assign(new Error(errorMessage), { code: error.code })
           reject(enhancedError)
         },
         {

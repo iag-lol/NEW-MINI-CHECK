@@ -19,31 +19,31 @@ interface StatCardProps {
 
 const variantStyles = {
   default: {
-    bg: 'bg-gradient-to-br from-slate-50 to-slate-100/50 dark:from-slate-900 dark:to-slate-800/50',
-    border: 'border-slate-200/60 dark:border-slate-700',
-    icon: 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300',
+    bg: 'bg-gradient-to-br from-white/62 to-slate-100/28 dark:from-white/[0.07] dark:to-slate-800/20',
+    border: 'border-white/65 dark:border-white/[0.07]',
+    icon: 'bg-white/75 dark:bg-white/10 text-slate-600 dark:text-slate-300',
     value: 'text-slate-900 dark:text-white',
   },
   success: {
-    bg: 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/30 dark:to-emerald-900/20',
+    bg: 'bg-gradient-to-br from-emerald-50/75 to-white/35 dark:from-emerald-500/10 dark:to-white/[0.025]',
     border: 'border-emerald-200/60 dark:border-emerald-800/40',
     icon: 'bg-emerald-200 dark:bg-emerald-800 text-emerald-700 dark:text-emerald-300',
     value: 'text-emerald-900 dark:text-emerald-100',
   },
   warning: {
-    bg: 'bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/30 dark:to-amber-900/20',
+    bg: 'bg-gradient-to-br from-amber-50/75 to-white/35 dark:from-amber-500/10 dark:to-white/[0.025]',
     border: 'border-amber-200/60 dark:border-amber-800/40',
     icon: 'bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-300',
     value: 'text-amber-900 dark:text-amber-100',
   },
   danger: {
-    bg: 'bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/30 dark:to-red-900/20',
+    bg: 'bg-gradient-to-br from-red-50/75 to-white/35 dark:from-red-500/10 dark:to-white/[0.025]',
     border: 'border-red-200/60 dark:border-red-800/40',
     icon: 'bg-red-200 dark:bg-red-800 text-red-700 dark:text-red-300',
     value: 'text-red-900 dark:text-red-100',
   },
   info: {
-    bg: 'bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20',
+    bg: 'bg-gradient-to-br from-blue-50/75 to-white/35 dark:from-blue-500/10 dark:to-white/[0.025]',
     border: 'border-blue-200/60 dark:border-blue-800/40',
     icon: 'bg-blue-200 dark:bg-blue-800 text-blue-700 dark:text-blue-300',
     value: 'text-blue-900 dark:text-blue-100',
@@ -74,13 +74,21 @@ export const StatCard = ({
       whileHover={onClick ? { scale: 1.02 } : undefined}
       whileTap={onClick ? { scale: 0.98 } : undefined}
       className={cn(
-        'group relative overflow-hidden rounded-2xl border p-6 shadow-sm transition-all',
+        'group relative overflow-hidden rounded-[22px] border p-4 shadow-[var(--glass-shadow-soft)] transition-all sm:p-5',
         styles.bg,
         styles.border,
-        onClick && 'cursor-pointer hover:shadow-md',
+        onClick && 'cursor-pointer hover:-translate-y-0.5 hover:shadow-lg',
         className
       )}
       onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onClick()
+        }
+      } : undefined}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
@@ -89,7 +97,7 @@ export const StatCard = ({
             initial={{ scale: 0.9 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-            className={cn('mt-2 text-3xl font-bold tabular-nums', styles.value)}
+            className={cn('mt-2 text-3xl font-extrabold tracking-[-0.04em] tabular-nums', styles.value)}
           >
             {value}
           </motion.p>
@@ -135,7 +143,7 @@ export const MiniStat = ({ label, value, icon, className }: MiniStatProps) => {
   return (
     <div
       className={cn(
-        'flex items-center gap-3 rounded-xl border border-slate-200/60 bg-white/60 p-3 dark:border-slate-800 dark:bg-slate-950/40',
+        'flex items-center gap-3 rounded-2xl border border-white/60 bg-white/40 p-3 shadow-sm dark:border-white/[0.06] dark:bg-white/[0.035]',
         className
       )}
     >

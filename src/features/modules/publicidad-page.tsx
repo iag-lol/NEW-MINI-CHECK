@@ -4,6 +4,7 @@ import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
 import { Megaphone, CheckCircle2, XCircle, AlertTriangle, Tag } from 'lucide-react'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import type { PieLabelRenderProps } from 'recharts'
 
 type PublicidadRow = Database['public']['Tables']['publicidad']['Row']
 const lateralAreas = [
@@ -97,7 +98,7 @@ export const PublicidadModulePage = () => {
           let con = 0
           let sin = 0
           rows.forEach((row) => {
-            const detalle = (row.detalle_lados as Record<LateralKey, any>) ?? {}
+            const detalle = row.detalle_lados as Record<LateralKey, { tiene: boolean }> | null
             const lateral = detalle?.[area.key]
             if (lateral?.tiene) con += 1
             else sin += 1
@@ -147,7 +148,7 @@ export const PublicidadModulePage = () => {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={(entry: any) => `${entry.name}: ${entry.value}`}
+                    label={(entry: PieLabelRenderProps) => `${entry.name}: ${entry.value}`}
                     outerRadius={90}
                     dataKey="value"
                   >
@@ -242,7 +243,7 @@ export const PublicidadModulePage = () => {
           label: 'Detalle Lados',
           className: 'min-w-[320px]',
           render: (row) => {
-            const detalle = row.detalle_lados as Record<string, any> ?? {}
+            const detalle = (row.detalle_lados as Record<string, unknown> | null) ?? {}
             return (
               <div className="grid gap-3 md:grid-cols-2">
                 {lateralAreas.map((area) => {

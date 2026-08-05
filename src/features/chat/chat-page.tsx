@@ -64,11 +64,6 @@ export function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
 
-  // Solicitar permiso de notificaciones al cargar
-  useEffect(() => {
-    notificationStore.requestPermission()
-  }, [])
-
   // Query para obtener mensajes
   const { data: mensajes = [], isLoading } = useQuery({
     queryKey: ['mensajes-chat'],
@@ -77,11 +72,12 @@ export function ChatPage() {
         .from('mensajes')
         .select('*')
         .eq('deleted', false)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
         .limit(500)
 
       if (error) throw error
-      return data as Mensaje[]
+      // Supabase limita primero los mensajes más recientes; la UI los muestra cronológicamente.
+      return (data as Mensaje[]).reverse()
     },
     refetchInterval: false,
   })
@@ -109,6 +105,32 @@ export function ChatPage() {
       u.rut.includes(query)
     )
   }, [mencionQuery, usuarios])
+
+  // Marcar mensajes como leídos
+  const { mutate: marcarComoLeido } = useMutation({
+    mutationFn: async (mensajeId: string) => {
+      if (!user) return
+
+      // Obtener el mensaje actual
+      const { data: mensaje } = await supabase
+        .from('mensajes')
+        .select('leido_por')
+        .eq('id', mensajeId)
+        .single()
+
+      if (!mensaje) return
+
+      // Agregar el usuario a leido_por si no está ya
+      if (!mensaje.leido_por.includes(user.rut)) {
+        const { error } = await supabase
+          .from('mensajes')
+          .update({ leido_por: [...mensaje.leido_por, user.rut] })
+          .eq('id', mensajeId)
+
+        if (error) throw error
+      }
+    },
+  })
 
   // Agregar toast
   const addToast = (toast: ChatToast) => {
@@ -166,7 +188,7 @@ export function ChatPage() {
 
             // Marcar como leído después de 2 segundos
             setTimeout(() => {
-              marcarComoLeidoMutation.mutate(nuevoMensaje.id)
+              marcarComoLeido(nuevoMensaje.id)
             }, 2000)
           }
         }
@@ -195,33 +217,7 @@ export function ChatPage() {
         channelRef.current = null
       }
     }
-  }, [user, queryClient, notificationStore])
-
-  // Marcar mensajes como leídos
-  const marcarComoLeidoMutation = useMutation({
-    mutationFn: async (mensajeId: string) => {
-      if (!user) return
-
-      // Obtener el mensaje actual
-      const { data: mensaje } = await supabase
-        .from('mensajes')
-        .select('leido_por')
-        .eq('id', mensajeId)
-        .single()
-
-      if (!mensaje) return
-
-      // Agregar el usuario a leido_por si no está ya
-      if (!mensaje.leido_por.includes(user.rut)) {
-        const { error } = await supabase
-          .from('mensajes')
-          .update({ leido_por: [...mensaje.leido_por, user.rut] })
-          .eq('id', mensajeId)
-
-        if (error) throw error
-      }
-    },
-  })
+  }, [user, queryClient, notificationStore, marcarComoLeido])
 
   // Mutation para enviar mensaje
   const enviarMensajeMutation = useMutation({
@@ -412,25 +408,32 @@ export function ChatPage() {
   const renderMensajeConMenciones = (texto: string, menciones: string[]) => {
     if (menciones.length === 0) return texto
 
-    let resultado = texto
-    menciones.forEach(rut => {
-      const usuario = usuarios.find(u => u.rut === rut)
-      if (usuario) {
-        // Escapar caracteres especiales en el nombre para regex
-        const nombreEscapado = usuario.nombre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        resultado = resultado.replace(
-          new RegExp(`@${nombreEscapado}`, 'g'),
-          `<span class="font-semibold text-brand-600 dark:text-brand-400">@${usuario.nombre}</span>`
-        )
-      }
-    })
+    const mentionNames = menciones
+      .map((rut) => usuarios.find((usuario) => usuario.rut === rut)?.nombre)
+      .filter((name): name is string => Boolean(name))
 
-    return <span dangerouslySetInnerHTML={{ __html: resultado }} />
+    if (mentionNames.length === 0) return texto
+
+    const escapedNames = mentionNames.map((name) =>
+      name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    )
+    const matcher = new RegExp(`(@(?:${escapedNames.join('|')}))`, 'g')
+    const names = new Set(mentionNames.map((name) => `@${name}`))
+
+    return texto.split(matcher).map((part, index) =>
+      names.has(part) ? (
+        <span key={`${part}-${index}`} className="font-semibold underline decoration-current/25 underline-offset-2">
+          {part}
+        </span>
+      ) : (
+        part
+      )
+    )
   }
 
   if (!user) {
     return (
-      <div className="flex h-[calc(100vh-12rem)] items-center justify-center">
+      <div className="flex h-[calc(100dvh-12rem)] items-center justify-center">
         <p className="text-slate-600 dark:text-slate-400">Debes iniciar sesión para usar el chat</p>
       </div>
     )
@@ -442,30 +445,31 @@ export function ChatPage() {
       <ChatToastContainer toasts={toasts} onDismiss={removeToast} />
 
       {/* Contenedor principal del chat - ajustado al layout */}
-      <div className="flex h-[calc(100vh-16rem)] flex-col rounded-2xl border border-slate-200 bg-white shadow-xl md:h-[calc(100vh-10rem)] dark:border-slate-800 dark:bg-slate-900">
+      <div className="glass-panel flex h-[calc(100dvh-12.75rem)] min-h-[32rem] flex-col overflow-hidden rounded-[26px] md:h-[calc(100dvh-8rem)]">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 bg-gradient-to-r from-brand-500 to-brand-600 px-6 py-4 dark:border-slate-800">
+        <div className="relative flex items-center justify-between overflow-hidden border-b border-white/15 bg-gradient-to-r from-brand-500 to-violet-600 px-4 py-3.5 sm:px-6 sm:py-4">
+          <div aria-hidden="true" className="absolute -right-8 -top-16 h-32 w-32 rounded-full bg-white/15 blur-3xl" />
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 backdrop-blur-sm">
-              <Users className="h-6 w-6 text-white" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/20 bg-white/15 backdrop-blur-sm sm:h-12 sm:w-12 sm:rounded-2xl">
+              <Users className="h-5 w-5 text-white sm:h-6 sm:w-6" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white">
+              <h1 className="text-lg font-extrabold tracking-[-0.03em] text-white sm:text-xl">
                 Chat General
               </h1>
-              <p className="text-sm text-white/80">
-                {usuarios.length} usuarios en línea
+              <p className="text-xs text-white/75 sm:text-sm">
+                {usuarios.length} miembros del equipo
               </p>
             </div>
           </div>
-          <div className="hidden items-center gap-2 md:flex">
+          <div className="relative hidden items-center gap-2 md:flex">
             <div className="flex h-2 w-2 animate-pulse rounded-full bg-green-400"></div>
             <span className="text-sm text-white/90">Conectado</span>
           </div>
         </div>
 
         {/* Mensajes - área con scroll */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 md:px-6">
+        <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-4 md:px-6">
           {isLoading ? (
             <div className="flex h-full items-center justify-center">
               <div className="text-center">
@@ -514,7 +518,7 @@ export function ChatPage() {
                           transition={{ duration: 0.2 }}
                           className={`mb-4 flex ${esMio ? 'justify-end' : 'justify-start'}`}
                         >
-                          <div className={`flex max-w-[75%] gap-3 ${esMio ? 'flex-row-reverse' : 'flex-row'}`}>
+                          <div className={`flex max-w-[88%] gap-2 sm:max-w-[78%] sm:gap-3 ${esMio ? 'flex-row-reverse' : 'flex-row'}`}>
                             {/* Avatar */}
                             {!esMio && (
                               <div className="flex-shrink-0">
@@ -553,7 +557,7 @@ export function ChatPage() {
                                       : 'bg-gradient-to-br from-brand-500 to-brand-600 text-white'
                                     : fuiMencionado
                                     ? 'bg-gradient-to-br from-amber-50 to-amber-100 text-amber-900 ring-2 ring-amber-200 dark:from-amber-900 dark:to-amber-800 dark:text-amber-100 dark:ring-amber-700'
-                                    : 'bg-white text-slate-900 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700'
+                                    : 'bg-white/68 text-slate-900 ring-1 ring-white/70 backdrop-blur-lg dark:bg-white/[0.08] dark:text-slate-100 dark:ring-white/10'
                                 }`}
                               >
                                 {/* Imagen si existe */}
@@ -600,7 +604,7 @@ export function ChatPage() {
         </div>
 
         {/* Input de mensaje */}
-        <div className="border-t border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50 md:p-6">
+        <div className="border-t border-white/60 bg-white/28 p-3 backdrop-blur-xl dark:border-white/[0.06] dark:bg-white/[0.025] sm:p-4 md:p-5">
           <div className="mx-auto max-w-5xl">
             {/* Preview de imagen */}
             <AnimatePresence>
@@ -617,11 +621,13 @@ export function ChatPage() {
                     className="max-h-40 rounded-xl shadow-lg"
                   />
                   <button
+                    type="button"
                     onClick={() => {
                       setImagenPreview(null)
                       setImagenFile(null)
                     }}
                     className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1.5 text-white shadow-lg hover:bg-red-600"
+                    aria-label="Quitar imagen adjunta"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -636,11 +642,12 @@ export function ChatPage() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  className="mb-3 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
+                  className="glass-panel-strong mb-3 max-h-60 overflow-y-auto rounded-2xl"
                 >
                   {usuariosFiltrados.slice(0, 5).map((usuario) => (
                     <button
                       key={usuario.rut}
+                      type="button"
                       onClick={() => seleccionarMencion(usuario)}
                       className="flex w-full items-center gap-3 px-4 py-3 transition-colors hover:bg-brand-50 dark:hover:bg-brand-900/20"
                     >
@@ -672,8 +679,10 @@ export function ChatPage() {
             <div className="flex items-end gap-2">
               {/* Botón de imagen */}
               <button
+                type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-white text-slate-600 shadow-md transition-all hover:bg-brand-50 hover:text-brand-600 hover:shadow-lg dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
+                aria-label="Adjuntar una imagen"
+                className="glass-control flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl border text-slate-600 shadow-sm transition-all hover:text-brand-600 hover:shadow-lg dark:text-slate-300"
                 title="Adjuntar imagen"
               >
                 <Paperclip className="h-5 w-5" />
@@ -699,17 +708,20 @@ export function ChatPage() {
                   onClick={(e) => setCursorPosition(e.currentTarget.selectionStart)}
                   placeholder="Escribe un mensaje... (usa @ para mencionar)"
                   rows={1}
-                  className="w-full resize-none rounded-xl border-2 border-slate-200 bg-white px-4 py-3 pr-12 text-sm shadow-md transition-all placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500"
+                  aria-label="Mensaje"
+                  className="glass-control w-full resize-none rounded-xl border px-4 py-3 text-sm shadow-sm outline-none placeholder:text-slate-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20 dark:text-slate-100 dark:placeholder:text-slate-500"
                   style={{ minHeight: '44px', maxHeight: '120px' }}
                 />
               </div>
 
               {/* Botón enviar */}
               <button
+                type="button"
                 onClick={() => enviarMensajeMutation.mutate()}
                 disabled={enviarMensajeMutation.isPending || (!mensaje.trim() && !imagenFile)}
                 className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 text-white shadow-lg transition-all hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-lg"
                 title="Enviar mensaje"
+                aria-label="Enviar mensaje"
               >
                 {enviarMensajeMutation.isPending ? (
                   <Loader2 className="h-5 w-5 animate-spin" />

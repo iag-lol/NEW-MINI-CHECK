@@ -3,8 +3,9 @@ import { cn } from '@/lib/utils'
 
 export const Card = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) => (
   <div
+    data-ui="card"
     className={cn(
-      'rounded-2xl border border-slate-200/60 bg-white/95 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-950/80',
+      'glass-panel relative rounded-[var(--app-radius)] p-4 text-slate-800 dark:text-slate-100 sm:p-6',
       className
     )}
     {...props}
@@ -16,7 +17,7 @@ export const CardTitle = ({
   ...props
 }: HTMLAttributes<HTMLHeadingElement>) => (
   <h3
-    className={cn('text-base font-semibold text-slate-900 dark:text-white', className)}
+    className={cn('text-base font-bold tracking-[-0.02em] text-slate-950 dark:text-white', className)}
     {...props}
   />
 )
@@ -26,7 +27,7 @@ export const CardDescription = ({
   ...props
 }: HTMLAttributes<HTMLParagraphElement>) => (
   <p
-    className={cn('text-sm text-slate-500 dark:text-slate-400', className)}
+    className={cn('text-sm leading-relaxed text-slate-500 dark:text-slate-400', className)}
     {...props}
   />
 )

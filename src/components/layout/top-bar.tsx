@@ -8,7 +8,7 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { NotificationCenter } from '@/components/notification-center'
 import { useLocation } from 'react-router-dom'
 import { TrackingStatus } from '@/components/layout/tracking-status'
-import { useTracking } from '@/context/tracking-context'
+import { useTracking } from '@/hooks/use-tracking'
 import { useInspeccionesEnCurso } from '@/hooks/use-inspeccion-presence'
 
 const tiempoTranscurrido = (startedAt: string) => {
@@ -31,6 +31,7 @@ export const TopBar = () => {
   const alertRef = useRef<HTMLDivElement | null>(null)
   const currentItem =
     SIDEBAR_ITEMS.find((item) => location.pathname.startsWith(item.path)) ?? SIDEBAR_ITEMS[0]
+  const CurrentIcon = currentItem.icon
 
   // Tick para refrescar el tiempo transcurrido de cada alerta
   const [, setTick] = useState(0)
@@ -57,21 +58,26 @@ export const TopBar = () => {
   const total = inspeccionesEnCurso.length
 
   return (
-    <header className="sticky top-0 z-20 w-full border-b border-transparent px-3 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-white/70 dark:supports-[backdrop-filter]:bg-slate-950/70 sm:px-4 sm:py-4">
-      <div className="flex items-center justify-between gap-2 sm:gap-4">
-        <div className="min-w-0 shrink">
-          <p className="hidden text-sm font-semibold uppercase tracking-wide text-slate-400 sm:block">
-            {dayjs().format('dddd D MMMM · HH:mm')} hrs
-          </p>
-          <h2 className="truncate text-lg font-black text-slate-900 dark:text-white sm:text-2xl">
-            {currentItem.label}
-          </h2>
-          {user && (
-            <p className="truncate text-xs text-slate-500 sm:text-sm">
-              Bienvenido, {user.nombre.split(' ')[0]} · {user.cargo}
-              <span className="hidden sm:inline"> · Terminal {user.terminal}</span>
-            </p>
-          )}
+    <header className="sticky top-0 z-20 w-full px-3 pb-1 pt-2 sm:px-5 sm:pt-3 md:px-6 lg:px-8">
+      <div className="glass-panel-strong flex min-h-[4.6rem] items-center justify-between gap-2 rounded-[24px] px-3 py-2.5 sm:gap-4 sm:px-4">
+        <div className="flex min-w-0 shrink items-center gap-3">
+          <span className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-white/60 bg-white/55 text-brand-600 shadow-sm sm:flex dark:border-white/[0.08] dark:bg-white/[0.06] dark:text-brand-300">
+            <CurrentIcon className="h-[18px] w-[18px]" />
+          </span>
+          <div className="min-w-0">
+            <time className="hidden text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 sm:block">
+              {dayjs().format('dddd D MMMM · HH:mm')} hrs
+            </time>
+            <h2 className="truncate text-base font-extrabold tracking-[-0.035em] text-slate-950 dark:text-white sm:text-xl">
+              {currentItem.label}
+            </h2>
+            {user && (
+              <p className="truncate text-[11px] text-slate-500 sm:text-xs dark:text-slate-400">
+                Hola, {user.nombre.split(' ')[0]} · {user.cargo}
+                <span className="hidden lg:inline"> · Terminal {user.terminal}</span>
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Alertas en vivo: una tarjeta por cada colaborador revisando.
@@ -91,7 +97,7 @@ export const TopBar = () => {
                     title={`${item.nombre} se encuentra revisando el bus ${item.ppu}${
                       item.interno ? ` (N° ${item.interno})` : ''
                     } en Terminal ${item.terminal} · hace ${tiempoTranscurrido(item.startedAt)}`}
-                    className="relative flex h-[3.15rem] w-[14rem] shrink-0 items-center gap-2 overflow-hidden rounded-xl border border-amber-200/90 bg-gradient-to-br from-amber-50 to-white px-2 shadow-sm dark:border-amber-700/50 dark:from-amber-950/50 dark:to-slate-950"
+                    className="relative flex h-[3.15rem] w-[14rem] shrink-0 items-center gap-2 overflow-hidden rounded-2xl border border-amber-200/70 bg-amber-50/65 px-2 shadow-sm backdrop-blur-xl dark:border-amber-500/20 dark:bg-amber-500/10"
                   >
                     <span className="live-halo relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-amber-500 shadow-sm">
                       <Bus className="h-4 w-4 text-white" />
@@ -129,7 +135,9 @@ export const TopBar = () => {
             <button
               type="button"
               onClick={() => setListaAbierta((prev) => !prev)}
-              className="flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-1.5 dark:border-amber-700/50 dark:bg-amber-950/40"
+              aria-label={`${total} inspecciones en curso`}
+              aria-expanded={listaAbierta}
+              className="flex items-center gap-1.5 rounded-xl border border-amber-200/70 bg-amber-50/65 px-2.5 py-1.5 backdrop-blur-xl dark:border-amber-500/20 dark:bg-amber-500/10"
             >
               <span className="marker-live-dot inline-block h-2 w-2 shrink-0 rounded-full bg-amber-500" />
               <ClipboardList className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
@@ -150,7 +158,7 @@ export const TopBar = () => {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -8, scale: 0.97 }}
                   transition={{ type: 'spring', damping: 24, stiffness: 320 }}
-                  className="absolute right-0 top-full z-50 mt-2 w-[17rem] overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+                  className="glass-panel-strong absolute right-0 top-full z-50 mt-2 w-[min(17rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl"
                 >
                   <div className="flex items-center gap-2 border-b border-slate-100 bg-amber-50/70 px-3 py-2 dark:border-slate-800 dark:bg-amber-950/30">
                     <span className="marker-live-dot inline-block h-2 w-2 rounded-full bg-amber-500" />
