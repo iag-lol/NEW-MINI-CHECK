@@ -12,6 +12,9 @@ const MARCA = [79, 70, 229] as const
 const SUAVE = [100, 116, 139] as const
 const LINEA = [214, 222, 234] as const
 const FONDO = [246, 248, 252] as const
+const VERDE = [22, 163, 74] as const
+const AMBAR = [217, 119, 6] as const
+const ROJO = [220, 38, 38] as const
 
 const SEVERIDAD_COLOR: Record<Severidad, readonly [number, number, number]> = {
   critica: [220, 38, 38],
@@ -27,14 +30,18 @@ const SEVERIDAD_ETIQUETA: Record<Severidad, string> = {
   info: 'INFO',
 }
 
+/** Verde / ámbar / rojo según el valor supere o no cada corte. */
+const semaforo = (valor: number, bien: number, regular: number) =>
+  valor >= bien ? VERDE : valor >= regular ? AMBAR : ROJO
+
 /**
  * Informe de rendimiento de un colaborador.
  *
- * Es un documento de varias páginas a propósito: a diferencia de la hoja de
- * pendientes —que se lleva en la mano por el terminal— este se lee sentado y
- * se archiva, así que prima el detalle sobre la brevedad. La paginación se
- * gestiona con un cursor vertical que reserva sitio antes de dibujar cada
- * bloque, de modo que ninguna sección queda partida por la mitad.
+ * Está pensado para decidir, no para archivar: abre con un veredicto y las
+ * acciones sugeridas, y sólo después baja al detalle que las respalda. Toda
+ * medida de ritmo se calcula dentro del turno —nunca de punta a punta del
+ * día—, porque el hueco entre el último bus de un turno y el primero del
+ * siguiente es descanso y mezclarlo falseaba las cifras.
  */
 export const generarInformeRendimiento = (analisis: AnalisisRendimiento) => {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
@@ -54,10 +61,14 @@ export const generarInformeRendimiento = (analisis: AnalisisRendimiento) => {
     doc.setLineWidth(0.3)
     doc.line(margen, yPie, ancho - margen, yPie)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
+    doc.setFontSize(6.6)
     doc.setTextColor(...SUAVE)
-    doc.text('Mini-Check · Chequeo de rendimiento', margen, yPie + 4)
-    const derecha = `${analisis.nombre} · página ${pagina}`
+    doc.text(
+      `Mini-Check · Chequeo de rendimiento · ${analisis.periodoEtiqueta}`,
+      margen,
+      yPie + 4
+    )
+    const derecha = `${analisis.nombre} · pág. ${pagina}`
     doc.text(derecha, ancho - margen - doc.getTextWidth(derecha), yPie + 4)
   }
 
@@ -72,27 +83,37 @@ export const generarInformeRendimiento = (analisis: AnalisisRendimiento) => {
     y = margen + 4
   }
 
-  /** Reserva `necesario` mm; si no caben, salta de página. */
   const reservar = (necesario: number) => {
     if (y + necesario > alto - 16) nuevaPagina()
   }
 
-  const titulo = (texto: string) => {
-    // Aire por encima: sin él el título se pega al bloque anterior y las
-    // secciones se leen como un único muro de datos.
-    if (pagina > 0 && y > margen + 6) y += 4
-    reservar(16)
+  const titulo = (texto: string, subtitulo?: string) => {
+    if (pagina > 0 && y > margen + 6) y += 5
+    // Se reserva sitio para el título Y para algo de contenido: si sólo se
+    // reservara el título, éste podría quedar solo al pie de la página con
+    // su sección entera en la siguiente.
+    reservar(subtitulo ? 42 : 38)
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(10.5)
     doc.setTextColor(...TINTA)
-    doc.text(texto.toLocaleUpperCase('es'), margen, y)
+    const mayus = texto.toLocaleUpperCase('es')
+    doc.text(mayus, margen, y)
     doc.setDrawColor(...MARCA)
     doc.setLineWidth(0.8)
-    doc.line(margen, y + 1.6, margen + doc.getTextWidth(texto.toLocaleUpperCase('es')), y + 1.6)
-    y += 7
+    doc.line(margen, y + 1.6, margen + doc.getTextWidth(mayus), y + 1.6)
+    y += 6
+    if (subtitulo) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7)
+      doc.setTextColor(...SUAVE)
+      doc.text(subtitulo, margen, y)
+      y += 4.5
+    } else {
+      y += 1
+    }
   }
 
-  const parrafo = (texto: string, tamano = 8.5) => {
+  const parrafo = (texto: string, tamano = 8) => {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(tamano)
     doc.setTextColor(...SUAVE)
@@ -102,14 +123,18 @@ export const generarInformeRendimiento = (analisis: AnalisisRendimiento) => {
     y += lineas.length * (tamano * 0.42) + 2.5
   }
 
-  /** Rejilla de cifras destacadas. */
   const tarjetas = (
-    datos: Array<{ etiqueta: string; valor: string; nota?: string }>,
+    datos: Array<{
+      etiqueta: string
+      valor: string
+      nota?: string
+      color?: readonly [number, number, number]
+    }>,
     columnas = 4
   ) => {
     const filas = Math.ceil(datos.length / columnas)
     const anchoCelda = util / columnas
-    const altoCelda = 17
+    const altoCelda = 18
     reservar(filas * altoCelda + 2)
 
     datos.forEach((dato, indice) => {
@@ -121,30 +146,36 @@ export const generarInformeRendimiento = (analisis: AnalisisRendimiento) => {
       doc.setFillColor(...FONDO)
       doc.roundedRect(x, yCelda, anchoCelda - 2, altoCelda - 2.5, 1.6, 1.6, 'F')
 
+      if (dato.color) {
+        doc.setFillColor(dato.color[0], dato.color[1], dato.color[2])
+        doc.roundedRect(x, yCelda, 1.4, altoCelda - 2.5, 0.7, 0.7, 'F')
+      }
+
       doc.setFont('helvetica', 'normal')
-      doc.setFontSize(6.4)
+      doc.setFontSize(6.2)
       doc.setTextColor(...SUAVE)
-      doc.text(dato.etiqueta.toLocaleUpperCase('es'), x + 3, yCelda + 4.6)
+      doc.text(dato.etiqueta.toLocaleUpperCase('es'), x + 3.5, yCelda + 4.6)
 
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(13)
-      doc.setTextColor(...TINTA)
-      doc.text(dato.valor, x + 3, yCelda + 11)
+      doc.setFontSize(12.5)
+      if (dato.color) doc.setTextColor(dato.color[0], dato.color[1], dato.color[2])
+      else doc.setTextColor(...TINTA)
+      doc.text(dato.valor, x + 3.5, yCelda + 11)
 
       if (dato.nota) {
         doc.setFont('helvetica', 'normal')
-        doc.setFontSize(6)
+        doc.setFontSize(5.9)
         doc.setTextColor(...SUAVE)
-        doc.text(dato.nota, x + 3, yCelda + 14.2)
+        const nota = doc.splitTextToSize(dato.nota, anchoCelda - 7) as string[]
+        doc.text(nota.slice(0, 1), x + 3.5, yCelda + 14.4)
       }
     })
 
     y += filas * altoCelda + 2
   }
 
-  /** Barras horizontales con etiqueta y valor. */
   const barras = (
-    datos: Array<{ etiqueta: string; valor: number; resaltado?: boolean }>,
+    datos: Array<{ etiqueta: string; valor: number; resaltado?: boolean; alerta?: boolean }>,
     sufijo = ''
   ) => {
     const maximo = Math.max(1, ...datos.map((dato) => dato.valor))
@@ -168,7 +199,8 @@ export const generarInformeRendimiento = (analisis: AnalisisRendimiento) => {
 
       const largo = (dato.valor / maximo) * anchoBarra
       if (largo > 0) {
-        if (dato.resaltado) doc.setFillColor(...MARCA)
+        if (dato.alerta) doc.setFillColor(...ROJO)
+        else if (dato.resaltado) doc.setFillColor(...MARCA)
         else doc.setFillColor(148, 163, 184)
         doc.roundedRect(
           margen + anchoEtiqueta,
@@ -179,6 +211,10 @@ export const generarInformeRendimiento = (analisis: AnalisisRendimiento) => {
           1.6,
           'F'
         )
+      } else if (dato.alerta) {
+        // Sin barra que pintar: se marca el cero con un punto rojo
+        doc.setFillColor(...ROJO)
+        doc.circle(margen + anchoEtiqueta + 1.6, yFila + 2.4, 1.1, 'F')
       }
 
       doc.setFont('helvetica', 'bold')
@@ -191,29 +227,28 @@ export const generarInformeRendimiento = (analisis: AnalisisRendimiento) => {
     y += datos.length * altoFila + 3
   }
 
-  /** Tabla genérica con cabecera y filas alternas. */
   const tabla = (
     cabeceras: string[],
-    filas: string[][],
+    filas: Array<{ celdas: string[]; destacar?: boolean }>,
     anchos: number[],
     alineacionDerecha: number[] = []
   ) => {
-    const altoFila = 5.6
+    const altoFila = 5.4
 
     const dibujarCabecera = () => {
-      reservar(altoFila * 2)
+      reservar(altoFila * 3)
       doc.setFillColor(...TINTA)
       doc.rect(margen, y, util, altoFila, 'F')
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(6.6)
+      doc.setFontSize(6.4)
       doc.setTextColor(255, 255, 255)
       let x = margen
       cabeceras.forEach((cabecera, indice) => {
         const texto = cabecera.toLocaleUpperCase('es')
         if (alineacionDerecha.includes(indice)) {
-          doc.text(texto, x + anchos[indice] - 2 - doc.getTextWidth(texto), y + 3.8)
+          doc.text(texto, x + anchos[indice] - 2 - doc.getTextWidth(texto), y + 3.7)
         } else {
-          doc.text(texto, x + 2, y + 3.8)
+          doc.text(texto, x + 2, y + 3.7)
         }
         x += anchos[indice]
       })
@@ -228,26 +263,28 @@ export const generarInformeRendimiento = (analisis: AnalisisRendimiento) => {
         dibujarCabecera()
       }
 
-      if (indiceFila % 2 === 0) {
+      if (fila.destacar) {
+        doc.setFillColor(254, 243, 232)
+        doc.rect(margen, y, util, altoFila, 'F')
+      } else if (indiceFila % 2 === 0) {
         doc.setFillColor(...FONDO)
         doc.rect(margen, y, util, altoFila, 'F')
       }
 
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(7)
+      doc.setFont('helvetica', fila.destacar ? 'bold' : 'normal')
+      doc.setFontSize(6.9)
       doc.setTextColor(...TINTA)
       let x = margen
-      fila.forEach((celda, indice) => {
+      fila.celdas.forEach((celda, indice) => {
         const disponible = anchos[indice] - 4
         let texto = celda
-        // Recorte con puntos suspensivos: mejor que invadir la columna vecina
         while (doc.getTextWidth(texto) > disponible && texto.length > 1) {
           texto = `${texto.slice(0, -2)}…`
         }
         if (alineacionDerecha.includes(indice)) {
-          doc.text(texto, x + anchos[indice] - 2 - doc.getTextWidth(texto), y + 3.8)
+          doc.text(texto, x + anchos[indice] - 2 - doc.getTextWidth(texto), y + 3.7)
         } else {
-          doc.text(texto, x + 2, y + 3.8)
+          doc.text(texto, x + 2, y + 3.7)
         }
         x += anchos[indice]
       })
@@ -257,58 +294,86 @@ export const generarInformeRendimiento = (analisis: AnalisisRendimiento) => {
     y += 3
   }
 
-  /* --------------------------------------------------------------- Portada */
+  /* ------------------------------------------------------ Portada ejecutiva */
 
   nuevaPagina()
 
-  const altoCabecera = 34
+  const altoCabecera = 36
   doc.setFillColor(...TINTA)
   doc.rect(0, 0, ancho, altoCabecera, 'F')
   doc.setFillColor(...MARCA)
   doc.rect(0, 0, ancho, 2.6, 'F')
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.5)
-  doc.setTextColor(170, 182, 205)
-  doc.text('CHEQUEO DE RENDIMIENTO', margen, 11)
+  doc.setFontSize(7)
+  doc.setTextColor(160, 174, 198)
+  doc.text('CHEQUEO DE RENDIMIENTO DEL COLABORADOR', margen, 11)
 
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(18)
+  doc.setFontSize(17)
   doc.setTextColor(255, 255, 255)
   doc.text(analisis.nombre, margen, 20)
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.setTextColor(170, 182, 205)
-  doc.text(`RUT ${analisis.rut}   |   ${analisis.periodoEtiqueta}`, margen, 26.5)
+  doc.setFontSize(7.6)
+  doc.setTextColor(160, 174, 198)
+  doc.text(`RUT ${analisis.rut}   |   ${analisis.periodoEtiqueta}`, margen, 26)
   doc.text(
-    `${dayjs(analisis.desde).format('DD/MM/YYYY')} – ${dayjs(analisis.hasta).format('DD/MM/YYYY')}`,
+    `${dayjs(analisis.desde).format('DD/MM/YYYY')} – ${dayjs(analisis.hasta).format(
+      'DD/MM/YYYY'
+    )}   |   Terminales: ${analisis.terminales.join(', ') || 'sin datos'}`,
     margen,
-    31
+    30.5
   )
 
-  // Puntuación global, alineada a la derecha
-  const nota = String(analisis.puntuacion)
+  // Bloque de nota, a la derecha
+  const colorNota = semaforo(analisis.puntuacion, 85, 60)
+  doc.setFillColor(colorNota[0], colorNota[1], colorNota[2])
+  doc.roundedRect(ancho - margen - 38, 7, 38, 22, 2.5, 2.5, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(30)
+  doc.setFontSize(20)
   doc.setTextColor(255, 255, 255)
-  const anchoNota = doc.getTextWidth(nota)
-  doc.text(nota, ancho - margen - anchoNota - 8, 22)
-
-  doc.setFontSize(10)
-  doc.text('/100', ancho - margen - 7.5, 22)
-
+  const nota = String(analisis.puntuacion)
+  doc.text(nota, ancho - margen - 19 - doc.getTextWidth(nota) / 2, 18)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.5)
-  doc.setTextColor(170, 182, 205)
+  doc.setFontSize(6.4)
   const etiquetaNota = analisis.notaGlobal.toLocaleUpperCase('es')
-  doc.text(etiquetaNota, ancho - margen - doc.getTextWidth(etiquetaNota), 28)
+  doc.text(
+    etiquetaNota,
+    ancho - margen - 19 - doc.getTextWidth(etiquetaNota) / 2,
+    24
+  )
 
-  y = altoCabecera + 9
+  y = altoCabecera + 8
 
-  /* ------------------------------------------------------------- Resumen */
+  /* ------------------------------------------------------------- Veredicto */
 
-  titulo('Resumen del período')
+  titulo('Lectura ejecutiva', 'Lo que hay que saber antes de bajar al detalle')
+
+  analisis.conclusiones.forEach((frase) => {
+    // El troceado usa la fuente activa: hay que fijarla ANTES de partir el
+    // texto o las líneas se calculan con un tamaño y se pintan con otro,
+    // y la última palabra se sale del margen.
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    const lineas = doc.splitTextToSize(frase, util - 7) as string[]
+    reservar(lineas.length * 3.5 + 3)
+    doc.setFillColor(...MARCA)
+    doc.circle(margen + 1.4, y - 1.1, 0.9, 'F')
+    doc.setTextColor(...TINTA)
+    doc.text(lineas, margen + 5, y)
+    y += lineas.length * 3.5 + 2
+  })
+
+  y += 2
+
+  /* --------------------------------------------------------- Indicadores */
+
+  titulo('Indicadores clave', 'El color marca si el valor está dentro de lo esperado')
+
+  const coberturaPct = Math.round(analisis.cobertura)
+  const precision = analisis.precisionGps
+
   tarjetas([
     {
       etiqueta: 'Revisiones',
@@ -316,190 +381,263 @@ export const generarInformeRendimiento = (analisis: AnalisisRendimiento) => {
       nota: `${analisis.busesDistintos} buses distintos`,
     },
     {
-      etiqueta: 'Días activos',
-      valor: `${analisis.diasActivos}/${analisis.diasLaborables}`,
-      nota: `${analisis.cobertura.toFixed(0)} % de cobertura`,
+      etiqueta: 'Cobertura de días',
+      valor: `${coberturaPct} %`,
+      nota: `${analisis.diasActivos} de ${analisis.diasLaborables} laborables`,
+      color: semaforo(coberturaPct, 85, 60),
     },
     {
-      etiqueta: 'Promedio diario',
-      valor: String(analisis.promedioPorDiaActivo),
-      nota: `mediana ${analisis.medianaPorDiaActivo}`,
+      etiqueta: 'Turnos trabajados',
+      valor: String(analisis.patron.totalTurnos),
+      nota: `${analisis.patron.turnosDia} de día · ${analisis.patron.turnosNoche} de noche`,
     },
     {
-      etiqueta: 'Racha máxima',
-      valor: `${analisis.rachaMaxima} d`,
-      nota: 'días laborables seguidos',
+      etiqueta: 'Horas en terreno',
+      valor: `${analisis.horasTrabajadas} h`,
+      nota: `${formatearMinutos(analisis.patron.duracionMedianaMin)} por turno`,
+    },
+    {
+      etiqueta: 'Revisiones por turno',
+      valor: String(analisis.patron.revisionesPorTurno ?? '—'),
+      nota: `${analisis.patron.ritmoMedioPorHora ?? '—'} por hora efectiva`,
     },
     {
       etiqueta: 'Entre revisiones',
       valor: formatearMinutos(analisis.cadenciaMedianaMin),
-      nota: `media ${formatearMinutos(analisis.cadenciaMediaMin)}`,
-    },
-    {
-      etiqueta: 'Jornada media',
-      valor: formatearMinutos(analisis.jornadaMediaMin),
-      nota:
-        analisis.revisionesPorHora !== null
-          ? `${analisis.revisionesPorHora} rev/hora`
-          : 'sin datos',
+      nota: 'mediana dentro del turno',
     },
     {
       etiqueta: 'Ubicación válida',
-      valor:
-        analisis.precisionGps !== null ? `${analisis.precisionGps.toFixed(0)} %` : '—',
+      valor: precision !== null ? `${precision.toFixed(0)} %` : '—',
       nota:
         analisis.distanciaMediaM !== null
           ? `a ${analisis.distanciaMediaM} m del terminal`
           : 'sin GPS',
+      color: precision !== null ? semaforo(precision, 90, 70) : undefined,
     },
     {
-      etiqueta: 'Estado de flota',
+      etiqueta: 'Buses operativos',
       valor:
         analisis.tasaOperativa !== null ? `${analisis.tasaOperativa.toFixed(0)} %` : '—',
-      nota: `${analisis.enPanne} en panne`,
+      nota: `${analisis.enPanne} detectados en panne`,
     },
   ])
 
-  /* -------------------------------------------------- Cómo se calcula la nota */
+  /* ---------------------------------------------------------- Patrón horario */
 
-  titulo('Cómo se compone la puntuación')
-  parrafo(
-    'Cada componente se mide sobre el propio historial del colaborador, no contra una cifra fija: un inspector de terminal grande y otro de terminal pequeño no comparten ritmo, así que "revisó poco" sólo tiene sentido comparado con lo que esa persona hace habitualmente.'
-  )
-  barras(
-    analisis.componentes.map((componente) => ({
-      etiqueta: `${componente.etiqueta} (${Math.round(componente.peso * 100)} %)`,
-      valor: componente.valor,
-      resaltado: componente.valor >= 80,
-    })),
-    ' pts'
+  titulo(
+    'Patrón de turnos',
+    'Ritmo medido entre la primera y la última revisión de cada turno, no de punta a punta del día'
   )
 
-  /* ------------------------------------------------------- Evolución semanal */
-
-  titulo('Evolución semanal')
-  if (analisis.porSemana.length === 0) {
-    parrafo('No hay semanas dentro del período analizado.')
+  if (analisis.patron.totalTurnos === 0) {
+    parrafo('No hay turnos registrados en el período.')
   } else {
-    const lineas: string[] = []
-    if (analisis.mejorSemana) {
-      lineas.push(
-        `Su mejor semana fue la ${analisis.mejorSemana.numero} (${dayjs(
-          analisis.mejorSemana.inicio
-        ).format('DD MMM')}) con ${analisis.mejorSemana.revisiones} revisiones en ${
-          analisis.mejorSemana.diasActivos
-        } días.`
-      )
-    }
-    if (analisis.peorSemanaActiva && analisis.peorSemanaActiva.clave !== analisis.mejorSemana?.clave) {
-      lineas.push(
-        `La más floja con actividad fue la ${analisis.peorSemanaActiva.numero} con ${analisis.peorSemanaActiva.revisiones}.`
-      )
-    }
-    if (analisis.semanasAusentes.length > 0) {
-      lineas.push(
-        `Sin ninguna revisión: ${analisis.semanasAusentes
-          .map((semana) => `semana ${semana.numero}`)
-          .join(', ')}.`
-      )
-    }
-    parrafo(lineas.join(' '))
+    const dominante =
+      analisis.patron.turnoDominante === 'dia'
+        ? 'predominantemente de día'
+        : analisis.patron.turnoDominante === 'noche'
+          ? 'predominantemente de noche'
+          : 'alternando día y noche'
+
+    parrafo(
+      `Trabaja ${dominante}. El descanso entre turnos no se contabiliza como pausa: sólo se miden los huecos dentro de una misma jornada de trabajo.`
+    )
+
+    // Cada tipo de turno se resume por separado: el horario medio entre un
+    // turno de mañana y uno de noche daría una hora que nunca existió.
+    const filasHorario = (['dia', 'noche'] as const)
+      .filter((tipo) => analisis.patron.horarios[tipo].turnos > 0)
+      .map((tipo) => {
+        const horario = analisis.patron.horarios[tipo]
+        return {
+          celdas: [
+            tipo === 'dia' ? 'Turno de día' : 'Turno de noche',
+            String(horario.turnos),
+            horario.entrada ?? '—',
+            horario.salida ?? '—',
+            formatearMinutos(horario.duracionMedianaMin),
+            String(horario.revisionesPorTurno ?? '—'),
+          ],
+        }
+      })
+
+    tabla(
+      ['Tipo', 'Turnos', 'Entrada típica', 'Salida típica', 'Duración típica', 'Rev./turno'],
+      filasHorario,
+      [40, 22, 32, 32, 34, 28],
+      [1, 5]
+    )
+
+    tarjetas(
+      [
+        {
+          etiqueta: 'Ritmo efectivo',
+          valor:
+            analisis.patron.ritmoMedioPorHora !== null
+              ? `${analisis.patron.ritmoMedioPorHora}/h`
+              : '—',
+          nota: 'revisiones por hora en turno',
+        },
+        {
+          etiqueta: 'Entre revisiones',
+          valor: formatearMinutos(analisis.cadenciaMedianaMin),
+          nota: 'mediana dentro del turno',
+        },
+        {
+          etiqueta: 'Pausa máxima en turno',
+          valor: formatearMinutos(analisis.pausaMaximaMin),
+          nota: analisis.pausaMaximaTurno
+            ? `${dayjs(analisis.pausaMaximaTurno.fechaJornada).format('DD MMM')} · turno de ${
+                analisis.pausaMaximaTurno.tipo === 'noche' ? 'noche' : 'día'
+              }`
+            : 'sin pausas relevantes',
+        },
+        {
+          etiqueta: 'Horas en terreno',
+          valor: `${analisis.horasTrabajadas} h`,
+          nota: `${analisis.patron.totalTurnos} turnos`,
+        },
+      ],
+      4
+    )
 
     barras(
-      analisis.porSemana.map((semana) => ({
-        etiqueta: semana.etiqueta,
-        valor: semana.revisiones,
-        resaltado: semana.clave === analisis.mejorSemana?.clave,
+      analisis.porFranja.map((franja) => ({
+        etiqueta: franja.etiqueta,
+        valor: franja.revisiones,
       }))
     )
   }
 
-  /* ------------------------------------------------------ Reparto del trabajo */
+  /* ------------------------------------------------------- Evolución semanal */
 
-  titulo('Reparto del trabajo')
+  titulo('Evolución semanal', 'En rojo, las semanas sin ninguna revisión')
+  if (analisis.porSemana.length === 0) {
+    parrafo('No hay semanas dentro del período analizado.')
+  } else {
+    barras(
+      analisis.porSemana.map((semana) => ({
+        etiqueta: `${semana.etiqueta}${semana.parcial ? ' (parcial)' : ''}`,
+        valor: semana.revisiones,
+        resaltado: semana.clave === analisis.mejorSemana?.clave,
+        alerta: semana.ausente,
+      }))
+    )
+  }
+
   barras(
     analisis.porDiaSemana.map((dia) => ({
       etiqueta: dia.etiqueta,
       valor: dia.revisiones,
     }))
   )
-  barras(
-    analisis.porFranja.map((franja) => ({
-      etiqueta: franja.etiqueta,
-      valor: franja.revisiones,
-    }))
+
+  /* -------------------------------------------------- Alertas con acción */
+
+  titulo(
+    `Alertas y acciones sugeridas (${analisis.alertas.length})`,
+    'Ordenadas por severidad; cada una incluye qué comprobar'
   )
 
-  /* ---------------------------------------------------------------- Alertas */
+  const ordenSeveridad: Record<Severidad, number> = {
+    critica: 0,
+    alta: 1,
+    media: 2,
+    info: 3,
+  }
 
-  titulo(`Alertas del período (${analisis.alertas.length})`)
-  analisis.alertas.forEach((alerta) => {
-    const lineasDetalle = doc.splitTextToSize(alerta.detalle, util - 22) as string[]
-    const altoBloque = Math.max(9, lineasDetalle.length * 3.4 + 6)
-    reservar(altoBloque + 2)
+  ;[...analisis.alertas]
+    .sort((a, b) => ordenSeveridad[a.severidad] - ordenSeveridad[b.severidad])
+    .forEach((alerta) => {
+      // Igual que arriba: fijar la fuente antes de partir el texto
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6.9)
+      const lineasDetalle = doc.splitTextToSize(alerta.detalle, util - 10) as string[]
+      const lineasAccion = alerta.accion
+        ? (doc.splitTextToSize(`Acción: ${alerta.accion}`, util - 10) as string[])
+        : []
+      const altoBloque =
+        7 + lineasDetalle.length * 3.2 + (lineasAccion.length ? lineasAccion.length * 3.2 + 1 : 0)
 
-    doc.setFillColor(...FONDO)
-    doc.roundedRect(margen, y, util, altoBloque, 1.6, 1.6, 'F')
+      reservar(altoBloque + 2)
 
-    const color = SEVERIDAD_COLOR[alerta.severidad]
-    doc.setFillColor(color[0], color[1], color[2])
-    doc.roundedRect(margen, y, 1.6, altoBloque, 0.8, 0.8, 'F')
+      doc.setFillColor(...FONDO)
+      doc.roundedRect(margen, y, util, altoBloque, 1.6, 1.6, 'F')
 
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(5.8)
-    doc.setTextColor(color[0], color[1], color[2])
-    doc.text(SEVERIDAD_ETIQUETA[alerta.severidad], margen + 4, y + 4.2)
+      const color = SEVERIDAD_COLOR[alerta.severidad]
+      doc.setFillColor(color[0], color[1], color[2])
+      doc.roundedRect(margen, y, 1.6, altoBloque, 0.8, 0.8, 'F')
 
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.setTextColor(...TINTA)
-    doc.text(alerta.titulo, margen + 20, y + 4.4)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(5.6)
+      doc.setTextColor(color[0], color[1], color[2])
+      doc.text(SEVERIDAD_ETIQUETA[alerta.severidad], margen + 4, y + 4.2)
 
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7)
-    doc.setTextColor(...SUAVE)
-    doc.text(lineasDetalle, margen + 4, y + 8.4)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8)
+      doc.setTextColor(...TINTA)
+      doc.text(alerta.titulo, margen + 21, y + 4.4)
 
-    y += altoBloque + 2
-  })
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6.9)
+      doc.setTextColor(...SUAVE)
+      doc.text(lineasDetalle, margen + 4, y + 8.2)
 
-  y += 2
+      if (lineasAccion.length > 0) {
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(6.9)
+        doc.setTextColor(color[0], color[1], color[2])
+        doc.text(lineasAccion, margen + 4, y + 8.2 + lineasDetalle.length * 3.2 + 1)
+      }
 
-  /* ------------------------------------------------------- Detalle por día */
+      y += altoBloque + 2
+    })
 
-  titulo('Detalle por jornada')
-  if (analisis.porDia.length === 0) {
-    parrafo('Sin jornadas con actividad en el período.')
+  /* ------------------------------------------------------- Detalle por turno */
+
+  titulo(
+    'Detalle turno a turno',
+    'Cada fila es un turno completo. "Pausa máx." es el hueco más largo dentro de ese mismo turno'
+  )
+
+  if (analisis.turnos.length === 0) {
+    parrafo('Sin turnos registrados en el período.')
   } else {
-    parrafo(
-      '"Entre rev." es el tiempo medio transcurrido entre dos revisiones consecutivas de esa misma jornada; "hueco" es la pausa más larga del día.'
-    )
+    const medianaTurno = analisis.patron.revisionesPorTurno ?? 0
     tabla(
-      ['Día', 'Rev.', 'Buses', 'Inicio', 'Fin', 'Jornada', 'Entre rev.', 'Hueco'],
-      [...analisis.porDia]
-        .sort((a, b) => b.fecha.localeCompare(a.fecha))
-        .map((dia) => [
-          dia.etiqueta,
-          String(dia.revisiones),
-          String(dia.busesDistintos),
-          dia.primera,
-          dia.ultima,
-          formatearMinutos(dia.jornadaMin),
-          formatearMinutos(dia.cadenciaMediaMin),
-          formatearMinutos(dia.huecoMaxMin),
-        ]),
-      // Los anchos suman el ancho útil de la página (188 mm)
-      [38, 13, 15, 16, 16, 28, 32, 30],
-      [1, 2]
+      ['Jornada', 'Turno', 'Entrada', 'Salida', 'Duración', 'Rev.', 'Buses', 'Ritmo/h', 'Pausa máx.'],
+      [...analisis.turnos]
+        .sort((a, b) => b.inicio.localeCompare(a.inicio))
+        .map((turno) => ({
+          // Se resalta lo que merece una mirada: turnos con la mitad de
+          // revisiones de lo normal o con una pausa de más de dos horas
+          destacar:
+            (medianaTurno > 0 && turno.revisiones < medianaTurno * 0.5) ||
+            (turno.pausaMaxMin ?? 0) > 120,
+          celdas: [
+            dayjs(turno.fechaJornada).format('ddd DD MMM'),
+            turno.tipo === 'noche' ? 'Noche' : 'Día',
+            turno.inicioHora,
+            `${turno.finHora}${turno.cruzaMedianoche ? ' +1' : ''}`,
+            formatearMinutos(turno.duracionMin),
+            String(turno.revisiones),
+            String(turno.busesDistintos),
+            turno.ritmoPorHora !== null ? String(turno.ritmoPorHora) : '—',
+            formatearMinutos(turno.pausaMaxMin),
+          ],
+        })),
+      [30, 15, 18, 20, 24, 13, 15, 20, 33],
+      [5, 6, 7, 8]
     )
   }
 
   /* ------------------------------------------------------- Días sin registro */
 
   if (analisis.diasAusentes.length > 0) {
-    titulo(`Días laborables sin registro (${analisis.diasAusentes.length})`)
-    parrafo(
-      'Días entre semana comprendidos en el período en los que no se registró ninguna revisión. El domingo no se considera laborable.'
+    titulo(
+      `Días laborables sin registro (${analisis.diasAusentes.length})`,
+      'El domingo no se considera laborable. Un turno de noche se imputa al día en que empezó'
     )
     const columnas = 6
     const anchoCelda = util / columnas
@@ -516,27 +654,46 @@ export const generarInformeRendimiento = (analisis: AnalisisRendimiento) => {
     y += filas * 6 + 3
   }
 
-  /* ------------------------------------------------------------------ Cierre */
+  /* ------------------------------------------------------------ Metodología */
 
-  reservar(16)
-  doc.setFillColor(...FONDO)
-  doc.roundedRect(margen, y, util, 13, 1.6, 1.6, 'F')
+  titulo('Cómo leer este informe')
+  parrafo(
+    'Un turno es un bloque continuo de revisiones. Se cierra cuando pasan más de 5 horas sin actividad, porque ese hueco es descanso entre jornadas y no ritmo de trabajo: contarlo como pausa producía cifras imposibles, del tipo "18 horas entre dos revisiones".'
+  )
+  parrafo(
+    'Las revisiones anteriores a las 06:00 se imputan al turno que empezó la noche anterior, de modo que un turno nocturno cuenta como un solo día trabajado y no como dos.'
+  )
+  parrafo(
+    `La puntuación combina constancia diaria (${Math.round(
+      analisis.componentes[0].peso * 100
+    )} %), volumen sostenido (${Math.round(
+      analisis.componentes[1].peso * 100
+    )} %), ubicación válida (${Math.round(
+      analisis.componentes[2].peso * 100
+    )} %) y regularidad semanal (${Math.round(
+      analisis.componentes[3].peso * 100
+    )} %). Los umbrales de "poco volumen" salen de la mediana del propio colaborador dentro del período, no de una cifra fija para todos.`
+  )
+
+  barras(
+    analisis.componentes.map((componente) => ({
+      etiqueta: `${componente.etiqueta} (${Math.round(componente.peso * 100)} %)`,
+      valor: componente.valor,
+      resaltado: componente.valor >= 80,
+    })),
+    ' pts'
+  )
+
+  reservar(12)
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(6.8)
+  doc.setFontSize(6.4)
   doc.setTextColor(...SUAVE)
   doc.text(
-    `Informe generado el ${dayjs().format('DD/MM/YYYY [a las] HH:mm')} hrs sobre ${
-      analisis.total
-    } revisiones registradas. Terminales: ${
-      analisis.terminales.join(', ') || 'sin datos'
-    }.`,
-    margen + 3,
-    y + 5
-  )
-  doc.text(
-    'Los umbrales de alerta se calculan sobre la mediana histórica del propio colaborador dentro del período seleccionado.',
-    margen + 3,
-    y + 9
+    `Informe generado el ${dayjs().format(
+      'DD/MM/YYYY [a las] HH:mm'
+    )} hrs sobre ${analisis.total} revisiones y ${analisis.patron.totalTurnos} turnos registrados.`,
+    margen,
+    y + 3
   )
 
   pie()

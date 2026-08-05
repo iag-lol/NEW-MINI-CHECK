@@ -8,44 +8,83 @@ type Revision = Tables<'revisiones'>
 /* -------------------------------------------------------------------------
    Reglas del análisis
 
-   Los umbrales se calculan sobre el propio historial del colaborador en vez
-   de fijarse a mano. Un inspector de terminal grande y otro de terminal chico
-   no comparten ritmo, así que "revisó poco" sólo tiene sentido comparado con
-   lo que esa persona hace habitualmente.
+   El eje del cálculo es el TURNO, no el día de calendario. Agrupar por fecha
+   mezclaba el descanso entre jornadas con las pausas de trabajo: alguien que
+   fichaba a las 05:00 y volvía a las 23:23 aparecía con "una pausa de 18 h",
+   cuando en realidad eran dos turnos distintos con su descanso en medio.
+
+   Los umbrales se calculan además sobre el propio historial del colaborador.
+   Un inspector de terminal grande y otro de terminal chico no comparten
+   ritmo, así que "revisó poco" sólo tiene sentido comparado con lo que esa
+   persona hace habitualmente.
    ------------------------------------------------------------------------- */
+
+/** Hueco a partir del cual dos revisiones pertenecen a turnos distintos */
+const CORTE_TURNO_MIN = 300
+
+/** Pausa dentro de un mismo turno que merece señalarse */
+const PAUSA_LARGA_MIN = 150
+
+/**
+ * Hora a la que se considera que empieza una nueva jornada laboral. Una
+ * revisión de las 03:00 pertenece al turno que arrancó la noche anterior,
+ * no al día nuevo: sin esto, cada turno de noche contaba como dos días
+ * trabajados y partía la jornada en dos mitades sin sentido.
+ */
+const CORTE_JORNADA_HORA = 6
+
+/** Un turno que arranca dentro de esta franja se clasifica como nocturno */
+const NOCHE_DESDE = 18
+const NOCHE_HASTA = 6
 
 /** Domingo no cuenta como día laborable a la hora de detectar ausencias */
 const DIA_NO_LABORABLE = 0
 
-/** Un hueco mayor a esto dentro de la misma jornada se marca como inactividad */
-const HUECO_LARGO_MIN = 150
-
-/** Proporción de la mediana diaria por debajo de la cual el día es flojo */
+/** Proporción de la mediana diaria por debajo de la cual la jornada es floja */
 const FACTOR_DIA_BAJO = 0.5
 
 /** Proporción de la mediana semanal por debajo de la cual la semana es floja */
 const FACTOR_SEMANA_BAJA = 0.6
 
 export type Severidad = 'critica' | 'alta' | 'media' | 'info'
+export type TipoTurno = 'dia' | 'noche'
 
 export interface Alerta {
   severidad: Severidad
   titulo: string
   detalle: string
+  /** Qué hacer con esto: es lo que convierte el dato en decisión */
+  accion?: string
 }
 
-export interface ResumenDia {
+export interface TurnoTrabajado {
+  id: string
+  /** Día al que se imputa el turno (el de su inicio) */
+  fechaJornada: string
+  tipo: TipoTurno
+  inicio: string
+  fin: string
+  inicioHora: string
+  finHora: string
+  duracionMin: number
+  revisiones: number
+  busesDistintos: number
+  enPanne: number
+  /** Minutos medios entre revisiones consecutivas DENTRO del turno */
+  cadenciaMediaMin: number | null
+  cadenciaMedianaMin: number | null
+  /** Pausa más larga dentro del turno */
+  pausaMaxMin: number | null
+  ritmoPorHora: number | null
+  cruzaMedianoche: boolean
+}
+
+export interface ResumenJornada {
   fecha: string
   etiqueta: string
   revisiones: number
-  primera: string
-  ultima: string
-  /** Minutos entre la primera y la última revisión del día */
-  jornadaMin: number
-  /** Minutos medios entre revisiones consecutivas del día */
-  cadenciaMediaMin: number | null
-  /** Hueco más largo del día, en minutos */
-  huecoMaxMin: number | null
+  turnos: TurnoTrabajado[]
+  minutosTrabajados: number
   busesDistintos: number
   enPanne: number
 }
@@ -58,26 +97,48 @@ export interface ResumenSemana {
   revisiones: number
   diasActivos: number
   ausente: boolean
-  /** La semana queda recortada por el borde del período seleccionado */
   parcial: boolean
 }
 
+export interface HorarioTurno {
+  turnos: number
+  entrada: string | null
+  salida: string | null
+  duracionMedianaMin: number | null
+  revisionesPorTurno: number | null
+}
+
+export interface PatronTurnos {
+  totalTurnos: number
+  turnosDia: number
+  turnosNoche: number
+  duracionMediaMin: number | null
+  duracionMedianaMin: number | null
+  revisionesPorTurno: number | null
+  ritmoMedioPorHora: number | null
+  /**
+   * Horario típico separado por tipo de turno. Promediar las entradas de un
+   * turno de mañana y uno de noche daba una hora intermedia inexistente
+   * ("entra habitualmente a las 03:06" para alguien que nunca entra a esa
+   * hora), así que cada tipo se resume por separado.
+   */
+  horarios: Record<TipoTurno, HorarioTurno>
+  turnoDominante: TipoTurno | 'mixto' | null
+}
+
 export interface AnalisisRendimiento {
-  /* Identidad y período */
   rut: string
   nombre: string
   periodoEtiqueta: string
   desde: string
   hasta: string
 
-  /* Volumen */
   total: number
   busesDistintos: number
   operativos: number
   enPanne: number
   terminales: string[]
 
-  /* Constancia */
   diasDelPeriodo: number
   diasLaborables: number
   diasActivos: number
@@ -87,16 +148,18 @@ export interface AnalisisRendimiento {
   promedioPorDiaActivo: number
   medianaPorDiaActivo: number
 
-  /* Cadencia */
+  /* Turnos */
+  turnos: TurnoTrabajado[]
+  patron: PatronTurnos
+  horasTrabajadas: number
+
+  /* Cadencia — siempre dentro del turno */
   cadenciaMediaMin: number | null
   cadenciaMedianaMin: number | null
-  huecoMaximoMin: number | null
-  huecoMaximoFecha: string | null
-  jornadaMediaMin: number | null
-  revisionesPorHora: number | null
+  pausaMaximaMin: number | null
+  pausaMaximaTurno: TurnoTrabajado | null
 
-  /* Reparto */
-  porDia: ResumenDia[]
+  porJornada: ResumenJornada[]
   porSemana: ResumenSemana[]
   mejorSemana: ResumenSemana | null
   peorSemanaActiva: ResumenSemana | null
@@ -104,18 +167,18 @@ export interface AnalisisRendimiento {
   porDiaSemana: Array<{ etiqueta: string; revisiones: number }>
   porFranja: Array<{ etiqueta: string; revisiones: number }>
 
-  /* Calidad */
   conGps: number
   dentroGeocerca: number
   precisionGps: number | null
   distanciaMediaM: number | null
   tasaOperativa: number | null
 
-  /* Diagnóstico */
   alertas: Alerta[]
   puntuacion: number
   notaGlobal: string
   componentes: Array<{ etiqueta: string; valor: number; peso: number }>
+  /** Frases de cierre para que el supervisor decida sin releer el informe */
+  conclusiones: string[]
 }
 
 export interface PeriodoAnalisis {
@@ -143,6 +206,33 @@ const media = (valores: number[]): number | null =>
 const conGpsValido = (rev: Revision) =>
   typeof rev.lat === 'number' && typeof rev.lon === 'number' && rev.lat !== 0
 
+/** Día laboral al que pertenece una marca horaria (la madrugada es del día anterior) */
+const fechaJornada = (momento: Dayjs) =>
+  (momento.hour() < CORTE_JORNADA_HORA ? momento.subtract(1, 'day') : momento).format(
+    'YYYY-MM-DD'
+  )
+
+const clasificarTurno = (inicio: Dayjs): TipoTurno =>
+  inicio.hour() >= NOCHE_DESDE || inicio.hour() < NOCHE_HASTA ? 'noche' : 'dia'
+
+/** Media de horas del reloj, tratándolas como ángulos: 23:50 y 00:10 dan 00:00 */
+const horaMedia = (momentos: Dayjs[]): string | null => {
+  if (momentos.length === 0) return null
+  let sumaSeno = 0
+  let sumaCoseno = 0
+  momentos.forEach((momento) => {
+    const angulo = ((momento.hour() * 60 + momento.minute()) / 1440) * 2 * Math.PI
+    sumaSeno += Math.sin(angulo)
+    sumaCoseno += Math.cos(angulo)
+  })
+  let anguloMedio = Math.atan2(sumaSeno / momentos.length, sumaCoseno / momentos.length)
+  if (anguloMedio < 0) anguloMedio += 2 * Math.PI
+  const minutos = Math.round((anguloMedio / (2 * Math.PI)) * 1440) % 1440
+  return `${String(Math.floor(minutos / 60)).padStart(2, '0')}:${String(
+    minutos % 60
+  ).padStart(2, '0')}`
+}
+
 const FRANJAS = [
   { etiqueta: 'Madrugada (00-06)', desde: 0, hasta: 6 },
   { etiqueta: 'Mañana (06-12)', desde: 6, hasta: 12 },
@@ -152,11 +242,6 @@ const FRANJAS = [
 
 const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
-/**
- * Rango temporal a partir del filtro de la pantalla. `hasta` nunca supera el
- * momento actual: contar como ausentes días que todavía no han ocurrido
- * falsearía la cobertura hacia abajo.
- */
 export const construirPeriodo = (
   modo: 'semana' | '1m' | '2m' | 'all',
   semanaInicio: Dayjs,
@@ -176,7 +261,9 @@ export const construirPeriodo = (
   }
 
   if (modo === 'all') {
-    const desde = primeraRevision ? dayjs(primeraRevision).startOf('day') : ahora.startOf('day')
+    const desde = primeraRevision
+      ? dayjs(primeraRevision).startOf('day')
+      : ahora.startOf('day')
     return {
       etiqueta: `Historial completo · desde ${desde.format('DD MMM YYYY')}`,
       desde,
@@ -192,15 +279,77 @@ export const construirPeriodo = (
   }
 }
 
-/* --------------------------------------------------------------- Análisis */
+/* -------------------------------------------------------- Detección de turnos */
 
 /**
- * Chequeo de rendimiento completo de un colaborador sobre un período.
+ * Parte la secuencia de revisiones en turnos.
  *
- * `revisiones` debe venir ya acotada al período; el rango se usa además para
- * saber qué días *deberían* tener actividad y poder detectar ausencias, algo
- * que no se puede deducir mirando sólo las revisiones existentes.
+ * Se abre un turno nuevo cuando entre dos revisiones consecutivas pasan más
+ * de `CORTE_TURNO_MIN` minutos: ese hueco es descanso, no trabajo. Todo lo que
+ * queda dentro de un turno sí es tiempo de faena, y es ahí donde tiene sentido
+ * medir el ritmo.
  */
+export const detectarTurnos = (revisiones: Revision[]): TurnoTrabajado[] => {
+  if (revisiones.length === 0) return []
+
+  const orden = [...revisiones].sort(
+    (a, b) => new Date(a.created_at).valueOf() - new Date(b.created_at).valueOf()
+  )
+
+  const grupos: Revision[][] = []
+  let actual: Revision[] = [orden[0]]
+
+  for (let i = 1; i < orden.length; i += 1) {
+    const anterior = dayjs(orden[i - 1].created_at)
+    const siguiente = dayjs(orden[i].created_at)
+    if (siguiente.diff(anterior, 'minute') > CORTE_TURNO_MIN) {
+      grupos.push(actual)
+      actual = [orden[i]]
+    } else {
+      actual.push(orden[i])
+    }
+  }
+  grupos.push(actual)
+
+  return grupos.map((grupo, indice) => {
+    const inicio = dayjs(grupo[0].created_at)
+    const fin = dayjs(grupo[grupo.length - 1].created_at)
+
+    const huecos: number[] = []
+    for (let i = 1; i < grupo.length; i += 1) {
+      huecos.push(
+        dayjs(grupo[i].created_at).diff(dayjs(grupo[i - 1].created_at), 'minute')
+      )
+    }
+
+    const duracionMin = fin.diff(inicio, 'minute')
+
+    return {
+      id: `${grupo[0].id}-${indice}`,
+      fechaJornada: fechaJornada(inicio),
+      tipo: clasificarTurno(inicio),
+      inicio: inicio.toISOString(),
+      fin: fin.toISOString(),
+      inicioHora: inicio.format('HH:mm'),
+      finHora: fin.format('HH:mm'),
+      duracionMin,
+      revisiones: grupo.length,
+      busesDistintos: new Set(grupo.map((rev) => rev.bus_ppu)).size,
+      enPanne: grupo.filter((rev) => rev.estado_bus === 'EN_PANNE').length,
+      cadenciaMediaMin: media(huecos),
+      cadenciaMedianaMin: mediana(huecos),
+      pausaMaxMin: huecos.length > 0 ? Math.max(...huecos) : null,
+      ritmoPorHora:
+        duracionMin >= 30
+          ? Math.round((grupo.length / (duracionMin / 60)) * 10) / 10
+          : null,
+      cruzaMedianoche: !inicio.isSame(fin, 'day'),
+    }
+  })
+}
+
+/* --------------------------------------------------------------- Análisis */
+
 export const analizarRendimiento = (
   revisiones: Revision[],
   periodo: PeriodoAnalisis,
@@ -220,54 +369,50 @@ export const analizarRendimiento = (
     (a, b) => new Date(a.created_at).valueOf() - new Date(b.created_at).valueOf()
   )
 
-  /* ------------------------------------------------------ Agrupación diaria */
+  const turnos = detectarTurnos(orden)
 
-  const porFecha = new Map<string, Revision[]>()
-  orden.forEach((rev) => {
-    const clave = dayjs(rev.created_at).format('YYYY-MM-DD')
-    const lista = porFecha.get(clave)
-    if (lista) lista.push(rev)
-    else porFecha.set(clave, [rev])
+  /* ------------------------------------------------------- Cadencia real */
+
+  // Todos los huecos entre revisiones consecutivas, descartando los que
+  // separan un turno del siguiente: ésos son descanso, no ritmo de trabajo.
+  const cadencias: number[] = []
+  for (let i = 1; i < orden.length; i += 1) {
+    const diferencia = dayjs(orden[i].created_at).diff(
+      dayjs(orden[i - 1].created_at),
+      'minute'
+    )
+    if (diferencia <= CORTE_TURNO_MIN) cadencias.push(diferencia)
+  }
+
+  const pausaMaximaTurno =
+    turnos.length > 0
+      ? turnos.reduce<TurnoTrabajado | null>((peor, turno) => {
+          if (turno.pausaMaxMin === null) return peor
+          if (!peor || (peor.pausaMaxMin ?? 0) < turno.pausaMaxMin) return turno
+          return peor
+        }, null)
+      : null
+
+  /* -------------------------------------------------- Agrupación por jornada */
+
+  const porFecha = new Map<string, TurnoTrabajado[]>()
+  turnos.forEach((turno) => {
+    const lista = porFecha.get(turno.fechaJornada)
+    if (lista) lista.push(turno)
+    else porFecha.set(turno.fechaJornada, [turno])
   })
 
-  const todasLasCadencias: number[] = []
-  let huecoMaximoMin: number | null = null
-  let huecoMaximoFecha: string | null = null
-
-  const porDia: ResumenDia[] = [...porFecha.entries()]
+  const porJornada: ResumenJornada[] = [...porFecha.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([fecha, revs]) => {
-      const marcas = revs.map((rev) => dayjs(rev.created_at))
-      const primera = marcas[0]
-      const ultima = marcas[marcas.length - 1]
-
-      // Tiempo entre revisiones consecutivas dentro de la misma jornada
-      const huecos: number[] = []
-      for (let i = 1; i < marcas.length; i += 1) {
-        const diferencia = marcas[i].diff(marcas[i - 1], 'minute')
-        huecos.push(diferencia)
-        todasLasCadencias.push(diferencia)
-      }
-
-      const huecoMax = huecos.length > 0 ? Math.max(...huecos) : null
-      if (huecoMax !== null && (huecoMaximoMin === null || huecoMax > huecoMaximoMin)) {
-        huecoMaximoMin = huecoMax
-        huecoMaximoFecha = fecha
-      }
-
-      return {
-        fecha,
-        etiqueta: dayjs(fecha).format('ddd DD MMM'),
-        revisiones: revs.length,
-        primera: primera.format('HH:mm'),
-        ultima: ultima.format('HH:mm'),
-        jornadaMin: ultima.diff(primera, 'minute'),
-        cadenciaMediaMin: media(huecos),
-        huecoMaxMin: huecoMax,
-        busesDistintos: new Set(revs.map((rev) => rev.bus_ppu)).size,
-        enPanne: revs.filter((rev) => rev.estado_bus === 'EN_PANNE').length,
-      }
-    })
+    .map(([fecha, turnosDelDia]) => ({
+      fecha,
+      etiqueta: dayjs(fecha).format('ddd DD MMM'),
+      revisiones: turnosDelDia.reduce((acc, turno) => acc + turno.revisiones, 0),
+      turnos: turnosDelDia,
+      minutosTrabajados: turnosDelDia.reduce((acc, turno) => acc + turno.duracionMin, 0),
+      busesDistintos: turnosDelDia.reduce((acc, turno) => acc + turno.busesDistintos, 0),
+      enPanne: turnosDelDia.reduce((acc, turno) => acc + turno.enPanne, 0),
+    }))
 
   /* ------------------------------------------------------ Calendario y racha */
 
@@ -284,8 +429,6 @@ export const analizarRendimiento = (
 
   let cursor = arranque
   const limite = periodo.hasta.startOf('day')
-
-  // Tope de seguridad: un historial corrupto no debe colgar el navegador
   let guardia = 0
   while (!cursor.isAfter(limite) && guardia < 3660) {
     const clave = cursor.format('YYYY-MM-DD')
@@ -309,9 +452,59 @@ export const analizarRendimiento = (
     }
   })
 
-  const conteosDiarios = porDia.map((dia) => dia.revisiones)
+  const conteosDiarios = porJornada.map((dia) => dia.revisiones)
   const medianaDiaria = mediana(conteosDiarios) ?? 0
   const promedioDiario = media(conteosDiarios) ?? 0
+
+  /* ------------------------------------------------------- Patrón de turnos */
+
+  const duraciones = turnos.filter((t) => t.duracionMin > 0).map((t) => t.duracionMin)
+  const turnosDeDia = turnos.filter((t) => t.tipo === 'dia')
+  const turnosDeNoche = turnos.filter((t) => t.tipo === 'noche')
+  const minutosTotales = duraciones.reduce((acc, v) => acc + v, 0)
+  const horasTrabajadas = Math.round((minutosTotales / 60) * 10) / 10
+
+  const resumirHorario = (lista: TurnoTrabajado[]): HorarioTurno => ({
+    turnos: lista.length,
+    entrada: horaMedia(lista.map((t) => dayjs(t.inicio))),
+    salida: horaMedia(lista.map((t) => dayjs(t.fin))),
+    duracionMedianaMin: mediana(lista.map((t) => t.duracionMin)),
+    revisionesPorTurno:
+      lista.length > 0
+        ? Math.round(
+            (lista.reduce((acc, t) => acc + t.revisiones, 0) / lista.length) * 10
+          ) / 10
+        : null,
+  })
+
+  const patron: PatronTurnos = {
+    totalTurnos: turnos.length,
+    turnosDia: turnosDeDia.length,
+    turnosNoche: turnosDeNoche.length,
+    duracionMediaMin: media(duraciones),
+    duracionMedianaMin: mediana(duraciones),
+    revisionesPorTurno:
+      turnos.length > 0 ? Math.round((orden.length / turnos.length) * 10) / 10 : null,
+    // Ritmo global (revisiones / horas efectivas). Promediar el ritmo de cada
+    // turno daba el mismo peso a uno de dos revisiones que a uno de doce, y
+    // los turnos cortos inflaban la cifra.
+    ritmoMedioPorHora:
+      minutosTotales > 0
+        ? Math.round((orden.length / (minutosTotales / 60)) * 10) / 10
+        : null,
+    horarios: {
+      dia: resumirHorario(turnosDeDia),
+      noche: resumirHorario(turnosDeNoche),
+    },
+    turnoDominante:
+      turnos.length === 0
+        ? null
+        : turnosDeDia.length >= turnos.length * 0.75
+          ? 'dia'
+          : turnosDeNoche.length >= turnos.length * 0.75
+            ? 'noche'
+            : 'mixto',
+  }
 
   /* ------------------------------------------------------------- Por semana */
 
@@ -320,8 +513,6 @@ export const analizarRendimiento = (
     { revisiones: number; dias: Set<string>; inicio: Dayjs; completa: boolean }
   >()
 
-  // Se siembran todas las semanas del período, también las vacías: una semana
-  // sin ninguna revisión es precisamente el dato que hay que ver.
   let cursorSemana = arranque.isoWeekday(1).startOf('day')
   let guardiaSemana = 0
   while (!cursorSemana.isAfter(periodo.hasta) && guardiaSemana < 530) {
@@ -344,8 +535,10 @@ export const analizarRendimiento = (
     guardiaSemana += 1
   }
 
-  orden.forEach((rev) => {
-    const fecha = dayjs(rev.created_at)
+  // Las revisiones se imputan a la semana de su JORNADA, no a la del reloj:
+  // un turno de noche del sábado que termina el domingo pertenece al sábado.
+  porJornada.forEach((jornada) => {
+    const fecha = dayjs(jornada.fecha)
     const clave = `${fecha.isoWeekYear()}-W${String(fecha.isoWeek()).padStart(2, '0')}`
     const entrada = porSemanaMapa.get(clave) ?? {
       revisiones: 0,
@@ -353,8 +546,8 @@ export const analizarRendimiento = (
       inicio: fecha.isoWeekday(1).startOf('day'),
       completa: true,
     }
-    entrada.revisiones += 1
-    entrada.dias.add(fecha.format('YYYY-MM-DD'))
+    entrada.revisiones += jornada.revisiones
+    entrada.dias.add(jornada.fecha)
     porSemanaMapa.set(clave, entrada)
   })
 
@@ -367,12 +560,11 @@ export const analizarRendimiento = (
       etiqueta: `S${valor.inicio.isoWeek()} · ${valor.inicio.format('DD MMM')}`,
       revisiones: valor.revisiones,
       diasActivos: valor.dias.size,
-      // Sólo se declara ausente una semana entera dentro del período
       ausente: valor.revisiones === 0 && valor.completa,
       parcial: !valor.completa,
     }))
 
-  const semanasActivas = porSemana.filter((semana) => !semana.ausente)
+  const semanasActivas = porSemana.filter((semana) => semana.revisiones > 0)
   const mejorSemana =
     semanasActivas.length > 0
       ? semanasActivas.reduce((mejor, actual) =>
@@ -394,7 +586,7 @@ export const analizarRendimiento = (
   const conteoFranja = new Array(FRANJAS.length).fill(0)
   orden.forEach((rev) => {
     const fecha = dayjs(rev.created_at)
-    conteoDiaSemana[fecha.day()] += 1
+    conteoDiaSemana[dayjs(fechaJornada(fecha)).day()] += 1
     const indice = FRANJAS.findIndex(
       (franja) => fecha.hour() >= franja.desde && fecha.hour() < franja.hasta
     )
@@ -407,32 +599,21 @@ export const analizarRendimiento = (
   const medidas = conGps.map((rev) => closestTerminalDistance(rev.lat, rev.lon))
   const dentroGeocerca = medidas.filter((m) => m.inside).length
   const operativos = orden.filter((rev) => rev.estado_bus === 'OPERATIVO').length
-
-  /* ------------------------------------------------------------- Cadencia */
-
-  const jornadasConVarias = porDia.filter((dia) => dia.revisiones > 1)
-  const jornadaMediaMin = media(jornadasConVarias.map((dia) => dia.jornadaMin))
-  const revisionesPorHora =
-    jornadaMediaMin && jornadaMediaMin > 0
-      ? Math.round(
-          (media(jornadasConVarias.map((dia) => dia.revisiones)) ?? 0) /
-            (jornadaMediaMin / 60) *
-            10
-        ) / 10
-      : null
+  const precisionGps = conGps.length > 0 ? (dentroGeocerca / conGps.length) * 100 : null
 
   /* -------------------------------------------------------------- Alertas */
 
   const alertas: Alerta[] = []
   const cobertura =
-    diasLaborables.length > 0 ? (porDia.length / diasLaborables.length) * 100 : 0
+    diasLaborables.length > 0 ? (porJornada.length / diasLaborables.length) * 100 : 0
 
   if (orden.length === 0) {
     alertas.push({
       severidad: 'critica',
       titulo: 'Sin actividad en el período',
-      detalle:
-        'No se registró ninguna revisión en el rango analizado. Conviene confirmar si hubo licencia, cambio de turno o un problema con la aplicación.',
+      detalle: 'No se registró ninguna revisión en el rango analizado.',
+      accion:
+        'Confirmar si hubo licencia, vacaciones o cambio de turno antes de escalar.',
     })
   }
 
@@ -443,6 +624,7 @@ export const analizarRendimiento = (
       detalle: `La semana del ${dayjs(semana.inicio).format(
         'DD [de] MMMM'
       )} no tiene ninguna revisión registrada.`,
+      accion: 'Cruzar con el libro de asistencia: ausencia justificada o no reportada.',
     })
   })
 
@@ -454,22 +636,26 @@ export const analizarRendimiento = (
         alertas.push({
           severidad: 'alta',
           titulo: `Semana ${semana.numero} por debajo de lo habitual`,
-          detalle: `${semana.revisiones} revisiones frente a una mediana de ${medianaSemanal} por semana.`,
+          detalle: `${semana.revisiones} revisiones en ${semana.diasActivos} día${
+            semana.diasActivos !== 1 ? 's' : ''
+          }, frente a una mediana de ${medianaSemanal} por semana.`,
+          accion: 'Revisar si coincide con turno reducido, feriado o falta de buses.',
         })
       })
   }
 
   if (medianaDiaria > 0) {
     const umbralDia = Math.max(1, Math.round(medianaDiaria * FACTOR_DIA_BAJO))
-    const diasFlojos = porDia.filter((dia) => dia.revisiones < umbralDia)
+    const diasFlojos = porJornada.filter((dia) => dia.revisiones < umbralDia)
     if (diasFlojos.length > 0) {
       alertas.push({
         severidad: 'media',
         titulo: `${diasFlojos.length} jornada${diasFlojos.length !== 1 ? 's' : ''} con volumen bajo`,
-        detalle: `Días por debajo de ${umbralDia} revisiones (mediana diaria: ${medianaDiaria}): ${diasFlojos
+        detalle: `Por debajo de ${umbralDia} revisiones (mediana diaria: ${medianaDiaria}): ${diasFlojos
           .slice(0, 6)
           .map((dia) => `${dayjs(dia.fecha).format('DD MMM')} (${dia.revisiones})`)
-          .join(', ')}${diasFlojos.length > 6 ? '…' : ''}.`,
+          .join(', ')}${diasFlojos.length > 6 ? '…' : '.'}`,
+        accion: 'Contrastar con la duración del turno de esos días antes de concluir.',
       })
     }
   }
@@ -483,23 +669,34 @@ export const analizarRendimiento = (
       detalle: `Sin revisiones el ${diasAusentes
         .slice(0, 8)
         .map((dia) => dayjs(dia).format('DD MMM'))
-        .join(', ')}${diasAusentes.length > 8 ? '…' : ''}.`,
+        .join(', ')}${diasAusentes.length > 8 ? '…' : '.'}`,
+      accion: 'Verificar libranzas y turnos asignados: puede ser descanso programado.',
     })
   }
 
-  if (huecoMaximoMin !== null && huecoMaximoMin > HUECO_LARGO_MIN) {
-    const horas = Math.floor(huecoMaximoMin / 60)
-    const minutos = huecoMaximoMin % 60
+  // Pausas: sólo cuentan las de DENTRO de un turno. El descanso entre turnos
+  // ya no aparece aquí, que era justo el falso positivo de 18 horas.
+  const turnosConPausaLarga = turnos.filter(
+    (turno) => (turno.pausaMaxMin ?? 0) > PAUSA_LARGA_MIN
+  )
+  if (turnosConPausaLarga.length > 0) {
+    const peor = turnosConPausaLarga.reduce((a, b) =>
+      (a.pausaMaxMin ?? 0) > (b.pausaMaxMin ?? 0) ? a : b
+    )
     alertas.push({
       severidad: 'media',
-      titulo: 'Pausa larga dentro de una jornada',
-      detalle: `El ${dayjs(huecoMaximoFecha ?? undefined).format(
-        'DD [de] MMMM'
-      )} pasaron ${horas} h ${minutos} min entre dos revisiones consecutivas.`,
+      titulo: `${turnosConPausaLarga.length} turno${
+        turnosConPausaLarga.length !== 1 ? 's' : ''
+      } con una pausa larga`,
+      detalle: `La mayor fue el ${dayjs(peor.fechaJornada).format('DD [de] MMMM')} (turno de ${
+        peor.tipo === 'noche' ? 'noche' : 'día'
+      }, ${peor.inicioHora}–${peor.finHora}): ${formatearMinutos(
+        peor.pausaMaxMin
+      )} sin registrar ninguna revisión.`,
+      accion: 'Preguntar por colación, traslado entre terminales o falla de equipo.',
     })
   }
 
-  const precisionGps = conGps.length > 0 ? (dentroGeocerca / conGps.length) * 100 : null
   if (precisionGps !== null && precisionGps < 70) {
     alertas.push({
       severidad: 'alta',
@@ -507,6 +704,7 @@ export const analizarRendimiento = (
       detalle: `Sólo el ${precisionGps.toFixed(
         0
       )} % de las revisiones con GPS cae dentro del perímetro de un terminal.`,
+      accion: 'Validar en el mapa del colaborador si el patrón es sistemático.',
     })
   }
 
@@ -517,6 +715,7 @@ export const analizarRendimiento = (
       titulo: `${sinGps} ${sinGps === 1 ? 'revisión' : 'revisiones'} sin coordenadas`,
       detalle:
         'No se pudo validar la ubicación de esas revisiones. Suele indicar el GPS desactivado en el dispositivo.',
+      accion: 'Recordar mantener la ubicación activa durante el turno.',
     })
   }
 
@@ -525,14 +724,13 @@ export const analizarRendimiento = (
       severidad: 'info',
       titulo: 'Sin incidencias detectadas',
       detalle:
-        'La constancia, el ritmo y la ubicación de las revisiones se mantienen dentro de lo esperado para este colaborador.',
+        'Constancia, ritmo dentro del turno y ubicación se mantienen dentro de lo esperado para este colaborador.',
+      accion: 'Sin acción requerida.',
     })
   }
 
   /* ----------------------------------------------------------- Puntuación */
 
-  // Cuatro componentes con pesos explícitos. La constancia manda: revisar
-  // todos los días es lo que sostiene el control de flota.
   const compConstancia = Math.min(100, cobertura)
   const compVolumen =
     medianaDiaria > 0 ? Math.min(100, (promedioDiario / medianaDiaria) * 100) : 0
@@ -562,6 +760,57 @@ export const analizarRendimiento = (
           ? 'Irregular'
           : 'Requiere seguimiento'
 
+  /* --------------------------------------------------------- Conclusiones */
+
+  const conclusiones: string[] = []
+
+  if (patron.totalTurnos > 0) {
+    const describir = (tipo: TipoTurno) => {
+      const horario = patron.horarios[tipo]
+      const nombre = tipo === 'dia' ? 'día' : 'noche'
+      return `${horario.turnos} de ${nombre} (${horario.entrada}–${horario.salida}, ${formatearMinutos(
+        horario.duracionMedianaMin
+      )})`
+    }
+
+    const partes: string[] = []
+    if (patron.turnosDia > 0) partes.push(describir('dia'))
+    if (patron.turnosNoche > 0) partes.push(describir('noche'))
+
+    conclusiones.push(
+      `Trabajó ${patron.totalTurnos} turnos en el período: ${partes.join(
+        ' y '
+      )}. Promedia ${patron.revisionesPorTurno} revisiones por turno, a ${patron.ritmoMedioPorHora} por hora efectiva.`
+    )
+  }
+
+  conclusiones.push(
+    `Cubre ${porJornada.length} de ${diasLaborables.length} días laborables (${cobertura.toFixed(
+      0
+    )} %), con una racha máxima de ${rachaMaxima} días seguidos.`
+  )
+
+  if (mejorSemana) {
+    conclusiones.push(
+      `Su mejor semana fue la ${mejorSemana.numero} con ${mejorSemana.revisiones} revisiones;` +
+        (semanasAusentes.length === 0
+          ? ' no hay semanas en blanco.'
+          : semanasAusentes.length === 1
+            ? ` quedó 1 semana sin ninguna actividad (la ${semanasAusentes[0].numero}).`
+            : ` quedaron ${semanasAusentes.length} semanas sin ninguna actividad.`)
+    )
+  }
+
+  if (precisionGps !== null) {
+    conclusiones.push(
+      `El ${precisionGps.toFixed(0)} % de sus revisiones se registró dentro de la geocerca de un terminal, a ${
+        medidas.length > 0
+          ? Math.round(medidas.reduce((acc, m) => acc + m.distance, 0) / medidas.length)
+          : 0
+      } m de media.`
+    )
+  }
+
   return {
     rut: identidad.rut,
     nombre: identidad.nombre,
@@ -579,21 +828,23 @@ export const analizarRendimiento = (
 
     diasDelPeriodo: diasDelPeriodo.length,
     diasLaborables: diasLaborables.length,
-    diasActivos: porDia.length,
+    diasActivos: porJornada.length,
     diasAusentes,
     cobertura,
     rachaMaxima,
     promedioPorDiaActivo: promedioDiario,
     medianaPorDiaActivo: medianaDiaria,
 
-    cadenciaMediaMin: media(todasLasCadencias),
-    cadenciaMedianaMin: mediana(todasLasCadencias),
-    huecoMaximoMin,
-    huecoMaximoFecha,
-    jornadaMediaMin,
-    revisionesPorHora,
+    turnos,
+    patron,
+    horasTrabajadas,
 
-    porDia,
+    cadenciaMediaMin: media(cadencias),
+    cadenciaMedianaMin: mediana(cadencias),
+    pausaMaximaMin: pausaMaximaTurno?.pausaMaxMin ?? null,
+    pausaMaximaTurno,
+
+    porJornada,
     porSemana,
     mejorSemana,
     peorSemanaActiva,
@@ -620,6 +871,7 @@ export const analizarRendimiento = (
     puntuacion,
     notaGlobal,
     componentes,
+    conclusiones,
   }
 }
 
@@ -631,3 +883,5 @@ export const formatearMinutos = (minutos: number | null): string => {
   const resto = minutos % 60
   return resto === 0 ? `${horas} h` : `${horas} h ${resto} min`
 }
+
+export const etiquetaTurno = (tipo: TipoTurno) => (tipo === 'noche' ? 'Noche' : 'Día')

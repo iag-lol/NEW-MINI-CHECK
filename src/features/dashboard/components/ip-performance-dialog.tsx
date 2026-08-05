@@ -1244,35 +1244,50 @@ const PanelRendimiento = ({
         ))}
       </div>
 
-      {/* Ritmo de trabajo */}
+      {/* Patrón de turnos: el descanso entre jornadas no cuenta como pausa */}
       <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
         <DatoRitmo
-          etiqueta="Entre revisiones"
-          valor={formatearMinutos(analisis.cadenciaMedianaMin)}
-          nota="mediana del período"
+          etiqueta="Turnos"
+          valor={String(analisis.patron.totalTurnos)}
+          nota={`${analisis.patron.turnosDia} día · ${analisis.patron.turnosNoche} noche`}
         />
         <DatoRitmo
-          etiqueta="Jornada media"
-          valor={formatearMinutos(analisis.jornadaMediaMin)}
+          etiqueta={
+            analisis.patron.turnoDominante === 'noche' ? 'Horario · noche' : 'Horario · día'
+          }
+          valor={(() => {
+            // Se muestra el horario del tipo de turno predominante: mezclar
+            // día y noche daría una hora media que esta persona nunca hace.
+            const tipo =
+              analisis.patron.turnoDominante === 'noche' ? 'noche' : 'dia'
+            const horario = analisis.patron.horarios[tipo]
+            return horario.entrada ? `${horario.entrada}–${horario.salida}` : '—'
+          })()}
           nota={
-            analisis.revisionesPorHora !== null
-              ? `${analisis.revisionesPorHora} rev/hora`
-              : 'sin datos'
+            analisis.patron.turnoDominante === 'mixto'
+              ? `mixto · ${formatearMinutos(analisis.patron.duracionMedianaMin)} por turno`
+              : formatearMinutos(analisis.patron.duracionMedianaMin)
           }
         />
         <DatoRitmo
-          etiqueta="Pausa más larga"
-          valor={formatearMinutos(analisis.huecoMaximoMin)}
-          nota={
-            analisis.huecoMaximoFecha
-              ? dayjs(analisis.huecoMaximoFecha).format('DD MMM')
+          etiqueta="Ritmo en turno"
+          valor={
+            analisis.patron.ritmoMedioPorHora !== null
+              ? `${analisis.patron.ritmoMedioPorHora}/h`
               : '—'
           }
+          nota={`${analisis.patron.revisionesPorTurno ?? '—'} por turno`}
         />
         <DatoRitmo
-          etiqueta="Promedio diario"
-          valor={String(analisis.promedioPorDiaActivo)}
-          nota={`mediana ${analisis.medianaPorDiaActivo}`}
+          etiqueta="Pausa máx. en turno"
+          valor={formatearMinutos(analisis.pausaMaximaMin)}
+          nota={
+            analisis.pausaMaximaTurno
+              ? `${dayjs(analisis.pausaMaximaTurno.fechaJornada).format('DD MMM')} · ${
+                  analisis.pausaMaximaTurno.tipo === 'noche' ? 'noche' : 'día'
+                }`
+              : 'sin pausas'
+          }
         />
       </div>
 
