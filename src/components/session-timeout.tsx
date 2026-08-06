@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { LogOut, ShieldAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ModalPortal } from '@/components/ui/modal-portal'
 import { useInactividad } from '@/hooks/use-inactividad'
 import { AVISO_MS, INACTIVIDAD_MS } from '@/lib/sesion'
 
@@ -32,70 +33,72 @@ export const SessionTimeout = () => {
   const progreso = Math.max(0, Math.min(1, (segundos * 1000) / AVISO_MS))
 
   return (
-    <AnimatePresence>
-      {avisando && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
-          role="alertdialog"
-          aria-modal="true"
-          aria-labelledby="titulo-inactividad"
-        >
+    <ModalPortal abierto={avisando}>
+      <AnimatePresence>
+        {avisando && (
           <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.98 }}
-            transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-            className="glass-panel-strong w-full max-w-sm overflow-hidden rounded-[var(--app-radius)] border border-white/60 p-5 shadow-2xl dark:border-white/10"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="titulo-inactividad"
           >
-            <div className="flex items-start gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br from-amber-400 to-orange-600 text-white shadow-lg">
-                <ShieldAlert className="h-5 w-5" />
-              </span>
-              <div className="min-w-0">
-                <p
-                  id="titulo-inactividad"
-                  className="text-[15px] font-extrabold leading-tight text-slate-900 dark:text-white"
-                >
-                  ¿Sigues ahí?
-                </p>
-                <p className="mt-1 text-[12.5px] leading-snug text-slate-600 dark:text-slate-300">
-                  Por seguridad, la sesión se cierra tras {minutos} minutos sin actividad.
-                  Se cerrará en{' '}
-                  <span className="font-bold tabular-nums text-slate-900 dark:text-white">
-                    {segundos}s
-                  </span>
-                  .
-                </p>
+            <motion.div
+              initial={{ opacity: 0, y: 16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+              className="glass-panel-strong w-full max-w-sm overflow-hidden rounded-[var(--app-radius)] border border-white/60 p-5 shadow-2xl dark:border-white/10"
+            >
+              <div className="flex items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-gradient-to-br from-amber-400 to-orange-600 text-white shadow-lg">
+                  <ShieldAlert className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p
+                    id="titulo-inactividad"
+                    className="text-[15px] font-extrabold leading-tight text-slate-900 dark:text-white"
+                  >
+                    ¿Sigues ahí?
+                  </p>
+                  <p className="mt-1 text-[12.5px] leading-snug text-slate-600 dark:text-slate-300">
+                    Por seguridad, la sesión se cierra tras {minutos} minutos sin actividad.
+                    Se cerrará en{' '}
+                    <span className="font-bold tabular-nums text-slate-900 dark:text-white">
+                      {segundos}s
+                    </span>
+                    .
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-800/70">
-              <div
-                className="h-full rounded-full bg-amber-500 transition-[width] duration-1000 ease-linear"
-                style={{ width: `${progreso * 100}%` }}
-              />
-            </div>
+              <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-800/70">
+                <div
+                  className="h-full rounded-full bg-amber-500 transition-[width] duration-1000 ease-linear"
+                  style={{ width: `${progreso * 100}%` }}
+                />
+              </div>
 
-            <p className="mt-3 text-[11px] leading-snug text-slate-500 dark:text-slate-400">
-              Si estabas llenando una inspección, continúa antes de que se cierre: los
-              datos sin enviar no se guardan.
-            </p>
+              <p className="mt-3 text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+                Si estabas llenando una inspección, continúa antes de que se cierre: los
+                datos sin enviar no se guardan.
+              </p>
 
-            <div className="mt-4 flex gap-2">
-              <Button onClick={seguirConectado} className="flex-1">
-                Seguir conectado
-              </Button>
-              <Button variant="outline" onClick={cerrarAhora} className="gap-1.5">
-                <LogOut className="h-4 w-4" />
-                Salir
-              </Button>
-            </div>
+              <div className="mt-4 flex gap-2">
+                <Button onClick={seguirConectado} className="flex-1">
+                  Seguir conectado
+                </Button>
+                <Button variant="outline" onClick={cerrarAhora} className="gap-1.5">
+                  <LogOut className="h-4 w-4" />
+                  Salir
+                </Button>
+              </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        )}
+      </AnimatePresence>
+    </ModalPortal>
   )
 }
