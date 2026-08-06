@@ -1,10 +1,9 @@
 import { Badge } from '@/components/ui/badge'
 import { ModuleLayout } from '@/components/layout/module-layout'
+import { GraficoBarras, GraficoDona, PALETA } from '@/components/charts/graficos-modulo'
 import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
 import { ShieldCheck, CheckCircle2, XCircle, Hash } from 'lucide-react'
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import type { PieLabelRenderProps } from 'recharts'
 
 type TagsRow = Database['public']['Tables']['tags']['Row']
 
@@ -77,69 +76,31 @@ export const TagModulePage = () => {
         },
       ]}
       getCharts={(rows) => {
-        const estadoData = [
-          { estado: 'Instalado', cantidad: rows.filter((row) => row.tiene).length },
-          { estado: 'Sin TAG', cantidad: rows.filter((row) => !row.tiene).length },
-        ]
-        const totalEstados = estadoData.reduce((sum, item) => sum + item.cantidad, 0)
-        const terminalCounts = rows.reduce<Record<string, number>>((acc, row) => {
-          acc[row.terminal] = (acc[row.terminal] ?? 0) + 1
-          return acc
-        }, {})
-        const terminalData = Object.entries(terminalCounts).map(([terminal, value]) => ({
-          name: terminal,
-          value,
-        }))
-        if (terminalData.length === 0) {
-          terminalData.push({ name: 'Sin datos', value: 1 })
-        }
+        const porTerminal = Object.entries(
+          rows.reduce<Record<string, number>>((acc, row) => {
+            acc[row.terminal] = (acc[row.terminal] ?? 0) + 1
+            return acc
+          }, {})
+        )
+          .map(([nombre, valor]) => ({ nombre, valor }))
+          .sort((a, b) => b.valor - a.valor)
 
         return [
           {
-            title: 'Estado de Instalación',
+            title: 'Estado de instalación',
             component: (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart
-                  data={
-                    totalEstados > 0 ? estadoData : [{ estado: 'Sin datos', cantidad: 0 }]
-                  }
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="estado" stroke="#64748b" fontSize={12} />
-                  <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="cantidad" fill="#6366f1" name="Cantidad" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <GraficoDona
+                etiquetaCentro="revisiones"
+                datos={[
+                  { nombre: 'Instalado', valor: rows.filter((row) => row.tiene).length, color: PALETA.ok },
+                  { nombre: 'Sin TAG', valor: rows.filter((row) => !row.tiene).length, color: PALETA.falla },
+                ]}
+              />
             ),
           },
           {
-            title: 'Distribución por Terminal',
-            component: (
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={terminalData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry: PieLabelRenderProps) => `${entry.name}: ${entry.value}`}
-                    outerRadius={90}
-                    dataKey="value"
-                  >
-                    {terminalData.map((entry, index) => (
-                      <Cell
-                        key={`${entry.name}-${index}`}
-                        fill={['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#0ea5e9'][index % 5]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            ),
+            title: 'Revisiones por terminal',
+            component: <GraficoBarras datos={porTerminal} />,
           },
         ]
       }}

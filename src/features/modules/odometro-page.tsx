@@ -1,10 +1,9 @@
 import { Badge } from '@/components/ui/badge'
 import { ModuleLayout } from '@/components/layout/module-layout'
+import { GraficoArea, GraficoDona, PALETA } from '@/components/charts/graficos-modulo'
 import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
 import { Gauge, TrendingUp, CheckCircle2, AlertTriangle } from 'lucide-react'
-import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import type { PieLabelRenderProps } from 'recharts'
 
 type OdometroRow = Database['public']['Tables']['odometro']['Row']
 
@@ -79,76 +78,32 @@ export const OdometroModulePage = () => {
         },
       ]}
       getCharts={(rows) => {
-        const sorted = [...rows].sort(
-          (a, b) => dayjs(a.created_at).valueOf() - dayjs(b.created_at).valueOf()
-        )
-        const trendData = sorted
+        const tendencia = [...rows]
+          .sort((a, b) => dayjs(a.created_at).valueOf() - dayjs(b.created_at).valueOf())
           .slice(-20)
           .map((row) => ({
-            date: dayjs(row.created_at).format('DD MMM'),
-            lectura: Number(row.lectura),
+            nombre: dayjs(row.created_at).format('DD MMM'),
+            valor: Number(row.lectura),
           }))
-        if (!trendData.length) {
-          trendData.push({ date: 'Sin datos', lectura: 0 })
-        }
-        const stateMeta = [
-          { key: 'OK' as const, label: 'OK', color: '#10b981' },
-          { key: 'INCONSISTENTE' as const, label: 'Inconsistente', color: '#f59e0b' },
-          { key: 'NO_FUNCIONA' as const, label: 'No funciona', color: '#ef4444' },
-        ]
-        const stateData = stateMeta.map(({ key, label, color }) => ({
-          name: label,
-          value: rows.filter((row) => row.estado === key).length,
-          color,
-        }))
-        const stateDataFinal = stateData.some((entry) => entry.value > 0)
-          ? stateData
-          : [{ name: 'Sin datos', value: 1, color: '#cbd5f5' }]
 
         return [
           {
-            title: 'Tendencia de Lecturas (Últimas 20)',
+            title: 'Tendencia de lecturas (últimas 20)',
             component: (
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={trendData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="date" stroke="#64748b" fontSize={12} />
-                  <YAxis stroke="#64748b" fontSize={12} />
-                  <Tooltip />
-                  <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="lectura"
-                    stroke="#6366f1"
-                    strokeWidth={2}
-                    name="Kilometraje"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <GraficoArea datos={tendencia} sufijo=" km" nombreSerie="Kilometraje" />
             ),
           },
           {
-            title: 'Distribución por Estado',
+            title: 'Estado de las lecturas',
             component: (
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={stateDataFinal}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry: PieLabelRenderProps) => `${entry.name}: ${entry.value}`}
-                    outerRadius={90}
-                    dataKey="value"
-                  >
-                    {stateDataFinal.map((entry, index) => (
-                      <Cell key={`${entry.name}-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              <GraficoDona
+                etiquetaCentro="lecturas"
+                datos={[
+                  { nombre: 'OK', valor: rows.filter((row) => row.estado === 'OK').length, color: PALETA.ok },
+                  { nombre: 'Inconsistente', valor: rows.filter((row) => row.estado === 'INCONSISTENTE').length, color: PALETA.atencion },
+                  { nombre: 'No funciona', valor: rows.filter((row) => row.estado === 'NO_FUNCIONA').length, color: PALETA.falla },
+                ]}
+              />
             ),
           },
         ]

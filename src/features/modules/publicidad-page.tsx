@@ -1,10 +1,9 @@
 import { Badge } from '@/components/ui/badge'
 import { ModuleLayout } from '@/components/layout/module-layout'
+import { GraficoBarrasDobles, GraficoDona, PALETA } from '@/components/charts/graficos-modulo'
 import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
 import { Megaphone, CheckCircle2, XCircle, AlertTriangle, Tag } from 'lucide-react'
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import type { PieLabelRenderProps } from 'recharts'
 
 type PublicidadRow = Database['public']['Tables']['publicidad']['Row']
 const lateralAreas = [
@@ -94,72 +93,40 @@ export const PublicidadModulePage = () => {
         },
       ]}
       getCharts={(rows) => {
-        const lateralData = lateralAreas.map((area) => {
-          let con = 0
-          let sin = 0
-          rows.forEach((row) => {
-            const detalle = row.detalle_lados as Record<LateralKey, { tiene: boolean }> | null
-            const lateral = detalle?.[area.key]
-            if (lateral?.tiene) con += 1
-            else sin += 1
-          })
-          return { lateral: area.label, Con: con, Sin: sin }
-        })
-        const hallazgoBuckets = {
-          ambos: rows.filter((row) => row.danio && row.residuos).length,
-          soloDanio: rows.filter((row) => row.danio && !row.residuos).length,
-          soloResiduos: rows.filter((row) => !row.danio && row.residuos).length,
-          limpios: rows.filter((row) => row.danio === false && row.residuos === false).length,
-          sinDato: rows.filter((row) => row.danio == null && row.residuos == null).length,
-        }
-        const hallazgosDataRaw = [
-          { name: 'Limpios', value: hallazgoBuckets.limpios, color: '#10b981' },
-          { name: 'Solo daño', value: hallazgoBuckets.soloDanio, color: '#f97316' },
-          { name: 'Solo residuos', value: hallazgoBuckets.soloResiduos, color: '#facc15' },
-          { name: 'Daño + residuos', value: hallazgoBuckets.ambos, color: '#ef4444' },
-          { name: 'Sin dato', value: hallazgoBuckets.sinDato, color: '#94a3b8' },
-        ]
-        const hallazgosData = hallazgosDataRaw.filter((item) => item.value > 0)
-        if (!hallazgosData.length) hallazgosData.push({ name: 'Sin registros', value: 1, color: '#e2e8f0' })
         return [
           {
             title: 'Instalación por lateral',
             component: (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={lateralData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="lateral" stroke="#64748b" fontSize={12} />
-                  <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="Con" stackId="a" fill="#0ea5e9" radius={[8, 8, 0, 0]} name="Con publicidad" />
-                  <Bar dataKey="Sin" stackId="a" fill="#cbd5f5" radius={[8, 8, 0, 0]} name="Sin publicidad" />
-                </BarChart>
-              </ResponsiveContainer>
+              <GraficoBarrasDobles
+                apilado
+                datos={lateralAreas.map((area) => {
+                  let con = 0
+                  let sin = 0
+                  rows.forEach((row) => {
+                    const detalle = row.detalle_lados as Record<LateralKey, { tiene: boolean }> | null
+                    if (detalle?.[area.key]?.tiene) con += 1
+                    else sin += 1
+                  })
+                  return { nombre: area.label, a: con, b: sin }
+                })}
+                serieA={{ nombre: 'Con publicidad', color: PALETA.marca }}
+                serieB={{ nombre: 'Sin publicidad', color: '#cbd5e1' }}
+              />
             ),
           },
           {
-            title: 'Distribución de hallazgos',
+            title: 'Hallazgos en campañas',
             component: (
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie
-                    data={hallazgosData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry: PieLabelRenderProps) => `${entry.name}: ${entry.value}`}
-                    outerRadius={90}
-                    dataKey="value"
-                  >
-                    {hallazgosData.map((entry, index) => (
-                      <Cell key={`${entry.name}-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              <GraficoDona
+                etiquetaCentro="buses"
+                datos={[
+                  { nombre: 'Limpios', valor: rows.filter((row) => row.danio === false && row.residuos === false).length, color: PALETA.ok },
+                  { nombre: 'Sólo daño', valor: rows.filter((row) => row.danio && !row.residuos).length, color: '#f97316' },
+                  { nombre: 'Sólo residuos', valor: rows.filter((row) => !row.danio && row.residuos).length, color: PALETA.atencion },
+                  { nombre: 'Daño + residuos', valor: rows.filter((row) => row.danio && row.residuos).length, color: PALETA.falla },
+                  { nombre: 'Sin dato', valor: rows.filter((row) => row.danio == null && row.residuos == null).length, color: PALETA.neutro },
+                ]}
+              />
             ),
           },
         ]

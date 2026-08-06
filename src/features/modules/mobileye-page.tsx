@@ -1,10 +1,9 @@
 import { Badge } from '@/components/ui/badge'
 import { ModuleLayout } from '@/components/layout/module-layout'
+import { GraficoBarrasDobles, GraficoDona, PALETA } from '@/components/charts/graficos-modulo'
 import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
 import { Radar, CheckCircle2, XCircle, AlertTriangle, Monitor } from 'lucide-react'
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import type { PieLabelRenderProps } from 'recharts'
 
 type MobileyeRow = Database['public']['Tables']['mobileye']['Row']
 
@@ -83,25 +82,15 @@ export const MobileyeModulePage = () => {
         },
       ]}
       getCharts={(rows) => {
-        const componentFields = [
-          { key: 'alerta_izq' as const, label: 'Alerta izquierda' },
-          { key: 'alerta_der' as const, label: 'Alerta derecha' },
+        const componentes = [
+          { key: 'alerta_izq' as const, label: 'Alerta izq.' },
+          { key: 'alerta_der' as const, label: 'Alerta der.' },
           { key: 'consola' as const, label: 'Consola' },
-          { key: 'sensor_frontal' as const, label: 'Sensor frontal' },
-          { key: 'sensor_izq' as const, label: 'Sensor izquierdo' },
-          { key: 'sensor_der' as const, label: 'Sensor derecho' },
+          { key: 'sensor_frontal' as const, label: 'S. frontal' },
+          { key: 'sensor_izq' as const, label: 'S. izquierdo' },
+          { key: 'sensor_der' as const, label: 'S. derecho' },
         ]
-        const componentData = componentFields.map(({ key, label }) => ({
-          componente: label,
-          ok: rows.filter((row) => row[key] === true).length,
-          falla: rows.filter((row) => row[key] === false).length,
-        }))
-        const hasComponentData = componentData.some((row) => row.ok > 0 || row.falla > 0)
-        const cleanComponentData = hasComponentData
-          ? componentData
-          : [{ componente: 'Sin datos', ok: 0, falla: 0 }]
-
-        const systemsOk = rows.filter(
+        const sistemasOk = rows.filter(
           (row) =>
             row.alerta_der &&
             row.alerta_izq &&
@@ -110,54 +99,32 @@ export const MobileyeModulePage = () => {
             row.sensor_izq &&
             row.sensor_frontal
         ).length
-        const statusDataRaw = [
-          { name: 'Operativos', value: systemsOk, color: '#10b981' },
-          { name: 'Con fallas', value: rows.length - systemsOk, color: '#f97316' },
-        ]
-        const statusData =
-          statusDataRaw.some((item) => item.value > 0) ?
-            statusDataRaw :
-            [{ name: 'Sin datos', value: 1, color: '#cbd5f5' }]
 
         return [
           {
-            title: 'Estado de Componentes',
+            title: 'Estado por componente',
             component: (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={cleanComponentData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="componente" stroke="#64748b" fontSize={12} />
-                  <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="ok" fill="#10b981" name="OK" radius={[8, 8, 0, 0]} />
-                  <Bar dataKey="falla" fill="#ef4444" name="Falla" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <GraficoBarrasDobles
+                datos={componentes.map(({ key, label }) => ({
+                  nombre: label,
+                  a: rows.filter((row) => row[key] === true).length,
+                  b: rows.filter((row) => row[key] === false).length,
+                }))}
+                serieA={{ nombre: 'Operativo', color: PALETA.ok }}
+                serieB={{ nombre: 'Dañado', color: PALETA.falla }}
+              />
             ),
           },
           {
-            title: 'Distribución de Estado General',
+            title: 'Equipos completos',
             component: (
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={statusData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry: PieLabelRenderProps) => `${entry.name}: ${entry.value}`}
-                    outerRadius={90}
-                    dataKey="value"
-                  >
-                    {statusData.map((entry, index) => (
-                      <Cell key={`${entry.name}-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              <GraficoDona
+                etiquetaCentro="equipos"
+                datos={[
+                  { nombre: 'Sin fallas', valor: sistemasOk, color: PALETA.ok },
+                  { nombre: 'Con alguna falla', valor: rows.length - sistemasOk, color: PALETA.atencion },
+                ]}
+              />
             ),
           },
         ]

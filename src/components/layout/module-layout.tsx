@@ -209,8 +209,8 @@ export const ModuleLayout = <T extends TableName>({
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-slate-500" />
-                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                <Filter className="h-3.5 w-3.5 text-brand-500" />
+                <span className="text-[13px] font-extrabold tracking-[-0.01em] text-slate-800 dark:text-slate-200">
                   Filtros y búsqueda
                 </span>
               </div>
@@ -250,7 +250,7 @@ export const ModuleLayout = <T extends TableName>({
               >
                 {filters.map((filter) => (
                   <div key={filter.key}>
-                    <label className="mb-1.5 block text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    <label className="mb-1.5 block text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
                       {filter.label}
                     </label>
                     <select
@@ -258,7 +258,7 @@ export const ModuleLayout = <T extends TableName>({
                       onChange={(e) =>
                         setFilterValues((prev) => ({ ...prev, [filter.key]: e.target.value }))
                       }
-                      className="glass-control h-11 w-full rounded-xl border px-3 text-sm text-slate-900 outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-300/20 dark:text-white"
+                      className="glass-control h-10 w-full rounded-[12px] border px-3 text-[13px] text-slate-900 outline-none focus:border-brand-400 focus:ring-4 focus:ring-brand-300/20 dark:text-white"
                     >
                       <option value="">Todos</option>
                       {filter.options?.map((option) => (
@@ -288,12 +288,20 @@ export const ModuleLayout = <T extends TableName>({
         </Card>
       )}
 
-      {/* Charts */}
+      {/* Análisis */}
       {chartConfigs.length > 0 && (
-        <div className={cn('grid gap-4', chartConfigs.length === 1 ? 'grid-cols-1' : 'md:grid-cols-2')}>
+        <div
+          className={cn(
+            'grid gap-2.5 sm:gap-4',
+            chartConfigs.length === 1 ? 'grid-cols-1' : 'md:grid-cols-2'
+          )}
+        >
           {chartConfigs.map((chart, index) => (
-            <Card key={index} className="p-6">
-              <h3 className="mb-4 text-lg font-bold text-slate-900 dark:text-white">
+            <Card key={index} className="p-3.5 sm:p-5">
+              <p className="text-[9px] font-black uppercase tracking-[0.16em] text-brand-600 dark:text-brand-400">
+                Análisis
+              </p>
+              <h3 className="mb-3 mt-0.5 text-[14px] font-extrabold tracking-[-0.02em] text-slate-950 dark:text-white sm:text-[15px]">
                 {chart.title}
               </h3>
               {chart.component}
@@ -305,33 +313,92 @@ export const ModuleLayout = <T extends TableName>({
       {/* Listado en tarjetas: la vista de móvil.
           Una tabla de 8 columnas en una pantalla de 390 px sólo se puede leer
           arrastrando de lado, y así se pierde de vista a qué bus pertenece
-          cada dato. En tarjetas cada registro se lee entero de una vez. */}
-      <div className="space-y-2 lg:hidden">
+          cada dato. Cada tarjeta reordena el registro como una ficha: la
+          identidad del bus arriba con su estado al lado, el detalle en una
+          rejilla de dos columnas y la observación como nota al pie. La lista
+          plana etiqueta:valor medía el doble y todo pesaba lo mismo. */}
+      <div className="space-y-2.5 lg:hidden">
         {filteredData?.map((row) => {
           const rowKey = 'id' in row && row.id ? (row.id as string) : JSON.stringify(row)
           const [encabezado, ...resto] = columns
+
+          // Cada columna cumple un papel distinto en la ficha y se detecta
+          // por su etiqueta: así las diez páginas de módulo se benefician sin
+          // declarar nada nuevo.
+          const etiquetaDe = (col: Column<TableRow<T>>) => col.label.toLowerCase()
+          // El "veredicto" de cada módulo se llama distinto en cada página;
+          // esta lista los reúne para subirlo junto a la PPU
+          const colEstado = resto.find((col) =>
+            [
+              'estado',
+              'resultado',
+              'cumplimiento',
+              'estado general',
+              'monitor',
+              'instalación',
+              'internet',
+            ].includes(etiquetaDe(col))
+          )
+          const colTerminal = resto.find((col) => etiquetaDe(col) === 'terminal')
+          const colFecha = resto.find((col) => etiquetaDe(col) === 'fecha')
+          const colObservacion = resto.find((col) => etiquetaDe(col).startsWith('observa'))
+          const detalle = resto.filter(
+            (col) =>
+              col !== colEstado &&
+              col !== colTerminal &&
+              col !== colFecha &&
+              col !== colObservacion
+          )
+
           return (
             <Card key={rowKey} className="!p-0">
-              <div className="flex items-center justify-between gap-2 border-b border-white/50 px-3 py-2.5 dark:border-white/[0.06]">
-                <div className="min-w-0 text-[13px] font-extrabold tracking-[-0.02em] text-slate-950 dark:text-white">
-                  {encabezado.render(row)}
-                </div>
-              </div>
-              <dl className="divide-y divide-white/40 dark:divide-white/[0.04]">
-                {resto.map((column) => (
-                  <div
-                    key={column.label}
-                    className="flex items-start justify-between gap-3 px-3 py-2"
-                  >
-                    <dt className="shrink-0 pt-px text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500 dark:text-slate-400">
-                      {column.label}
-                    </dt>
-                    <dd className="min-w-0 flex-1 text-right text-[12px] text-slate-700 dark:text-slate-200">
-                      {column.render(row)}
-                    </dd>
+              {/* Identidad + veredicto: lo que se busca al escanear la lista */}
+              <div className="flex items-center gap-2.5 px-3.5 pb-2 pt-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[14.5px] font-black tracking-[-0.02em] text-slate-950 dark:text-white">
+                    {encabezado.render(row)}
                   </div>
-                ))}
-              </dl>
+                  {(colTerminal || colFecha) && (
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[10.5px] font-semibold text-slate-400">
+                      {colTerminal && <span>{colTerminal.render(row)}</span>}
+                      {colTerminal && colFecha && <span aria-hidden>·</span>}
+                      {colFecha && <span>{colFecha.render(row)}</span>}
+                    </p>
+                  )}
+                </div>
+                {colEstado && <div className="shrink-0">{colEstado.render(row)}</div>}
+              </div>
+
+              {/* Detalle en losetas: dos columnas, etiqueta arriba y valor
+                  abajo. Se lee de un vistazo y ocupa la mitad que la lista */}
+              {detalle.length > 0 && (
+                <div className="grid grid-cols-2 gap-1.5 px-3 pb-2.5">
+                  {detalle.map((column) => (
+                    <div
+                      key={column.label}
+                      className="min-w-0 rounded-[11px] border border-white/55 bg-white/45 px-2.5 py-1.5 dark:border-white/[0.05] dark:bg-white/[0.035]"
+                    >
+                      <p className="truncate text-[8.5px] font-black uppercase tracking-[0.12em] text-slate-400">
+                        {column.label}
+                      </p>
+                      <div className="mt-0.5 text-[12px] font-semibold leading-snug text-slate-800 dark:text-slate-100">
+                        {column.render(row)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {colObservacion && (
+                <div className="border-t border-white/50 px-3.5 py-2 dark:border-white/[0.05]">
+                  <p className="text-[8.5px] font-black uppercase tracking-[0.12em] text-slate-400">
+                    {colObservacion.label}
+                  </p>
+                  <div className="mt-0.5 text-[11.5px] leading-snug text-slate-600 dark:text-slate-300">
+                    {colObservacion.render(row)}
+                  </div>
+                </div>
+              )}
             </Card>
           )
         })}
@@ -354,30 +421,52 @@ export const ModuleLayout = <T extends TableName>({
 
       {/* Tabla: a partir de pantalla grande, donde sí caben las columnas */}
       <Card className="hidden overflow-hidden p-0 lg:block">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100/80 px-5 py-3.5 dark:border-white/[0.06]">
+          <div>
+            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-brand-600 dark:text-brand-400">
+              Detalle
+            </p>
+            <h3 className="text-[15px] font-extrabold tracking-[-0.02em] text-slate-950 dark:text-white">
+              Registros del período
+            </h3>
+          </div>
+          <span className="rounded-full border border-white/60 bg-white/50 px-2.5 py-1 text-[11px] font-bold tabular-nums text-slate-600 dark:border-white/[0.07] dark:bg-white/[0.05] dark:text-slate-300">
+            {filteredData.length.toLocaleString('es-CL')}
+            {data && filteredData.length !== data.length && (
+              <span className="font-normal text-slate-400"> de {data.length.toLocaleString('es-CL')}</span>
+            )}
+          </span>
+        </div>
         <div className={cn(tableScrollClassName ?? 'max-h-[60vh]', 'overflow-auto')}>
-          <table className="min-w-full divide-y divide-slate-100 text-sm dark:divide-slate-900">
-            <thead className="sticky top-0 z-10 bg-white/85 text-left uppercase tracking-wide text-slate-500 backdrop-blur-xl dark:bg-slate-900/85">
-              <tr>
+          <table className="min-w-full text-[12.5px]">
+            <thead className="sticky top-0 z-10 bg-white/90 text-left backdrop-blur-xl dark:bg-slate-950/90">
+              <tr className="shadow-[inset_0_-1px_0_rgba(148,163,184,0.25)]">
                 {columns.map((column) => (
                   <th
                     key={column.label}
-                    className={cn('whitespace-nowrap px-4 py-3.5 text-[11px] font-bold tracking-[0.08em] sm:px-6 sm:py-4', column.className)}
+                    className={cn(
+                      'whitespace-nowrap px-4 py-3 text-[10px] font-black uppercase tracking-[0.11em] text-slate-400 first:pl-5 last:pr-5 dark:text-slate-500',
+                      column.className
+                    )}
                   >
                     {column.label}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100/70 bg-white/25 dark:divide-slate-900/70 dark:bg-slate-950/20">
+            <tbody className="divide-y divide-slate-100/70 dark:divide-white/[0.045]">
               {filteredData?.map((row) => {
                 const rowKey = 'id' in row && row.id ? (row.id as string) : JSON.stringify(row)
                 return (
                   <tr
                     key={rowKey}
-                    className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-900/50"
+                    className="transition-colors hover:bg-brand-50/40 dark:hover:bg-brand-950/20"
                   >
                     {columns.map((column) => (
-                      <td key={column.label} className={cn('px-4 py-3.5 sm:px-6 sm:py-4', column.className)}>
+                      <td
+                        key={column.label}
+                        className={cn('px-4 py-3 first:pl-5 last:pr-5', column.className)}
+                      >
                         {column.render(row)}
                       </td>
                     ))}
@@ -387,11 +476,11 @@ export const ModuleLayout = <T extends TableName>({
               {filteredData?.length === 0 && (
                 <tr>
                   <td
-                    className="px-6 py-12 text-center text-slate-400"
+                    className="px-6 py-12 text-center text-[13px] text-slate-400"
                     colSpan={columns.length}
                   >
                     {data?.length === 0
-                      ? 'No hay registros para mostrar todavía. Las revisiones completadas serán visibles al instante gracias a Supabase Realtime.'
+                      ? 'No hay registros para mostrar todavía. Las revisiones completadas aparecen al instante.'
                       : 'No se encontraron resultados con los filtros aplicados.'}
                   </td>
                 </tr>

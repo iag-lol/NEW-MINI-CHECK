@@ -1,10 +1,9 @@
 import { Badge } from '@/components/ui/badge'
 import { ModuleLayout } from '@/components/layout/module-layout'
+import { GraficoBarras, GraficoDona, PALETA } from '@/components/charts/graficos-modulo'
 import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
 import { Wifi, CheckCircle2, WifiOff } from 'lucide-react'
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import type { PieLabelRenderProps } from 'recharts'
 
 type WifiRow = Database['public']['Tables']['wifi']['Row']
 
@@ -86,95 +85,43 @@ export const WifiModulePage = () => {
         },
       ]}
       getCharts={(rows) => {
-        const ppuData = [
-          { estado: 'PPU Visible', cantidad: rows.filter((row) => row.ppu_visible === true).length },
-          { estado: 'PPU No Visible', cantidad: rows.filter((row) => row.ppu_visible === false).length },
-        ]
-        const totalPpu = ppuData.reduce((sum, item) => sum + item.cantidad, 0)
-        
-        const internetData = [
-          { estado: 'Con Internet', cantidad: rows.filter((row) => row.tiene_internet === true).length },
-          { estado: 'Sin Internet', cantidad: rows.filter((row) => row.tiene_internet === false).length },
-        ]
-        const totalInternet = internetData.reduce((sum, item) => sum + item.cantidad, 0)
-
-        const terminalCounts = rows.reduce<Record<string, number>>((acc, row) => {
-          acc[row.terminal] = (acc[row.terminal] ?? 0) + 1
-          return acc
-        }, {})
-        const terminalData = Object.entries(terminalCounts).map(([terminal, value]) => ({
-          name: terminal,
-          value,
-        }))
-        if (terminalData.length === 0) {
-          terminalData.push({ name: 'Sin datos', value: 1 })
-        }
+        const porTerminal = Object.entries(
+          rows.reduce<Record<string, number>>((acc, row) => {
+            acc[row.terminal] = (acc[row.terminal] ?? 0) + 1
+            return acc
+          }, {})
+        )
+          .map(([nombre, valor]) => ({ nombre, valor }))
+          .sort((a, b) => b.valor - a.valor)
 
         return [
           {
-            title: 'Visibilidad de PPU',
+            title: 'Conexión a internet',
             component: (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart
-                  data={
-                    totalPpu > 0 ? ppuData : [{ estado: 'Sin datos', cantidad: 0 }]
-                  }
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="estado" stroke="#64748b" fontSize={12} />
-                  <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="cantidad" fill="#6366f1" name="Cantidad" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <GraficoDona
+                etiquetaCentro="con dato"
+                datos={[
+                  { nombre: 'Con internet', valor: rows.filter((row) => row.tiene_internet === true).length, color: PALETA.ok },
+                  { nombre: 'Sin internet', valor: rows.filter((row) => row.tiene_internet === false).length, color: PALETA.falla },
+                ]}
+              />
             ),
           },
           {
-            title: 'Conexión a Internet',
+            title: 'Visibilidad de la PPU en la red',
             component: (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart
-                  data={
-                    totalInternet > 0 ? internetData : [{ estado: 'Sin datos', cantidad: 0 }]
-                  }
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="estado" stroke="#64748b" fontSize={12} />
-                  <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="cantidad" fill="#10b981" name="Cantidad" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <GraficoBarras
+                datos={[
+                  { nombre: 'PPU visible', valor: rows.filter((row) => row.ppu_visible === true).length, color: PALETA.ok },
+                  { nombre: 'No visible', valor: rows.filter((row) => row.ppu_visible === false).length, color: PALETA.falla },
+                  { nombre: 'Sin dato', valor: rows.filter((row) => row.ppu_visible == null).length, color: PALETA.neutro },
+                ]}
+              />
             ),
           },
           {
-            title: 'Distribución por Terminal',
-            component: (
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={terminalData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry: PieLabelRenderProps) => `${entry.name}: ${entry.value}`}
-                    outerRadius={90}
-                    dataKey="value"
-                  >
-                    {terminalData.map((entry, index) => (
-                      <Cell
-                        key={`${entry.name}-${index}`}
-                        fill={['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#0ea5e9'][index % 5]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            ),
+            title: 'Revisiones por terminal',
+            component: <GraficoBarras datos={porTerminal} />,
           },
         ]
       }}

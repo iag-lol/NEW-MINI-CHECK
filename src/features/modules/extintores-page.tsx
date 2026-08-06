@@ -1,10 +1,9 @@
 import { Badge } from '@/components/ui/badge'
 import { ModuleLayout } from '@/components/layout/module-layout'
+import { GraficoBarras, GraficoDona, PALETA } from '@/components/charts/graficos-modulo'
 import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
 import { BadgeCheck, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import type { PieLabelRenderProps } from 'recharts'
 
 type ExtintoresRow = Database['public']['Tables']['extintores']['Row']
 
@@ -140,81 +139,43 @@ export const ExtintoresModulePage = () => {
         },
       ]}
       getCharts={(rows) => {
-        const instalacionData = [
-          { estado: 'Con Extintor', cantidad: rows.filter((r) => r.tiene).length },
-          { estado: 'Sin Extintor', cantidad: rows.filter((r) => !r.tiene).length },
-        ]
-
-        const certificacionData = [
-          { estado: 'Vigente', cantidad: rows.filter((r) => r.certificacion === 'VIGENTE').length },
-          { estado: 'Vencida', cantidad: rows.filter((r) => r.certificacion === 'VENCIDA').length },
-          { estado: 'Sin dato', cantidad: rows.filter((r) => !r.certificacion).length },
-        ]
-        const presionDataRaw = [
-          { name: 'Óptimo', value: rows.filter((r) => r.presion === 'OPTIMO').length, color: '#10b981' },
-          { name: 'Baja carga', value: rows.filter((r) => r.presion === 'BAJA_CARGA').length, color: '#f59e0b' },
-          { name: 'Sobrecarga', value: rows.filter((r) => r.presion === 'SOBRECARGA').length, color: '#ef4444' },
-          { name: 'Sin dato', value: rows.filter((r) => !r.presion).length, color: '#cbd5f5' },
-        ]
-        const presionData = presionDataRaw.filter((item) => item.value > 0)
-        if (presionData.length === 0) presionData.push({ name: 'Sin registros', value: 1, color: '#e2e8f0' })
         return [
           {
             title: 'Estado de instalación',
             component: (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={instalacionData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="estado" stroke="#64748b" fontSize={12} />
-                  <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                  />
-                  <Legend />
-                  <Bar dataKey="cantidad" fill="#10b981" name="Cantidad" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <GraficoDona
+                etiquetaCentro="revisiones"
+                datos={[
+                  { nombre: 'Con extintor', valor: rows.filter((row) => row.tiene).length, color: PALETA.ok },
+                  { nombre: 'Sin extintor', valor: rows.filter((row) => !row.tiene).length, color: PALETA.falla },
+                ]}
+              />
             ),
           },
           {
-            title: 'Estado de certificaciones',
+            title: 'Certificaciones',
             component: (
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={certificacionData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="estado" stroke="#64748b" fontSize={12} />
-                  <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-                  />
-                  <Legend />
-                  <Bar dataKey="cantidad" fill="#0ea5e9" name="Cantidad" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <GraficoDona
+                etiquetaCentro="extintores"
+                datos={[
+                  { nombre: 'Vigente', valor: rows.filter((row) => row.certificacion === 'VIGENTE').length, color: PALETA.ok },
+                  { nombre: 'Vencida', valor: rows.filter((row) => row.certificacion === 'VENCIDA').length, color: PALETA.falla },
+                  { nombre: 'Sin dato', valor: rows.filter((row) => !row.certificacion).length, color: PALETA.neutro },
+                ]}
+              />
             ),
           },
           {
-            title: 'Distribución de carga en manómetro',
+            title: 'Carga del manómetro',
             component: (
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie
-                    data={presionData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry: PieLabelRenderProps) => `${entry.name}: ${entry.value}`}
-                    outerRadius={90}
-                    dataKey="value"
-                  >
-                    {presionData.map((entry, index) => (
-                      <Cell key={`cell-${entry.name}-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              <GraficoBarras
+                datos={[
+                  { nombre: 'Óptimo', valor: rows.filter((row) => row.presion === 'OPTIMO').length, color: PALETA.ok },
+                  { nombre: 'Baja carga', valor: rows.filter((row) => row.presion === 'BAJA_CARGA').length, color: PALETA.atencion },
+                  { nombre: 'Sobrecarga', valor: rows.filter((row) => row.presion === 'SOBRECARGA').length, color: PALETA.falla },
+                  { nombre: 'Sin dato', valor: rows.filter((row) => !row.presion).length, color: PALETA.neutro },
+                ]}
+              />
             ),
           },
         ]

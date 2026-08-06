@@ -5,27 +5,14 @@ import {
   HelpCircle,
   XCircle,
 } from 'lucide-react'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
 import { Badge } from '@/components/ui/badge'
 import { ModuleLayout } from '@/components/layout/module-layout'
+import { GraficoBarrasDobles, GraficoDona, PALETA } from '@/components/charts/graficos-modulo'
 import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
 
 type Mas15Row = Database['public']['Tables']['mas15']['Row']
 
-const COLORES = ['#16a34a', '#dc2626', '#94a3b8']
 
 export const Mas15ModulePage = () => {
   return (
@@ -97,15 +84,6 @@ export const Mas15ModulePage = () => {
         },
       ]}
       getCharts={(data: Mas15Row[]) => {
-        const resumen = [
-          { nombre: 'Con +15', valor: data.filter((f) => f.tiene_mas15 === true).length },
-          { nombre: 'Sin +15', valor: data.filter((f) => f.tiene_mas15 === false).length },
-          {
-            nombre: 'No evaluado',
-            valor: data.filter((f) => f.tiene_mas15 === null).length,
-          },
-        ].filter((item) => item.valor > 0)
-
         const porTerminal = Object.entries(
           data.reduce<Record<string, { con: number; sin: number }>>((acc, fila) => {
             const clave = fila.terminal || 'Sin terminal'
@@ -114,46 +92,30 @@ export const Mas15ModulePage = () => {
             else if (fila.tiene_mas15 === false) acc[clave].sin += 1
             return acc
           }, {})
-        ).map(([terminal, valores]) => ({ terminal, ...valores }))
+        ).map(([nombre, valores]) => ({ nombre, a: valores.con, b: valores.sin }))
 
         return [
           {
             title: 'Resultado de la prueba',
             component: (
-              <ResponsiveContainer width="100%" height={230}>
-                <PieChart>
-                  <Pie
-                    data={resumen}
-                    dataKey="valor"
-                    nameKey="nombre"
-                    innerRadius={45}
-                    outerRadius={80}
-                    paddingAngle={3}
-                  >
-                    {resumen.map((entrada, indice) => (
-                      <Cell key={entrada.nombre} fill={COLORES[indice % COLORES.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              <GraficoDona
+                etiquetaCentro="pruebas"
+                datos={[
+                  { nombre: 'Con +15', valor: data.filter((fila) => fila.tiene_mas15 === true).length, color: PALETA.ok },
+                  { nombre: 'Sin +15', valor: data.filter((fila) => fila.tiene_mas15 === false).length, color: PALETA.falla },
+                  { nombre: 'No evaluado', valor: data.filter((fila) => fila.tiene_mas15 === null).length, color: PALETA.neutro },
+                ]}
+              />
             ),
           },
           {
-            title: 'Por terminal',
+            title: 'Resultado por terminal',
             component: (
-              <ResponsiveContainer width="100%" height={230}>
-                <BarChart data={porTerminal}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-                  <XAxis dataKey="terminal" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="con" name="Con +15" fill="#16a34a" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="sin" name="Sin +15" fill="#dc2626" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <GraficoBarrasDobles
+                datos={porTerminal}
+                serieA={{ nombre: 'Con +15', color: PALETA.ok }}
+                serieB={{ nombre: 'Sin +15', color: PALETA.falla }}
+              />
             ),
           },
         ]

@@ -1,19 +1,7 @@
 import { AlertTriangle, CheckCircle2, Hash, XCircle } from 'lucide-react'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
 import { Badge } from '@/components/ui/badge'
 import { ModuleLayout } from '@/components/layout/module-layout'
+import { GraficoBarrasDobles, GraficoDona, PALETA } from '@/components/charts/graficos-modulo'
 import dayjs from '@/lib/dayjs'
 import type { Database, EstadoNorma } from '@/types/database'
 
@@ -29,7 +17,6 @@ const ELEMENTOS = [
   { columna: 'patente_trasera', label: 'Patente trasera' },
 ] as const satisfies ReadonlyArray<{ columna: keyof NormaGraficaRow; label: string }>
 
-const COLORES = ['#0d9488', '#f59e0b', '#dc2626']
 
 const EstadoChip = ({ estado }: { estado: EstadoNorma }) => {
   if (estado === 'OK') return <Badge variant="success">Conforme</Badge>
@@ -120,87 +107,47 @@ export const NormaGraficaModulePage = () => {
         },
       ]}
       getCharts={(data: NormaGraficaRow[]) => {
-        // Cuántos buses fallan en cada elemento: separa reponer de repintar
-        const porElemento = ELEMENTOS.map((elemento) => ({
-          elemento: elemento.label,
-          deteriorado: data.filter((fila) => fila[elemento.columna] === 'DETERIORADO').length,
-          falta: data.filter((fila) => fila[elemento.columna] === 'FALTA').length,
-        }))
-
-        const resumen = [
-          { nombre: 'Cumple', valor: data.filter((fila) => fila.cumple).length },
-          {
-            nombre: 'Sólo deterioro',
-            valor: data.filter(
-              (fila) =>
-                !fila.cumple &&
-                !ELEMENTOS.some((elemento) => fila[elemento.columna] === 'FALTA')
-            ).length,
-          },
-          {
-            nombre: 'Con faltantes',
-            valor: data.filter((fila) =>
-              ELEMENTOS.some((elemento) => fila[elemento.columna] === 'FALTA')
-            ).length,
-          },
-        ].filter((item) => item.valor > 0)
-
         return [
           {
             title: 'Cumplimiento general',
             component: (
-              <ResponsiveContainer width="100%" height={230}>
-                <PieChart>
-                  <Pie
-                    data={resumen}
-                    dataKey="valor"
-                    nameKey="nombre"
-                    innerRadius={45}
-                    outerRadius={80}
-                    paddingAngle={3}
-                  >
-                    {resumen.map((entrada, indice) => (
-                      <Cell key={entrada.nombre} fill={COLORES[indice % COLORES.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              <GraficoDona
+                etiquetaCentro="buses"
+                datos={[
+                  { nombre: 'Cumple', valor: data.filter((fila) => fila.cumple).length, color: PALETA.ok },
+                  {
+                    nombre: 'Sólo deterioro',
+                    valor: data.filter(
+                      (fila) =>
+                        !fila.cumple &&
+                        !ELEMENTOS.some((elemento) => fila[elemento.columna] === 'FALTA')
+                    ).length,
+                    color: PALETA.atencion,
+                  },
+                  {
+                    nombre: 'Con faltantes',
+                    valor: data.filter((fila) =>
+                      ELEMENTOS.some((elemento) => fila[elemento.columna] === 'FALTA')
+                    ).length,
+                    color: PALETA.falla,
+                  },
+                ]}
+              />
             ),
           },
           {
             title: 'Hallazgos por elemento',
             component: (
-              <ResponsiveContainer width="100%" height={230}>
-                <BarChart data={porElemento} margin={{ bottom: 12 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-                  <XAxis
-                    dataKey="elemento"
-                    tick={{ fontSize: 9 }}
-                    interval={0}
-                    angle={-18}
-                    textAnchor="end"
-                    height={54}
-                  />
-                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar
-                    dataKey="deteriorado"
-                    name="Deteriorado"
-                    stackId="hallazgos"
-                    fill="#f59e0b"
-                  />
-                  <Bar
-                    dataKey="falta"
-                    name="Falta"
-                    stackId="hallazgos"
-                    fill="#dc2626"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              <GraficoBarrasDobles
+                apilado
+                datos={ELEMENTOS.map((elemento) => ({
+                  nombre: elemento.label,
+                  a: data.filter((fila) => fila[elemento.columna] === 'DETERIORADO').length,
+                  b: data.filter((fila) => fila[elemento.columna] === 'FALTA').length,
+                }))}
+                serieA={{ nombre: 'Deteriorado', color: PALETA.atencion }}
+                serieB={{ nombre: 'Falta', color: PALETA.falla }}
+              />
             ),
           },
         ]

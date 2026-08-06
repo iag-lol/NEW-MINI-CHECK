@@ -1,10 +1,9 @@
 import { Badge } from '@/components/ui/badge'
 import { ModuleLayout } from '@/components/layout/module-layout'
+import { GraficoBarras, GraficoDona, PALETA } from '@/components/charts/graficos-modulo'
 import dayjs from '@/lib/dayjs'
 import type { Database } from '@/types/database'
 import { HardDrive, ShieldAlert, Lock, LockOpen } from 'lucide-react'
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import type { PieLabelRenderProps } from 'recharts'
 
 type RackRow = Database['public']['Tables']['rack']['Row']
 
@@ -101,88 +100,45 @@ export const RackModulePage = () => {
         },
       ]}
       getCharts={(rows) => {
-        const discoData = [
-          { estado: 'Con disco', cantidad: rows.filter((r) => r.tiene_disco_duro === true).length },
-          { estado: 'Sin disco', cantidad: rows.filter((r) => r.tiene_disco_duro === false).length },
-        ]
-        const seguridadData = [
-          {
-            estado: 'Cerraduras OK',
-            cantidad: rows.filter((r) => r.cerraduras_buen_estado === true).length,
-          },
-          {
-            estado: 'Cerraduras con falla',
-            cantidad: rows.filter((r) => r.cerraduras_buen_estado === false).length,
-          },
-        ]
-        const terminalCounts = rows.reduce<Record<string, number>>((acc, row) => {
-          const terminal = row.terminal || 'Sin terminal'
-          acc[terminal] = (acc[terminal] ?? 0) + 1
-          return acc
-        }, {})
-        const terminalData = Object.entries(terminalCounts).map(([name, value]) => ({ name, value }))
-
-        if (terminalData.length === 0) {
-          terminalData.push({ name: 'Sin datos', value: 1 })
-        }
+        const porTerminal = Object.entries(
+          rows.reduce<Record<string, number>>((acc, row) => {
+            acc[row.terminal] = (acc[row.terminal] ?? 0) + 1
+            return acc
+          }, {})
+        )
+          .map(([nombre, valor]) => ({ nombre, valor }))
+          .sort((a, b) => b.valor - a.valor)
 
         return [
           {
-            title: 'Estado de Disco Duro',
+            title: 'Disco duro',
             component: (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={discoData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="estado" stroke="#64748b" fontSize={12} />
-                  <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="cantidad" fill="#0ea5e9" name="Cantidad" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <GraficoDona
+                etiquetaCentro="racks"
+                datos={[
+                  { nombre: 'Con disco', valor: rows.filter((row) => row.tiene_disco_duro === true).length, color: PALETA.ok },
+                  { nombre: 'Sin disco', valor: rows.filter((row) => row.tiene_disco_duro === false).length, color: PALETA.falla },
+                  { nombre: 'Sin dato', valor: rows.filter((row) => row.tiene_disco_duro == null).length, color: PALETA.neutro },
+                ]}
+              />
             ),
           },
           {
-            title: 'Estado de Cerraduras',
+            title: 'Cerraduras',
             component: (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={seguridadData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="estado" stroke="#64748b" fontSize={12} />
-                  <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="cantidad" fill="#f59e0b" name="Cantidad" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <GraficoDona
+                etiquetaCentro="racks"
+                datos={[
+                  { nombre: 'Buen estado', valor: rows.filter((row) => row.cerraduras_buen_estado === true).length, color: PALETA.ok },
+                  { nombre: 'Con falla', valor: rows.filter((row) => row.cerraduras_buen_estado === false).length, color: PALETA.falla },
+                  { nombre: 'Sin dato', valor: rows.filter((row) => row.cerraduras_buen_estado == null).length, color: PALETA.neutro },
+                ]}
+              />
             ),
           },
           {
-            title: 'Distribución por Terminal',
-            component: (
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={terminalData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={(entry: PieLabelRenderProps) => `${entry.name}: ${entry.value}`}
-                    outerRadius={90}
-                    dataKey="value"
-                  >
-                    {terminalData.map((entry, index) => (
-                      <Cell
-                        key={`${entry.name}-${index}`}
-                        fill={['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#6366f1'][index % 5]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            ),
+            title: 'Revisiones por terminal',
+            component: <GraficoBarras datos={porTerminal} />,
           },
         ]
       }}
