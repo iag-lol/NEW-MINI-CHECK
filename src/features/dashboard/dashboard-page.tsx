@@ -33,6 +33,7 @@ import { ConsolidadosDialog } from '@/features/dashboard/components/consolidados
 import { BusReportDialog } from '@/features/dashboard/components/bus-report-dialog'
 import { IpPerformanceDialog } from '@/features/dashboard/components/ip-performance-dialog'
 import { LiveMap } from '@/features/dashboard/components/live-map'
+import { ModulosActivos } from '@/features/dashboard/components/modulos-activos'
 import { Card, CardTitle } from '@/components/ui/card'
 import { StatCard } from '@/components/ui/stat-card'
 import { Skeleton, SkeletonCard, SkeletonChart } from '@/components/ui/skeleton'
@@ -391,6 +392,12 @@ export const DashboardPage = () => {
           variant={pendingTickets.length > 0 ? 'warning' : 'success'}
         />
       </div>
+
+      <ModulosActivos
+        desde={weekInfo.startISO}
+        hasta={weekInfo.endISO}
+        totalRevisiones={revisions?.length ?? 0}
+      />
 
       <div className="grid gap-3 sm:gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">

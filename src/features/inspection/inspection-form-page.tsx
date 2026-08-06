@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode, type ComponentType } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type ComponentType } from 'react'
 import { FormProvider, useForm } from 'react-hook-form'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   AlertTriangle,
+  BatteryCharging,
   Bus,
   Camera,
   Check,
@@ -43,6 +44,8 @@ import { useAnunciarInspeccion } from '@/hooks/use-inspeccion-presence'
 import type { Tables, Database } from '@/types/database'
 import { useNotificationStore } from '@/store/notification-store'
 import { useTracking } from '@/hooks/use-tracking'
+import { MODULOS, type ModuloClave } from '@/constants/modulos'
+import { useModulosVigentes } from '@/hooks/use-modulos-config'
 
 const publicidadAreaSchema = z
   .object({
@@ -166,38 +169,43 @@ const inspectionSchema = z
       tieneInternet: z.boolean().nullable(),
       observacion: z.string().optional(),
     }),
+    mas15: z.object({
+      // El bus arrancó y consola + validador llegaron a encenderse. Sin este
+      // paso previo no hay nada que comprobar: el resultado quedaría inválido.
+      arranqueOk: z.boolean().nullable(),
+      // Estado de cada equipo DESPUÉS de retirar el corta corriente
+      consolaEncendida: z.boolean().nullable(),
+      validadorEncendido: z.boolean().nullable(),
+      observacion: z.string().optional(),
+    }),
   })
 
-const steps = [
-  { key: 'estado', label: 'Estado', icon: ClipboardCheck, accent: 'from-brand-500 to-indigo-500' },
-  { key: 'tag', label: 'TAG', icon: Tag, accent: 'from-amber-500 to-yellow-500' },
-  { key: 'camaras', label: 'Cámaras', icon: Camera, accent: 'from-blue-500 to-sky-500' },
-  { key: 'extintores', label: 'Extintor', icon: Flame, accent: 'from-red-500 to-orange-500' },
-  { key: 'odometro', label: 'Odómetro', icon: Gauge, accent: 'from-teal-500 to-emerald-500' },
-  { key: 'mobileye', label: 'Mobileye', icon: Radar, accent: 'from-purple-500 to-violet-500' },
-  { key: 'rack', label: 'Rack', icon: HardDrive, accent: 'from-slate-500 to-slate-600' },
-  { key: 'wifi', label: 'WiFi', icon: Wifi, accent: 'from-sky-500 to-cyan-500' },
-  { key: 'publicidad', label: 'Publicidad', icon: Megaphone, accent: 'from-pink-500 to-rose-500' },
-  { key: 'cierre', label: 'Cierre', icon: Flag, accent: 'from-emerald-500 to-green-500' },
-] as const
+/**
+ * Los pasos salen del catálogo central de módulos, no de una lista propia.
+ * Antes el formulario, Configuración y el dashboard mantenían cada uno su
+ * copia, y añadir un módulo obligaba a tocar los tres para que coincidieran.
+ */
+const steps = MODULOS.map((modulo) => ({
+  key: modulo.clave,
+  label: modulo.nombre,
+  icon: modulo.icono,
+  accent: modulo.acento,
+}))
 
-type StepKey = (typeof steps)[number]['key']
+type StepKey = ModuloClave
 
 /**
- * Bus EN PANNE: se revisan OBLIGATORIAMENTE estos módulos.
- * Cámaras, Odómetro y WiFi se omiten porque requieren el bus operativo.
+ * Bus EN PANNE: se revisan obligatoriamente los módulos que no necesitan el
+ * bus encendido. Cámaras, Odómetro, WiFi y +15 se omiten porque todos exigen
+ * arrancar el motor.
  */
-const PANNE_REQUIRED_STEPS: readonly StepKey[] = [
-  'estado',
-  'tag',
-  'extintores',
-  'mobileye',
-  'rack',
-  'publicidad',
-  'cierre',
-]
+const PANNE_REQUIRED_STEPS: readonly StepKey[] = MODULOS.filter(
+  (modulo) => modulo.obligatorioEnPanne
+).map((modulo) => modulo.clave)
 
-const PANNE_SKIPPED_STEPS: readonly StepKey[] = ['camaras', 'odometro', 'wifi']
+const PANNE_SKIPPED_STEPS: readonly StepKey[] = MODULOS.filter(
+  (modulo) => modulo.requiereBusOperativo
+).map((modulo) => modulo.clave)
 
 // Marcadores de registros que NO representan una revisión real del rack
 const OBS_PANNE = 'Bus en panne - no revisado'
@@ -549,6 +557,12 @@ export const InspectionFormPage = () => {
         tieneInternet: null,
         observacion: '',
       },
+      mas15: {
+        arranqueOk: null,
+        consolaEncendida: null,
+        validadorEncendido: null,
+        observacion: '',
+      },
     },
   })
   const [step, setStep] = useState(0)
@@ -602,10 +616,21 @@ export const InspectionFormPage = () => {
 
   // Pasos activos según el estado del bus:
   // EN PANNE → TAG, Extintor, Mobileye, Rack y Publicidad son OBLIGATORIOS
-  const activeSteps = useMemo(
-    () => (isEnPanne ? steps.filter((item) => PANNE_REQUIRED_STEPS.includes(item.key)) : [...steps]),
-    [isEnPanne]
+  // Módulos vigentes hoy según lo configurado en Configuración: un módulo
+  // apagado o fuera de su programación no aparece como paso ni se guarda.
+  const { clavesActivas } = useModulosVigentes()
+
+  const moduloVigente = useCallback(
+    (clave: ModuloClave) => clavesActivas.has(clave),
+    [clavesActivas]
   )
+
+  const activeSteps = useMemo(() => {
+    const base = isEnPanne
+      ? steps.filter((item) => PANNE_REQUIRED_STEPS.includes(item.key))
+      : [...steps]
+    return base.filter((item) => clavesActivas.has(item.key))
+  }, [isEnPanne, clavesActivas])
   const currentStep = Math.min(step, activeSteps.length - 1)
   const stepKey: StepKey = activeSteps[currentStep].key
   const progressPct = activeSteps.length > 1 ? (currentStep / (activeSteps.length - 1)) * 100 : 0
@@ -1016,6 +1041,24 @@ export const InspectionFormPage = () => {
         }
         break
       }
+      case 'mas15': {
+        const mas15 = snapshot.mas15
+        if (mas15.arranqueOk === null || mas15.arranqueOk === undefined) {
+          missing.push('Indica si el bus arrancó y se encendieron consola y validador')
+        } else if (mas15.arranqueOk === false) {
+          if (!mas15.observacion?.trim()) {
+            missing.push('Explica por qué no se pudo completar el encendido')
+          }
+        } else {
+          if (mas15.consolaEncendida === null || mas15.consolaEncendida === undefined) {
+            missing.push('Indica si la consola sigue encendida sin corta corriente')
+          }
+          if (mas15.validadorEncendido === null || mas15.validadorEncendido === undefined) {
+            missing.push('Indica si el validador sigue encendido sin corta corriente')
+          }
+        }
+        break
+      }
       case 'publicidad':
         publicityAreas.forEach((area) => {
           const lateral = snapshot.publicidad[area.key]
@@ -1043,10 +1086,11 @@ export const InspectionFormPage = () => {
         if (!options?.shallow) {
           // Validar todos los pasos del flujo activo (en panne incluye
           // obligatoriamente TAG, Extintor, Mobileye, Rack y Publicidad)
-          const relevantes =
+          const relevantes = (
             snapshot.estadoBus === 'EN_PANNE'
               ? steps.filter((item) => PANNE_REQUIRED_STEPS.includes(item.key))
               : steps
+          ).filter((item) => clavesActivas.has(item.key))
           for (const stepConfig of relevantes) {
             if (stepConfig.key === 'cierre') continue
             const childMissing = getMissingForStep(stepConfig.key, snapshot, { shallow: true })
@@ -1159,52 +1203,58 @@ export const InspectionFormPage = () => {
       // OBLIGATORIAMENTE, por lo que siempre se guardan los valores reales.
       // Solo Cámaras, Odómetro y WiFi quedan como "no revisado".
 
-      await supabase.from('tags').insert({
-        revision_id: revisionData.id,
-        tiene: values.tag.tiene,
-        serie: values.tag.serie || null,
-        observacion: values.tag.observacion || null,
-        bus_ppu: bus.ppu,
-        terminal: values.terminalReportado,
-      })
+      if (moduloVigente('tag')) {
+        await supabase.from('tags').insert({
+          revision_id: revisionData.id,
+          tiene: values.tag.tiene,
+          serie: values.tag.serie || null,
+          observacion: values.tag.observacion || null,
+          bus_ppu: bus.ppu,
+          terminal: values.terminalReportado,
+        })
+      }
 
-      await supabase.from('camaras').insert({
-        revision_id: revisionData.id,
-        monitor_estado: enPanne ? 'SIN_SENAL' : values.camaras.monitorEstado,
-        detalle: enPanne ? {} : {
-          monitorDetalle: values.camaras.monitorDetalle,
-          camDelantera: values.camaras.camDelantera,
-          camCabina: values.camaras.camCabina,
-          camInteriores: values.camaras.camInteriores,
-          camTrasera: values.camaras.camTrasera,
-          visiblesMonitor: values.camaras.visiblesMonitor,
-          activaReversa: values.camaras.activaReversa,
-          activaPuertas: values.camaras.activaPuertas,
-          visiblesPuertasCerradas: values.camaras.visiblesPuertasCerradas,
-        },
-        observacion: enPanne ? 'Bus en panne - no revisado' : (values.camaras.observacion || null),
-        bus_ppu: bus.ppu,
-        terminal: values.terminalReportado,
-      })
+      if (moduloVigente('camaras')) {
+        await supabase.from('camaras').insert({
+          revision_id: revisionData.id,
+          monitor_estado: enPanne ? 'SIN_SENAL' : values.camaras.monitorEstado,
+          detalle: enPanne ? {} : {
+            monitorDetalle: values.camaras.monitorDetalle,
+            camDelantera: values.camaras.camDelantera,
+            camCabina: values.camaras.camCabina,
+            camInteriores: values.camaras.camInteriores,
+            camTrasera: values.camaras.camTrasera,
+            visiblesMonitor: values.camaras.visiblesMonitor,
+            activaReversa: values.camaras.activaReversa,
+            activaPuertas: values.camaras.activaPuertas,
+            visiblesPuertasCerradas: values.camaras.visiblesPuertasCerradas,
+          },
+          observacion: enPanne ? 'Bus en panne - no revisado' : (values.camaras.observacion || null),
+          bus_ppu: bus.ppu,
+          terminal: values.terminalReportado,
+        })
+      }
 
-      await supabase.from('extintores').insert({
-        revision_id: revisionData.id,
-        tiene: values.extintores.tiene,
-        vencimiento_mes: values.extintores.vencimientoMes ?? null,
-        vencimiento_anio: values.extintores.vencimientoAnio ?? null,
-        certificacion: values.extintores.certificacion ?? null,
-        sonda: values.extintores.sonda ?? null,
-        manometro: values.extintores.manometro ?? null,
-        presion: values.extintores.presion ?? null,
-        cilindro: values.extintores.cilindro ?? null,
-        porta: values.extintores.porta ?? null,
-        observacion: values.extintores.observacion ?? null,
-        bus_ppu: bus.ppu,
-        terminal: values.terminalReportado,
-      })
+      if (moduloVigente('extintores')) {
+        await supabase.from('extintores').insert({
+          revision_id: revisionData.id,
+          tiene: values.extintores.tiene,
+          vencimiento_mes: values.extintores.vencimientoMes ?? null,
+          vencimiento_anio: values.extintores.vencimientoAnio ?? null,
+          certificacion: values.extintores.certificacion ?? null,
+          sonda: values.extintores.sonda ?? null,
+          manometro: values.extintores.manometro ?? null,
+          presion: values.extintores.presion ?? null,
+          cilindro: values.extintores.cilindro ?? null,
+          porta: values.extintores.porta ?? null,
+          observacion: values.extintores.observacion ?? null,
+          bus_ppu: bus.ppu,
+          terminal: values.terminalReportado,
+        })
+      }
 
       // Mobileye aplica solo a buses Volvo (operativos o en panne)
-      if (values.mobileye.aplica) {
+      if (moduloVigente('mobileye') && values.mobileye.aplica) {
         await supabase.from('mobileye').insert({
           revision_id: revisionData.id,
           bus_marca: bus.marca,
@@ -1220,14 +1270,16 @@ export const InspectionFormPage = () => {
         })
       }
 
-      await supabase.from('odometro').insert({
-        revision_id: revisionData.id,
-        lectura: enPanne ? 0 : values.odometro.lectura,
-        estado: enPanne ? 'NO_FUNCIONA' : values.odometro.estado,
-        observacion: enPanne ? 'Bus en panne - no revisado' : (values.odometro.observacion ?? null),
-        bus_ppu: bus.ppu,
-        terminal: values.terminalReportado,
-      })
+      if (moduloVigente('odometro')) {
+        await supabase.from('odometro').insert({
+          revision_id: revisionData.id,
+          lectura: enPanne ? 0 : values.odometro.lectura,
+          estado: enPanne ? 'NO_FUNCIONA' : values.odometro.estado,
+          observacion: enPanne ? 'Bus en panne - no revisado' : (values.odometro.observacion ?? null),
+          bus_ppu: bus.ppu,
+          terminal: values.terminalReportado,
+        })
+      }
 
       // RACK · sin llave física: no se revisó, se conserva el último
       // registro real del bus (se vuelve a consultar aquí para no depender
@@ -1267,22 +1319,49 @@ export const InspectionFormPage = () => {
             observacion: values.rack.observacion || null,
           }
 
-      await supabase.from('rack').insert({
-        revision_id: revisionData.id,
-        ...rackInsert,
-        bus_ppu: bus.ppu,
-        terminal: values.terminalReportado,
-      })
+      if (moduloVigente('rack')) {
+        await supabase.from('rack').insert({
+          revision_id: revisionData.id,
+          ...rackInsert,
+          bus_ppu: bus.ppu,
+          terminal: values.terminalReportado,
+        })
+      }
 
-      await supabase.from('wifi').insert({
-        revision_id: revisionData.id,
-        ppu_visible: enPanne ? null : (values.wifi.ppuVisible ?? null),
-        bus_encendido: enPanne ? null : (values.wifi.busEncendido ?? null),
-        tiene_internet: enPanne ? null : (values.wifi.tieneInternet ?? null),
-        observacion: enPanne ? 'Bus en panne - no revisado' : (values.wifi.observacion || null),
-        bus_ppu: bus.ppu,
-        terminal: values.terminalReportado,
-      })
+      if (moduloVigente('wifi')) {
+        await supabase.from('wifi').insert({
+          revision_id: revisionData.id,
+          ppu_visible: enPanne ? null : (values.wifi.ppuVisible ?? null),
+          bus_encendido: enPanne ? null : (values.wifi.busEncendido ?? null),
+          tiene_internet: enPanne ? null : (values.wifi.tieneInternet ?? null),
+          observacion: enPanne ? 'Bus en panne - no revisado' : (values.wifi.observacion || null),
+          bus_ppu: bus.ppu,
+          terminal: values.terminalReportado,
+        })
+      }
+
+      if (moduloVigente('mas15')) {
+        const arranqueOk = values.mas15.arranqueOk === true
+        // El resultado se deduce, no se pregunta: sólo hay +15 si AMBOS
+        // equipos siguen encendidos tras retirar el corta corriente.
+        const tieneMas15 = arranqueOk
+          ? values.mas15.consolaEncendida === true &&
+            values.mas15.validadorEncendido === true
+          : null
+
+        await supabase.from('mas15').insert({
+          revision_id: revisionData.id,
+          arranque_ok: arranqueOk,
+          consola_encendida: arranqueOk ? values.mas15.consolaEncendida ?? null : null,
+          validador_encendido: arranqueOk
+            ? values.mas15.validadorEncendido ?? null
+            : null,
+          tiene_mas15: tieneMas15,
+          observacion: values.mas15.observacion || null,
+          bus_ppu: bus.ppu,
+          terminal: values.terminalReportado,
+        })
+      }
 
       const publicidadTiene = publicityAreas.some((area) => values.publicidad[area.key].tiene)
       const publicidadDanio = publicityAreas.some((area) => values.publicidad[area.key].danio)
@@ -1311,7 +1390,9 @@ export const InspectionFormPage = () => {
         terminal: values.terminalReportado,
       }
 
-      await supabase.from('publicidad').insert(publicidadPayload)
+      if (moduloVigente('publicidad')) {
+        await supabase.from('publicidad').insert(publicidadPayload)
+      }
 
       // Tickets automáticos: los módulos obligatorios generan tickets
       // también para buses en panne (la revisión ahora es real)
@@ -2460,6 +2541,168 @@ export const InspectionFormPage = () => {
     )
   }
 
+  /**
+   * +15 · alimentación permanente del equipo embarcado.
+   *
+   * El resultado no se pregunta, se deduce: si tras retirar el corta corriente
+   * la consola Y el validador siguen encendidos, el bus tiene +15. Dejarlo a
+   * criterio del inspector abriría la puerta a que cada uno lo interprete
+   * distinto.
+   */
+  const renderMas15 = () => {
+    const mas15State = methods.watch('mas15')
+    const arranqueOk = mas15State.arranqueOk
+    const consola = mas15State.consolaEncendida
+    const validador = mas15State.validadorEncendido
+
+    const evaluado = consola !== null && consola !== undefined && validador !== null && validador !== undefined
+    const tieneMas15 = evaluado ? consola === true && validador === true : null
+
+    return (
+      <SectionCard
+        title="+15"
+        description="Alimentación del equipo embarcado sin corta corriente"
+        icon={BatteryCharging}
+        accent="from-lime-500 to-emerald-500"
+      >
+        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-900/40">
+          <p className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+            Procedimiento
+          </p>
+          <ol className="space-y-1.5 text-sm leading-snug text-slate-600 dark:text-slate-300">
+            <li>1. Encender el bus y esperar a que la consola y el validador se enciendan.</li>
+            <li>2. Con ambos encendidos, apagar el bus.</li>
+            <li>3. Retirar el corta corriente.</li>
+            <li>
+              4. Si la consola y el validador <strong>siguen encendidos</strong>, el bus
+              cuenta con +15. Si ambos se apagan, no cuenta con +15.
+            </li>
+          </ol>
+        </div>
+
+        <BinaryQuestion
+          label="¿El bus arrancó y se encendieron consola y validador?"
+          value={arranqueOk}
+          positiveLabel="Sí, ambos encendieron"
+          negativeLabel="No pude completarlo"
+          onChange={(value) => {
+            methods.setValue('mas15.arranqueOk', value, { shouldDirty: true })
+            if (value === false) {
+              // Sin encendido previo no hay nada que medir
+              methods.setValue('mas15.consolaEncendida', null, { shouldDirty: true })
+              methods.setValue('mas15.validadorEncendido', null, { shouldDirty: true })
+            }
+          }}
+        />
+
+        {arranqueOk === false && (
+          <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              No se puede evaluar el +15 sin el encendido previo
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="mas15-obs">¿Qué ocurrió? (obligatorio)</Label>
+              <Textarea
+                id="mas15-obs"
+                rows={3}
+                placeholder="Ej: la consola no encendió, el bus no arranca, no había corta corriente accesible..."
+                value={mas15State.observacion ?? ''}
+                onChange={(event) =>
+                  methods.setValue('mas15.observacion', event.target.value, {
+                    shouldDirty: true,
+                  })
+                }
+              />
+            </div>
+          </div>
+        )}
+
+        {arranqueOk === true && (
+          <div className="space-y-4 rounded-xl border border-slate-200 bg-white/60 p-4 dark:border-slate-800 dark:bg-slate-900/30">
+            <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              Bus apagado y corta corriente retirado
+            </p>
+
+            <BinaryQuestion
+              label="¿La consola sigue encendida?"
+              value={consola}
+              positiveLabel="Sigue encendida"
+              negativeLabel="Se apagó"
+              onChange={(value) =>
+                methods.setValue('mas15.consolaEncendida', value, { shouldDirty: true })
+              }
+            />
+
+            <BinaryQuestion
+              label="¿El validador sigue encendido?"
+              value={validador}
+              positiveLabel="Sigue encendido"
+              negativeLabel="Se apagó"
+              onChange={(value) =>
+                methods.setValue('mas15.validadorEncendido', value, { shouldDirty: true })
+              }
+            />
+
+            {evaluado && (
+              <div
+                className={`flex items-center gap-3 rounded-xl border p-3 ${
+                  tieneMas15
+                    ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40'
+                    : 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40'
+                }`}
+              >
+                <span
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white ${
+                    tieneMas15 ? 'bg-emerald-500' : 'bg-red-500'
+                  }`}
+                >
+                  {tieneMas15 ? (
+                    <Check className="h-5 w-5" strokeWidth={3} />
+                  ) : (
+                    <X className="h-5 w-5" strokeWidth={3} />
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <p
+                    className={`text-sm font-black ${
+                      tieneMas15
+                        ? 'text-emerald-800 dark:text-emerald-200'
+                        : 'text-red-800 dark:text-red-200'
+                    }`}
+                  >
+                    {tieneMas15 ? 'El bus CUENTA con +15' : 'El bus NO cuenta con +15'}
+                  </p>
+                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                    {tieneMas15
+                      ? 'Ambos equipos mantienen alimentación sin corta corriente.'
+                      : consola !== validador
+                        ? 'Sólo uno de los dos equipos quedó encendido: se registra como sin +15.'
+                        : 'Ambos equipos se apagaron al retirar el corta corriente.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="mas15-obs-ok">Observación (opcional)</Label>
+              <Textarea
+                id="mas15-obs-ok"
+                rows={2}
+                placeholder="Detalles del equipo, número de serie, anomalías..."
+                value={mas15State.observacion ?? ''}
+                onChange={(event) =>
+                  methods.setValue('mas15.observacion', event.target.value, {
+                    shouldDirty: true,
+                  })
+                }
+              />
+            </div>
+          </div>
+        )}
+      </SectionCard>
+    )
+  }
+
   const renderStep = () => {
     switch (stepKey) {
       case 'estado':
@@ -2478,6 +2721,8 @@ export const InspectionFormPage = () => {
         return renderOdometro()
       case 'wifi':
         return renderWifi()
+      case 'mas15':
+        return renderMas15()
       case 'publicidad':
         return renderPublicidad()
       case 'cierre':

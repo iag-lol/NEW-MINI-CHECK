@@ -12,6 +12,7 @@ import { Card, CardEyebrow, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { InstallAppCard } from '@/components/install-app'
+import { ModulosAdmin } from '@/features/configuracion/components/modulos-admin'
 import { desbloquearAudio, playNotificationTone, vibrar } from '@/lib/sound'
 import { useNotificationStore } from '@/store/notification-store'
 import { useAuthStore } from '@/store/auth-store'
@@ -85,6 +86,8 @@ export const ConfiguracionPage = () => {
           </div>
         </div>
       </Card>
+
+      <ModulosAdmin />
 
       <div className="grid gap-3 lg:grid-cols-2 lg:gap-4">
         <Card className="flex flex-col gap-3">

@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import {
+  BatteryCharging,
   LayoutDashboard,
   ClipboardList,
   Map,
@@ -68,6 +69,7 @@ export const SIDEBAR_GROUPS: NavGroup[] = [
       { label: 'Odómetro', path: '/app/odometro', icon: Gauge },
       { label: 'Rack', path: '/app/rack', icon: HardDrive },
       { label: 'WiFi', path: '/app/wifi', icon: Wifi },
+      { label: '+15', path: '/app/mas15', icon: BatteryCharging },
       { label: 'Publicidad', path: '/app/publicidad', icon: Megaphone },
     ],
   },

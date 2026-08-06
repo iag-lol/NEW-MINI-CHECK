@@ -154,6 +154,36 @@ type WifiRow = {
   terminal: string
 }
 
+type Mas15Row = {
+  id: string
+  revision_id: string
+  /** El bus arrancó y consola + validador se encendieron: sin esto no se puede evaluar */
+  arranque_ok: boolean
+  /** Tras retirar el corta corriente */
+  consola_encendida: boolean | null
+  validador_encendido: boolean | null
+  /** Resultado: ambos equipos siguen encendidos sin corta corriente */
+  tiene_mas15: boolean | null
+  observacion: string | null
+  created_at: string
+  bus_ppu: string
+  terminal: string
+}
+
+type ModuloConfigRow = {
+  clave: string
+  activo: boolean
+  tipo: string
+  semanas_mes: number[] | null
+  dias_semana: number[] | null
+  meses: number[] | null
+  vigente_desde: string | null
+  vigente_hasta: string | null
+  orden: number | null
+  actualizado_en: string | null
+  actualizado_por: string | null
+}
+
 type TicketRow = {
   id: string
   modulo: string
@@ -253,6 +283,8 @@ export type Database = {
       rack: TableRecord<RackRow, Omit<RackRow, 'id' | 'created_at'>>
       publicidad: TableRecord<PublicidadRow, Omit<PublicidadRow, 'id' | 'created_at'>>
       wifi: TableRecord<WifiRow, Omit<WifiRow, 'id' | 'created_at'>>
+      mas15: TableRecord<Mas15Row, Omit<Mas15Row, 'id' | 'created_at'>>
+      modulos_config: TableRecord<ModuloConfigRow, ModuloConfigRow, Partial<ModuloConfigRow>>
       tickets: TableRecord<TicketRow, Omit<TicketRow, 'id' | 'created_at' | 'actualizado_en'>>
       personal: TableRecord<PersonalRow, Omit<PersonalRow, 'id' | 'created_at'>>
       flota: TableRecord<FlotaRow, Omit<FlotaRow, 'id' | 'created_at'>>
