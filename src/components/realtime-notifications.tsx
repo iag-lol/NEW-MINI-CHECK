@@ -64,7 +64,9 @@ export function RealtimeNotifications() {
     if (nuevas.length === 0) return
 
     nuevas.forEach((n) => vistasRef.current.add(n.id))
-    setVisibles((prev) => [...nuevas, ...prev].slice(0, 4))
+    // Máximo 3 a la vez: con más, los avisos tapan media pantalla en móvil
+    // y dejan de leerse; el historial completo vive en la campana.
+    setVisibles((prev) => [...nuevas, ...prev].slice(0, 3))
   }, [notifications])
 
   const descartar = (id: string) =>
@@ -101,10 +103,19 @@ export function RealtimeNotifications() {
             >
               <div
                 className={cn(
-                  'glass-panel-strong relative overflow-hidden rounded-[18px] border pr-7',
+                  'glass-panel-strong relative overflow-hidden rounded-[16px] border pr-7',
                   estilo.ring
                 )}
               >
+                {/* Filete de severidad: se distingue el tipo de un vistazo
+                    sin leer, incluso con varios avisos apilados */}
+                <span
+                  aria-hidden
+                  className={cn(
+                    'absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full',
+                    estilo.barra
+                  )}
+                />
                 <button
                   type="button"
                   onClick={() => {
@@ -112,7 +123,7 @@ export function RealtimeNotifications() {
                     if (notif.url) navigate(notif.url)
                     descartar(notif.id)
                   }}
-                  className="flex w-full items-center gap-2.5 p-2.5 text-left transition active:scale-[0.985]"
+                  className="flex w-full items-center gap-2.5 py-2.5 pl-3 pr-1 text-left transition active:scale-[0.985]"
                 >
                   <span
                     className={cn(

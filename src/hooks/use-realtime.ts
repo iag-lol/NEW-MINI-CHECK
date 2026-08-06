@@ -11,6 +11,23 @@ type Ticket = Tables<'tickets'>
 /** Cada cuánto se comprueban registros nuevos si el canal en vivo no llega */
 const SONDEO_MS = 15_000
 
+/**
+ * Ventana para agrupar los eventos de un mismo envío.
+ *
+ * Al enviar una revisión, el formulario inserta la fila de `revisiones` y a
+ * continuación un ticket por cada hallazgo. Cada inserción llega como un
+ * evento separado, y avisar por evento producía cuatro o cinco alertas del
+ * mismo envío. Los tickets se insertan milisegundos después de su revisión,
+ * así que unos segundos de espera bastan para juntarlos en un solo aviso.
+ */
+const VENTANA_AGRUPACION_MS = 4_000
+
+interface EnvioPendiente {
+  revision?: Revision
+  tickets: Ticket[]
+  timer: number
+}
+
 /** "JUAN CARLOS PÉREZ SOTO" -> "Juan Carlos Pérez" (dos primeros nombres) */
 const nombreCorto = (nombre: string) =>
   nombre
@@ -36,8 +53,8 @@ const nombreCorto = (nombre: string) =>
  *   visto. Es la red de seguridad: puede tardar unos segundos, pero garantiza
  *   que el supervisor se entera aunque la réplica en vivo esté apagada.
  *
- * Las repeticiones no importan: el store descarta cualquier notificación cuyo
- * id ya exista, así que el primero que llegue gana.
+ * Ambas vías alimentan el mismo buffer de agrupación por revisión, y el store
+ * descarta ids repetidos, así que el primero que llegue gana y no hay dobles.
  */
 export const useRealtimeSubscriptions = () => {
   const push = useNotificationStore((state) => state.push)
@@ -49,10 +66,14 @@ export const useRealtimeSubscriptions = () => {
   const desdeRevisiones = useRef<string>(new Date().toISOString())
   const desdeTickets = useRef<string>(new Date().toISOString())
 
+  // Envíos a medio llegar, agrupados por id de revisión
+  const pendientesRef = useRef<Map<string, EnvioPendiente>>(new Map())
+
   useEffect(() => {
     if (!user) return
 
     const esSupervisor = user.cargo === 'SUPERVISOR' || user.cargo === 'JEFE DE TERMINAL'
+    const pendientes = pendientesRef.current
 
     const refrescarListados = () => {
       queryClient.invalidateQueries({ queryKey: ['revisiones'] })
@@ -61,45 +82,89 @@ export const useRealtimeSubscriptions = () => {
       queryClient.invalidateQueries({ queryKey: ['pendientes-revisiones'] })
     }
 
-    const avisarRevision = (revision: Revision) => {
+    /** Emite UNA notificación con todo lo acumulado de un envío. */
+    const emitir = (revisionId: string) => {
+      const entrada = pendientes.get(revisionId)
+      if (!entrada) return
+      pendientes.delete(revisionId)
+
       if (!esSupervisor) return
 
-      const inspector = nombreCorto(revision.inspector_nombre)
-      const terminal = revision.terminal_reportado || revision.terminal_detectado
-      const interno = revision.bus_interno ? ` (N° ${revision.bus_interno})` : ''
-      const enPanne = revision.estado_bus === 'EN_PANNE'
+      const { revision, tickets } = entrada
+      const modulos = [...new Set(tickets.map((ticket) => ticket.modulo))]
 
-      push({
-        id: revision.id,
-        type: enPanne ? 'warning' : 'success',
-        title: enPanne
-          ? `Bus en panne · ${revision.bus_ppu}`
-          : `${inspector} revisó un bus`,
-        body: `${inspector} ha revisado el bus ${revision.bus_ppu}${interno} en el Terminal ${terminal}${
-          enPanne ? ' · Quedó EN PANNE' : ''
-        }`,
-        url: '/app/registros',
-        tag: 'revision',
-        metadata: {
-          ppu: revision.bus_ppu,
-          terminal,
-          inspector: revision.inspector_nombre,
-          estado: revision.estado_bus,
-        },
-      })
+      if (revision) {
+        const inspector = nombreCorto(revision.inspector_nombre)
+        const terminal = revision.terminal_reportado || revision.terminal_detectado
+        const interno = revision.bus_interno ? ` (N° ${revision.bus_interno})` : ''
+        const enPanne = revision.estado_bus === 'EN_PANNE'
+
+        const hallazgos =
+          tickets.length > 0
+            ? ` · ${tickets.length} hallazgo${tickets.length !== 1 ? 's' : ''}: ${modulos.join(', ')}`
+            : ''
+
+        push({
+          id: revision.id,
+          type: enPanne || tickets.length > 0 ? 'warning' : 'success',
+          title: enPanne
+            ? `Bus en panne · ${revision.bus_ppu}`
+            : `${inspector} revisó un bus`,
+          body: `${inspector} ha revisado el bus ${revision.bus_ppu}${interno} en el Terminal ${terminal}${
+            enPanne ? ' · Quedó EN PANNE' : ''
+          }${hallazgos}`,
+          url: tickets.length > 0 ? '/app/tickets' : '/app/registros',
+          tag: 'revision',
+          metadata: {
+            ppu: revision.bus_ppu,
+            terminal,
+            inspector: revision.inspector_nombre,
+            estado: revision.estado_bus,
+            hallazgos: modulos,
+          },
+        })
+        return
+      }
+
+      // Tickets sin revisión a la vista (canal que perdió el evento, o un
+      // ticket creado suelto): un único aviso resumido por revisión.
+      if (tickets.length > 0) {
+        const primero = tickets[0]
+        const descripcion = primero.descripcion ?? ''
+        push({
+          id: `tickets-${revisionId}`,
+          type: 'warning',
+          title:
+            tickets.length === 1
+              ? `Nuevo ticket · ${primero.modulo}`
+              : `${tickets.length} tickets nuevos · ${primero.terminal}`,
+          body:
+            tickets.length === 1
+              ? descripcion.length > 90
+                ? `${descripcion.slice(0, 90)}…`
+                : descripcion
+              : `Módulos con hallazgos: ${modulos.join(', ')}`,
+          url: '/app/tickets',
+          tag: 'ticket',
+        })
+      }
     }
 
-    const avisarTicket = (ticket: Ticket) => {
-      if (!esSupervisor) return
-      const descripcion = ticket.descripcion ?? ''
-      push({
-        id: ticket.id,
-        type: 'warning',
-        title: `Nuevo ticket · ${ticket.modulo}`,
-        body: descripcion.length > 90 ? `${descripcion.slice(0, 90)}…` : descripcion,
-        url: '/app/tickets',
-        tag: 'ticket',
-      })
+    /** Suma un evento al buffer de su envío; el primero arma el temporizador. */
+    const encolar = (
+      revisionId: string,
+      dato: { revision?: Revision; ticket?: Ticket }
+    ) => {
+      let entrada = pendientes.get(revisionId)
+      if (!entrada) {
+        entrada = {
+          tickets: [],
+          timer: window.setTimeout(() => emitir(revisionId), VENTANA_AGRUPACION_MS),
+        }
+        pendientes.set(revisionId, entrada)
+      }
+      if (dato.revision) entrada.revision = dato.revision
+      if (dato.ticket) entrada.tickets.push(dato.ticket)
     }
 
     /* ------------------------------------------------- Canal en vivo */
@@ -115,7 +180,7 @@ export const useRealtimeSubscriptions = () => {
           if (revision.created_at > desdeRevisiones.current) {
             desdeRevisiones.current = revision.created_at
           }
-          avisarRevision(revision)
+          encolar(revision.id, { revision })
         }
       )
       .subscribe((estado) => {
@@ -138,7 +203,7 @@ export const useRealtimeSubscriptions = () => {
           if (ticket.created_at > desdeTickets.current) {
             desdeTickets.current = ticket.created_at
           }
-          avisarTicket(ticket)
+          encolar(ticket.revision_id ?? ticket.id, { ticket })
         }
       )
       .subscribe()
@@ -162,7 +227,7 @@ export const useRealtimeSubscriptions = () => {
         const nuevas = revisiones as unknown as Revision[]
         desdeRevisiones.current = nuevas[nuevas.length - 1].created_at
         refrescarListados()
-        nuevas.forEach(avisarRevision)
+        nuevas.forEach((revision) => encolar(revision.id, { revision }))
       }
 
       const { data: tickets } = await supabase
@@ -176,7 +241,7 @@ export const useRealtimeSubscriptions = () => {
         const nuevos = tickets as unknown as Ticket[]
         desdeTickets.current = nuevos[nuevos.length - 1].created_at
         queryClient.invalidateQueries({ queryKey: ['tickets'] })
-        nuevos.forEach(avisarTicket)
+        nuevos.forEach((ticket) => encolar(ticket.revision_id ?? ticket.id, { ticket }))
       }
     }
 
@@ -190,6 +255,9 @@ export const useRealtimeSubscriptions = () => {
     return () => {
       window.clearInterval(intervalo)
       document.removeEventListener('visibilitychange', alVolver)
+      // Vaciar el buffer sin emitir: la sesión del efecto terminó
+      pendientes.forEach((entrada) => window.clearTimeout(entrada.timer))
+      pendientes.clear()
       void supabase.removeChannel(canalRevisiones)
       void supabase.removeChannel(canalTickets)
     }
