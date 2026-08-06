@@ -14,7 +14,25 @@ type OdometroRow = Tables<'odometro'>
 type RackRow = Tables<'rack'>
 type PublicidadRow = Tables<'publicidad'>
 type WifiRow = Tables<'wifi'>
+type Mas15Row = Tables<'mas15'>
+type NormaGraficaRow = Tables<'norma_grafica'>
 type TicketRow = Tables<'tickets'>
+
+/** Elementos de la norma gráfica, en el orden del levantamiento en terreno */
+const ELEMENTOS_NORMA = [
+  { columna: 'interno_delantero', header: 'N° INTERNO DELANTERO' },
+  { columna: 'interno_trasero', header: 'N° INTERNO TRASERO' },
+  { columna: 'ppu_lateral_derecho', header: 'NORMA PPU LATERAL DERECHO' },
+  { columna: 'ppu_trasera', header: 'NORMA PPU TRASERA' },
+  { columna: 'patente_delantera', header: 'PATENTE DELANTERA' },
+  { columna: 'patente_trasera', header: 'PATENTE TRASERA' },
+] as const satisfies ReadonlyArray<{ columna: keyof NormaGraficaRow; header: string }>
+
+const ETIQUETA_NORMA = {
+  OK: 'CONFORME',
+  DETERIORADO: 'DETERIORADO',
+  FALTA: 'FALTA',
+} as const
 
 // ============================================================
 // REPORTE SEMANAL XLSX · DISEÑO PROFESIONAL
@@ -174,7 +192,17 @@ const limpio = (value: string | null | undefined) => {
 
 /** Última fila por bus de una tabla de módulo (histórico completo hasta endISO) */
 const fetchUltimoPorBus = async <T extends { bus_ppu: string; created_at: string }>(
-  table: 'tags' | 'camaras' | 'extintores' | 'mobileye' | 'odometro' | 'rack' | 'publicidad' | 'wifi',
+  table:
+    | 'tags'
+    | 'camaras'
+    | 'extintores'
+    | 'mobileye'
+    | 'odometro'
+    | 'rack'
+    | 'publicidad'
+    | 'wifi'
+    | 'mas15'
+    | 'norma_grafica',
   endISO: string
 ): Promise<Map<string, T>> => {
   const { data } = await supabase
@@ -235,17 +263,29 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
 
   // 3) Último registro por bus de cada módulo (independiente de la revisión:
   //    si el módulo se capturó en una revisión anterior, igual se rescata)
-  const [tags, camaras, extintores, mobileyes, odometros, racks, publicidades, wifis] =
-    await Promise.all([
-      fetchUltimoPorBus<TagRow>('tags', end),
-      fetchUltimoPorBus<CamarasRow>('camaras', end),
-      fetchUltimoPorBus<ExtintoresRow>('extintores', end),
-      fetchUltimoPorBus<MobileyeRow>('mobileye', end),
-      fetchUltimoPorBus<OdometroRow>('odometro', end),
-      fetchUltimoPorBus<RackRow>('rack', end),
-      fetchUltimoPorBus<PublicidadRow>('publicidad', end),
-      fetchUltimoPorBus<WifiRow>('wifi', end),
-    ])
+  const [
+    tags,
+    camaras,
+    extintores,
+    mobileyes,
+    odometros,
+    racks,
+    publicidades,
+    wifis,
+    mas15s,
+    normas,
+  ] = await Promise.all([
+    fetchUltimoPorBus<TagRow>('tags', end),
+    fetchUltimoPorBus<CamarasRow>('camaras', end),
+    fetchUltimoPorBus<ExtintoresRow>('extintores', end),
+    fetchUltimoPorBus<MobileyeRow>('mobileye', end),
+    fetchUltimoPorBus<OdometroRow>('odometro', end),
+    fetchUltimoPorBus<RackRow>('rack', end),
+    fetchUltimoPorBus<PublicidadRow>('publicidad', end),
+    fetchUltimoPorBus<WifiRow>('wifi', end),
+    fetchUltimoPorBus<Mas15Row>('mas15', end),
+    fetchUltimoPorBus<NormaGraficaRow>('norma_grafica', end),
+  ])
 
   // 4) Tickets pendientes de la semana (para el informe)
   const { data: ticketsData } = await supabase
@@ -301,6 +341,10 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
   const problemaPublicidad = (p: PublicidadRow) => p.danio === true || p.residuos === true
   const problemaWifi = (w: WifiRow) =>
     w.tiene_internet === false || w.ppu_visible === false || w.bus_encendido === false
+  // NULL en tiene_mas15 es "no se pudo medir", no un incumplimiento: sólo el
+  // false cuenta como problema para no inflar el indicador
+  const problemaMas15 = (m: Mas15Row) => m.tiene_mas15 === false
+  const problemaNorma = (n: NormaGraficaRow) => !n.cumple
 
   // ==========================================================
   // HOJA 1 · INFORME (dashboard con KPIs y resúmenes)
@@ -503,6 +547,8 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
     resumenModulo('RACK', racks, problemaRack),
     resumenModulo('WIFI', wifis, problemaWifi),
     resumenModulo('PUBLICIDAD', publicidades, problemaPublicidad),
+    resumenModulo('+15', mas15s, problemaMas15),
+    resumenModulo('NORMA GRÁFICA', normas, problemaNorma),
   ]
 
   modulos.forEach((mod) => {
@@ -563,6 +609,15 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
     ['Racks sin disco duro', contarProblema(racks, (r) => r.tiene_disco_duro === false)],
     ['Buses sin internet (WiFi)', contarProblema(wifis, (w) => w.tiene_internet === false)],
     ['Publicidad con daño o residuos', contarProblema(publicidades, problemaPublicidad)],
+    ['Buses sin +15 (el equipo se apaga)', contarProblema(mas15s, problemaMas15)],
+    ['Buses sin evaluar el +15 (no encendió)', contarProblema(mas15s, (m) => m.tiene_mas15 === null)],
+    ['Buses que no cumplen la norma gráfica', contarProblema(normas, problemaNorma)],
+    [
+      'Buses con algún elemento gráfico faltante',
+      contarProblema(normas, (n) =>
+        ELEMENTOS_NORMA.some((elemento) => n[elemento.columna] === 'FALTA')
+      ),
+    ],
   ]
 
   hallazgos.forEach(([texto, cantidad]) => {
@@ -1035,6 +1090,118 @@ export const exportAllModulesToXlsx = async (startDate?: string, endDate?: strin
         const value = String(row.getCell(col).value ?? '')
         if (value.includes('DAÑO') || value.includes('RESIDUOS')) marcarProblema(row.getCell(col))
       }
+    }
+  )
+
+  // ==========================================================
+  // HOJA 11 · +15
+  // ==========================================================
+  // El resultado ya viene resuelto de la app (consola Y validador encendidos
+  // tras retirar el corta corriente); aquí sólo se traduce a texto.
+  hojaModulo<Mas15Row>(
+    {
+      nombre: 'MAS15',
+      titulo: '+15 · ÚLTIMO REGISTRO POR BUS',
+      accent: 'FF4D7C0F',
+      columnas: [
+        ...baseCols,
+        { header: 'RESULTADO', key: 'resultado', width: 16 },
+        { header: 'ENCENDIDO PREVIO', key: 'arranque', width: 15 },
+        { header: 'CONSOLA SIN CORTA CORRIENTE', key: 'consola', width: 16 },
+        { header: 'VALIDADOR SIN CORTA CORRIENTE', key: 'validador', width: 16 },
+        { header: 'OBSERVACIONES', key: 'observacion', width: 34 },
+        ...colaCols,
+      ],
+    },
+    mas15s,
+    (_bus, mas15) => ({
+      // NULL es "el bus no llegó a encender", no un "no tiene": mezclarlos
+      // falsearía el porcentaje de flota con +15
+      resultado: !mas15
+        ? '-'
+        : mas15.tiene_mas15 === null
+          ? 'NO EVALUADO'
+          : mas15.tiene_mas15
+            ? 'CUENTA CON +15'
+            : 'SIN +15',
+      arranque: mas15 ? (mas15.arranque_ok ? 'CORRECTO' : 'NO SE LOGRO') : '-',
+      consola:
+        mas15?.consola_encendida === null || mas15?.consola_encendida === undefined
+          ? '-'
+          : mas15.consola_encendida
+            ? 'SIGUE ENCENDIDA'
+            : 'SE APAGO',
+      validador:
+        mas15?.validador_encendido === null || mas15?.validador_encendido === undefined
+          ? '-'
+          : mas15.validador_encendido
+            ? 'SIGUE ENCENDIDO'
+            : 'SE APAGO',
+      observacion: mas15?.observacion ?? '-',
+    }),
+    (row, mas15) => {
+      if (mas15.tiene_mas15 === false) marcarProblema(row.getCell(4))
+      if (!mas15.arranque_ok) marcarProblema(row.getCell(5))
+      for (let col = 6; col <= 7; col += 1) {
+        if (row.getCell(col).value === 'SE APAGO') marcarProblema(row.getCell(col))
+      }
+    }
+  )
+
+  // ==========================================================
+  // HOJA 12 · NORMA GRÁFICA
+  // ==========================================================
+  // Una columna por elemento del levantamiento, en el mismo orden en que se
+  // revisa el bus, para poder leer la fila de frente a trasera.
+  hojaModulo<NormaGraficaRow>(
+    {
+      nombre: 'NORMA GRAFICA',
+      titulo: 'NORMA GRÁFICA · ÚLTIMO REGISTRO POR BUS',
+      accent: 'FF0F766E',
+      columnas: [
+        ...baseCols,
+        { header: 'CUMPLE', key: 'cumple', width: 12 },
+        { header: 'N° NO CONFORMES', key: 'no_conformes', width: 12 },
+        ...ELEMENTOS_NORMA.map((elemento) => ({
+          header: elemento.header,
+          key: elemento.columna,
+          width: 15,
+        })),
+        { header: 'OBSERVACIONES', key: 'observacion', width: 34 },
+        ...colaCols,
+      ],
+    },
+    normas,
+    (_bus, norma) => {
+      const noConformes = norma
+        ? ELEMENTOS_NORMA.filter((elemento) => norma[elemento.columna] !== 'OK').length
+        : 0
+      return {
+        cumple: norma ? (norma.cumple ? 'SI' : 'NO') : '-',
+        no_conformes: norma ? noConformes : '-',
+        ...Object.fromEntries(
+          ELEMENTOS_NORMA.map((elemento) => [
+            elemento.columna,
+            norma ? (ETIQUETA_NORMA[norma[elemento.columna]] ?? '-') : '-',
+          ])
+        ),
+        observacion: norma?.observacion ?? '-',
+      }
+    },
+    (row, norma) => {
+      if (!norma.cumple) {
+        marcarProblema(row.getCell(4))
+        marcarProblema(row.getCell(5))
+      }
+      // Primera columna de elemento = 6 (PPU, interno, terminal, cumple, n°)
+      ELEMENTOS_NORMA.forEach((elemento, indice) => {
+        const cell = row.getCell(6 + indice)
+        if (norma[elemento.columna] === 'FALTA') {
+          marcarProblema(cell)
+        } else if (norma[elemento.columna] === 'DETERIORADO') {
+          cell.font = { size: 10, name: 'Calibri', bold: true, color: { argb: C.amberDark } }
+        }
+      })
     }
   )
 

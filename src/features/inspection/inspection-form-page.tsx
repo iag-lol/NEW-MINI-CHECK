@@ -15,6 +15,7 @@ import {
   Flame,
   Gauge,
   HardDrive,
+  Hash,
   KeyRound,
   Loader2,
   MapPin,
@@ -88,6 +89,56 @@ const publicidadAreaSchema = z
       }
     }
   })
+
+const estadoNormaSchema = z.enum(['OK', 'DETERIORADO', 'FALTA']).nullable()
+
+/**
+ * Elementos de la norma gráfica, en el orden del levantamiento en terreno.
+ *
+ * `campo` es el nombre en el formulario y `columna` el de la tabla: se declaran
+ * juntos para que el insert, la validación y la UI recorran una sola lista y no
+ * puedan desalinearse.
+ */
+const ELEMENTOS_NORMA = [
+  {
+    campo: 'internoDelantero',
+    columna: 'interno_delantero',
+    label: 'N° interno delantero',
+    ayuda: 'Numeración pintada en el frontal',
+  },
+  {
+    campo: 'internoTrasero',
+    columna: 'interno_trasero',
+    label: 'N° interno trasero',
+    ayuda: 'Numeración pintada en la trasera',
+  },
+  {
+    campo: 'ppuLateralDerecho',
+    columna: 'ppu_lateral_derecho',
+    label: 'Norma PPU lateral derecho',
+    ayuda: 'PPU gráfica en el costado derecho',
+  },
+  {
+    campo: 'ppuTrasera',
+    columna: 'ppu_trasera',
+    label: 'Norma PPU trasera',
+    ayuda: 'PPU gráfica en la trasera',
+  },
+  {
+    campo: 'patenteDelantera',
+    columna: 'patente_delantera',
+    label: 'Patente delantera',
+    ayuda: 'Placa patente física del frontal',
+  },
+  {
+    campo: 'patenteTrasera',
+    columna: 'patente_trasera',
+    label: 'Patente trasera',
+    ayuda: 'Placa patente física de la trasera',
+  },
+] as const
+
+type EstadoNormaValor = 'OK' | 'DETERIORADO' | 'FALTA' | null
 
 // El flujo usa validación contextual por paso; el esquema mantiene el contrato tipado completo.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -167,6 +218,15 @@ const inspectionSchema = z
       ppuVisible: z.boolean().nullable(),
       busEncendido: z.boolean().nullable(),
       tieneInternet: z.boolean().nullable(),
+      observacion: z.string().optional(),
+    }),
+    normaGrafica: z.object({
+      internoDelantero: estadoNormaSchema,
+      internoTrasero: estadoNormaSchema,
+      ppuLateralDerecho: estadoNormaSchema,
+      ppuTrasera: estadoNormaSchema,
+      patenteDelantera: estadoNormaSchema,
+      patenteTrasera: estadoNormaSchema,
       observacion: z.string().optional(),
     }),
     mas15: z.object({
@@ -456,6 +516,87 @@ const BinaryQuestion = ({
   </div>
 )
 
+/**
+ * Selector de tres estados para la norma gráfica.
+ *
+ * Un sí/no no basta aquí: una PPU despintada y una PPU ausente se resuelven de
+ * formas distintas (una se repinta, la otra se instala), y con dos opciones el
+ * inspector se ve obligado a elegir la menos falsa.
+ */
+const ESTADOS_NORMA = [
+  {
+    valor: 'OK' as const,
+    label: 'Conforme',
+    activo: 'border-emerald-600 bg-emerald-600 text-white shadow-md shadow-emerald-600/25',
+    inactivo: 'hover:border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30',
+  },
+  {
+    valor: 'DETERIORADO' as const,
+    label: 'Deteriorado',
+    activo: 'border-amber-500 bg-amber-500 text-white shadow-md shadow-amber-500/25',
+    inactivo: 'hover:border-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/30',
+  },
+  {
+    valor: 'FALTA' as const,
+    label: 'Falta',
+    activo: 'border-red-600 bg-red-600 text-white shadow-md shadow-red-600/25',
+    inactivo: 'hover:border-red-300 hover:bg-red-50 dark:hover:bg-red-950/30',
+  },
+]
+
+const EstadoNormaQuestion = ({
+  label,
+  description,
+  value,
+  onChange,
+}: {
+  label: string
+  description?: string
+  value: EstadoNormaValor
+  onChange: (value: 'OK' | 'DETERIORADO' | 'FALTA') => void
+}) => (
+  <div
+    className={`space-y-2.5 rounded-2xl border p-3.5 transition sm:p-4 ${
+      value === null
+        ? 'border-slate-200/80 bg-white/70 dark:border-slate-800 dark:bg-slate-950/40'
+        : value === 'OK'
+          ? 'border-emerald-200/80 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/10'
+          : value === 'DETERIORADO'
+            ? 'border-amber-200/80 bg-amber-50/40 dark:border-amber-900/50 dark:bg-amber-950/10'
+            : 'border-red-200/80 bg-red-50/40 dark:border-red-900/50 dark:bg-red-950/10'
+    }`}
+  >
+    <div className="flex items-start justify-between gap-2">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-900 dark:text-white">{label}</p>
+        {description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}
+      </div>
+      {value === null && (
+        <span className="flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700 dark:bg-amber-950/60 dark:text-amber-300">
+          Pendiente
+        </span>
+      )}
+    </div>
+    <div className="grid grid-cols-3 gap-2">
+      {ESTADOS_NORMA.map((estado) => (
+        <button
+          key={estado.valor}
+          type="button"
+          aria-pressed={value === estado.valor}
+          onClick={() => onChange(estado.valor)}
+          className={`flex min-h-[44px] items-center justify-center rounded-xl border px-2 py-2 text-[12.5px] font-semibold transition active:scale-[0.98] ${
+            value === estado.valor
+              ? estado.activo
+              : `border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 ${estado.inactivo}`
+          }`}
+        >
+          {estado.label}
+        </button>
+      ))}
+    </div>
+  </div>
+)
+
 const SectionCard = ({
   title,
   description,
@@ -555,6 +696,15 @@ export const InspectionFormPage = () => {
         ppuVisible: null,
         busEncendido: null,
         tieneInternet: null,
+        observacion: '',
+      },
+      normaGrafica: {
+        internoDelantero: null,
+        internoTrasero: null,
+        ppuLateralDerecho: null,
+        ppuTrasera: null,
+        patenteDelantera: null,
+        patenteTrasera: null,
         observacion: '',
       },
       mas15: {
@@ -1041,6 +1191,24 @@ export const InspectionFormPage = () => {
         }
         break
       }
+      case 'normaGrafica': {
+        const norma = snapshot.normaGrafica
+        const conHallazgo: string[] = []
+        ELEMENTOS_NORMA.forEach((elemento) => {
+          const estado = norma[elemento.campo]
+          if (estado === null || estado === undefined) {
+            missing.push(`Norma gráfica · Evalúa ${elemento.label}`)
+            return
+          }
+          if (estado !== 'OK') conHallazgo.push(elemento.label)
+        })
+        // Un elemento deteriorado o ausente termina en ticket: sin describir el
+        // hallazgo, quien lo repara no sabe qué buscar
+        if (conHallazgo.length > 0 && !norma.observacion?.trim()) {
+          missing.push('Norma gráfica · Describe el hallazgo en la observación')
+        }
+        break
+      }
       case 'mas15': {
         const mas15 = snapshot.mas15
         if (mas15.arranqueOk === null || mas15.arranqueOk === undefined) {
@@ -1340,6 +1508,29 @@ export const InspectionFormPage = () => {
         })
       }
 
+      // Norma gráfica: elementos que no quedaron conformes. Se calcula fuera
+      // del insert porque también decide el ticket automático.
+      const normaHallazgos = ELEMENTOS_NORMA.filter(
+        (elemento) => values.normaGrafica[elemento.campo] !== 'OK'
+      )
+
+      if (moduloVigente('normaGrafica')) {
+        await supabase.from('norma_grafica').insert({
+          revision_id: revisionData.id,
+          interno_delantero: values.normaGrafica.internoDelantero ?? 'FALTA',
+          interno_trasero: values.normaGrafica.internoTrasero ?? 'FALTA',
+          ppu_lateral_derecho: values.normaGrafica.ppuLateralDerecho ?? 'FALTA',
+          ppu_trasera: values.normaGrafica.ppuTrasera ?? 'FALTA',
+          patente_delantera: values.normaGrafica.patenteDelantera ?? 'FALTA',
+          patente_trasera: values.normaGrafica.patenteTrasera ?? 'FALTA',
+          // El cumplimiento se deduce, no se pregunta: los seis conformes
+          cumple: normaHallazgos.length === 0,
+          observacion: values.normaGrafica.observacion || null,
+          bus_ppu: bus.ppu,
+          terminal: values.terminalReportado,
+        })
+      }
+
       if (moduloVigente('mas15')) {
         const arranqueOk = values.mas15.arranqueOk === true
         // El resultado se deduce, no se pregunta: sólo hay +15 si AMBOS
@@ -1440,6 +1631,22 @@ export const InspectionFormPage = () => {
       }
       if (!values.tag.tiene) {
         tickets.push({ modulo: 'TAG', descripcion: 'Bus sin TAG instalado' })
+      }
+      if (moduloVigente('normaGrafica') && normaHallazgos.length > 0) {
+        // Un solo ticket con el detalle: seis tickets por bus enterrarían la
+        // bandeja y todos se resuelven en la misma visita al taller
+        const detalle = normaHallazgos
+          .map(
+            (elemento) =>
+              `${elemento.label} (${
+                values.normaGrafica[elemento.campo] === 'FALTA' ? 'falta' : 'deteriorado'
+              })`
+          )
+          .join(', ')
+        tickets.push({
+          modulo: 'Norma gráfica',
+          descripcion: `Norma gráfica no conforme: ${detalle}`,
+        })
       }
 
       if (tickets.length) {
@@ -2542,6 +2749,135 @@ export const InspectionFormPage = () => {
   }
 
   /**
+   * Norma gráfica · rotulación obligatoria del bus.
+   *
+   * Seis elementos con el mismo tratamiento: números internos, PPU normada y
+   * placas patentes. El cumplimiento no se pregunta, se deduce de los seis.
+   */
+  const renderNormaGrafica = () => {
+    const normaState = methods.watch('normaGrafica')
+    const evaluados = ELEMENTOS_NORMA.filter(
+      (elemento) => normaState[elemento.campo] !== null && normaState[elemento.campo] !== undefined
+    )
+    const hallazgos = evaluados.filter((elemento) => normaState[elemento.campo] !== 'OK')
+    const completo = evaluados.length === ELEMENTOS_NORMA.length
+    const cumple = completo && hallazgos.length === 0
+
+    return (
+      <SectionCard
+        title="Norma gráfica"
+        description="Números internos, PPU normada y placas patentes"
+        icon={Hash}
+        accent="from-cyan-500 to-teal-500"
+        badge={
+          <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            {evaluados.length}/{ELEMENTOS_NORMA.length}
+          </span>
+        }
+      >
+        <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-900/40">
+          <p className="mb-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+            Cómo marcar cada elemento
+          </p>
+          <ul className="space-y-1.5 text-sm leading-snug text-slate-600 dark:text-slate-300">
+            <li>
+              <strong className="text-emerald-700 dark:text-emerald-400">Conforme</strong> ·
+              completo, legible y bien adherido.
+            </li>
+            <li>
+              <strong className="text-amber-700 dark:text-amber-400">Deteriorado</strong> ·
+              existe pero está despintado, rayado, despegado o ilegible.
+            </li>
+            <li>
+              <strong className="text-red-700 dark:text-red-400">Falta</strong> · no está
+              instalado en el bus.
+            </li>
+          </ul>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-2">
+          {ELEMENTOS_NORMA.map((elemento) => (
+            <EstadoNormaQuestion
+              key={elemento.campo}
+              label={elemento.label}
+              description={elemento.ayuda}
+              value={normaState[elemento.campo] ?? null}
+              onChange={(value) =>
+                methods.setValue(`normaGrafica.${elemento.campo}`, value, {
+                  shouldDirty: true,
+                })
+              }
+            />
+          ))}
+        </div>
+
+        {completo && (
+          <div
+            className={`flex items-center gap-3 rounded-xl border p-3 ${
+              cumple
+                ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40'
+                : 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40'
+            }`}
+          >
+            <span
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white ${
+                cumple ? 'bg-emerald-500' : 'bg-red-500'
+              }`}
+            >
+              {cumple ? (
+                <Check className="h-5 w-5" strokeWidth={3} />
+              ) : (
+                <X className="h-5 w-5" strokeWidth={3} />
+              )}
+            </span>
+            <div className="min-w-0">
+              <p
+                className={`text-sm font-black ${
+                  cumple
+                    ? 'text-emerald-800 dark:text-emerald-200'
+                    : 'text-red-800 dark:text-red-200'
+                }`}
+              >
+                {cumple
+                  ? 'El bus CUMPLE la norma gráfica'
+                  : `${hallazgos.length} elemento${hallazgos.length !== 1 ? 's' : ''} no conforme${
+                      hallazgos.length !== 1 ? 's' : ''
+                    }`}
+              </p>
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                {cumple
+                  ? 'Los seis elementos están completos y legibles.'
+                  : hallazgos.map((elemento) => elemento.label).join(' · ')}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <Label htmlFor="norma-obs">
+            Observación {hallazgos.length > 0 ? '(obligatoria)' : '(opcional)'}
+          </Label>
+          <Textarea
+            id="norma-obs"
+            rows={hallazgos.length > 0 ? 3 : 2}
+            placeholder={
+              hallazgos.length > 0
+                ? 'Describe qué está deteriorado o falta: ubicación, estado y si es legible...'
+                : 'Detalles adicionales de la rotulación...'
+            }
+            value={normaState.observacion ?? ''}
+            onChange={(event) =>
+              methods.setValue('normaGrafica.observacion', event.target.value, {
+                shouldDirty: true,
+              })
+            }
+          />
+        </div>
+      </SectionCard>
+    )
+  }
+
+  /**
    * +15 · alimentación permanente del equipo embarcado.
    *
    * El resultado no se pregunta, se deduce: si tras retirar el corta corriente
@@ -2721,6 +3057,8 @@ export const InspectionFormPage = () => {
         return renderOdometro()
       case 'wifi':
         return renderWifi()
+      case 'normaGrafica':
+        return renderNormaGrafica()
       case 'mas15':
         return renderMas15()
       case 'publicidad':

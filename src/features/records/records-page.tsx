@@ -25,6 +25,22 @@ interface Filters {
   query: string
 }
 
+/** Elementos de la norma gráfica, en el orden del levantamiento en terreno */
+const ELEMENTOS_NORMA = [
+  { columna: 'interno_delantero', header: 'N° INTERNO DELANTERO' },
+  { columna: 'interno_trasero', header: 'N° INTERNO TRASERO' },
+  { columna: 'ppu_lateral_derecho', header: 'NORMA PPU LATERAL DERECHO' },
+  { columna: 'ppu_trasera', header: 'NORMA PPU TRASERA' },
+  { columna: 'patente_delantera', header: 'PATENTE DELANTERA' },
+  { columna: 'patente_trasera', header: 'PATENTE TRASERA' },
+] as const satisfies ReadonlyArray<{ columna: keyof Tables<'norma_grafica'>; header: string }>
+
+const ETIQUETA_NORMA = {
+  OK: 'CONFORME',
+  DETERIORADO: 'DETERIORADO',
+  FALTA: 'FALTA',
+} as const
+
 export const RecordsPage = () => {
   const [searchParams, setSearchParams] = useSearchParams()
   const user = useAuthStore((state) => state.user)
@@ -43,6 +59,9 @@ export const RecordsPage = () => {
   const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  // El Excel ahora consulta +15 y norma gráfica antes de armarse: sin aviso,
+  // el botón parecía no responder
+  const [exporting, setExporting] = useState(false)
 
   const alternarSoloMias = (valor: boolean) => {
     setSoloMias(valor)
@@ -84,7 +103,7 @@ export const RecordsPage = () => {
     if (!window.confirm('¿Eliminar este registro y todos sus datos asociados?')) return
     setDeletingId(revisionId)
     try {
-      const childTables = ['tickets', 'tags', 'camaras', 'extintores', 'mobileye', 'odometro', 'rack', 'publicidad']
+      const childTables = ['tickets', 'tags', 'camaras', 'extintores', 'mobileye', 'odometro', 'rack', 'publicidad', 'wifi', 'mas15', 'norma_grafica']
       for (const table of childTables) {
         await supabase.from(table).delete().eq('revision_id', revisionId)
       }
@@ -111,36 +130,152 @@ export const RecordsPage = () => {
 
   const exportXlsx = async () => {
     if (!revisiones?.length) return
-    const workbook = new ExcelJS.Workbook()
-    const sheet = workbook.addWorksheet('Revisiones')
-    sheet.columns = [
-      { header: 'Fecha', key: 'fecha', width: 18 },
-      { header: 'Bus', key: 'bus', width: 20 },
-      { header: 'Inspector', key: 'inspector', width: 24 },
-      { header: 'Terminal', key: 'terminal', width: 18 },
-      { header: 'Estado', key: 'estado', width: 14 },
-      { header: 'Observación', key: 'obs', width: 60 },
-    ]
-    revisiones.forEach((revision) => {
-      sheet.addRow({
-        fecha: dayjs(revision.created_at).format('DD-MM-YYYY HH:mm'),
-        bus: `${revision.bus_ppu} · #${revision.bus_interno}`,
-        inspector: revision.inspector_nombre,
-        terminal: revision.terminal_detectado,
-        estado: revision.estado_bus,
-        obs: revision.observaciones,
+    setExporting(true)
+    try {
+      const ids = revisiones.map((revision) => revision.id)
+
+      // Los módulos que se piden en el reporte se traen por revisión y no por
+      // bus: aquí interesa qué se midió en ESA revisión, no el último dato
+      // conocido del bus.
+      const [{ data: mas15Data }, { data: normaData }] = await Promise.all([
+        supabase.from('mas15').select('*').in('revision_id', ids),
+        supabase.from('norma_grafica').select('*').in('revision_id', ids),
+      ])
+
+      const mas15PorRevision = new Map(
+        ((mas15Data as Tables<'mas15'>[]) ?? []).map((fila) => [fila.revision_id, fila])
+      )
+      const normaPorRevision = new Map(
+        ((normaData as Tables<'norma_grafica'>[]) ?? []).map((fila) => [fila.revision_id, fila])
+      )
+
+      const workbook = new ExcelJS.Workbook()
+      workbook.creator = 'Mini-Check'
+      workbook.created = new Date()
+      const sheet = workbook.addWorksheet('Revisiones', {
+        views: [{ state: 'frozen', ySplit: 1 }],
       })
-    })
-    const buffer = await workbook.xlsx.writeBuffer()
-    const blob = new Blob([buffer], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    })
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `revisiones_${dayjs().format('YYYYMMDD_HHmm')}.xlsx`
-    link.click()
-    window.URL.revokeObjectURL(url)
+      sheet.columns = [
+        { header: 'FECHA', key: 'fecha', width: 18 },
+        { header: 'PPU', key: 'ppu', width: 12 },
+        { header: 'N° INTERNO', key: 'interno', width: 11 },
+        { header: 'INSPECTOR', key: 'inspector', width: 26 },
+        { header: 'TERMINAL', key: 'terminal', width: 18 },
+        { header: 'ESTADO BUS', key: 'estado', width: 14 },
+        { header: '+15', key: 'mas15', width: 16 },
+        { header: '+15 · ENCENDIDO PREVIO', key: 'mas15_arranque', width: 15 },
+        { header: 'NORMA GRÁFICA', key: 'norma', width: 15 },
+        ...ELEMENTOS_NORMA.map((elemento) => ({
+          header: elemento.header,
+          key: elemento.columna,
+          width: 15,
+        })),
+        { header: 'OBSERVACIÓN', key: 'obs', width: 50 },
+      ]
+
+      const cabecera = sheet.getRow(1)
+      cabecera.height = 32
+      cabecera.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F3864' } }
+        cell.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' }, name: 'Calibri' }
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+      })
+
+      revisiones.forEach((revision) => {
+        const mas15 = mas15PorRevision.get(revision.id)
+        const norma = normaPorRevision.get(revision.id)
+
+        const fila = sheet.addRow({
+          fecha: dayjs(revision.created_at).format('DD-MM-YYYY HH:mm'),
+          ppu: revision.bus_ppu,
+          interno: revision.bus_interno,
+          inspector: revision.inspector_nombre,
+          terminal: revision.terminal_detectado,
+          estado: revision.estado_bus === 'EN_PANNE' ? 'EN PANNE' : 'OPERATIVO',
+          // NULL es "no se pudo medir", no un incumplimiento: se distingue
+          mas15: !mas15
+            ? 'NO REVISADO'
+            : mas15.tiene_mas15 === null
+              ? 'NO EVALUADO'
+              : mas15.tiene_mas15
+                ? 'CUENTA CON +15'
+                : 'SIN +15',
+          mas15_arranque: mas15 ? (mas15.arranque_ok ? 'CORRECTO' : 'NO SE LOGRÓ') : '-',
+          norma: !norma ? 'NO REVISADO' : norma.cumple ? 'CUMPLE' : 'NO CUMPLE',
+          ...Object.fromEntries(
+            ELEMENTOS_NORMA.map((elemento) => [
+              elemento.columna,
+              norma ? ETIQUETA_NORMA[norma[elemento.columna]] : '-',
+            ])
+          ),
+          obs: revision.observaciones ?? '-',
+        })
+
+        fila.height = 18
+        fila.eachCell({ includeEmpty: true }, (cell, col) => {
+          cell.font = { size: 10, name: 'Calibri' }
+          cell.alignment = {
+            vertical: 'middle',
+            horizontal: col === 4 || col === sheet.columnCount ? 'left' : 'center',
+          }
+        })
+        fila.getCell(2).font = { size: 10, name: 'Calibri', bold: true }
+
+        // Rojo sólo donde hay que actuar: un archivo con todo pintado no
+        // ayuda a encontrar los buses que importan
+        const marcar = (columna: number) => {
+          fila.getCell(columna).font = {
+            size: 10,
+            name: 'Calibri',
+            bold: true,
+            color: { argb: 'FFB91C1C' },
+          }
+        }
+        if (revision.estado_bus === 'EN_PANNE') marcar(6)
+        if (mas15?.tiene_mas15 === false) marcar(7)
+        if (norma && !norma.cumple) marcar(9)
+        ELEMENTOS_NORMA.forEach((elemento, indice) => {
+          if (!norma) return
+          const celda = fila.getCell(10 + indice)
+          if (norma[elemento.columna] === 'FALTA') {
+            marcar(10 + indice)
+          } else if (norma[elemento.columna] === 'DETERIORADO') {
+            celda.font = {
+              size: 10,
+              name: 'Calibri',
+              bold: true,
+              color: { argb: 'FF92400E' },
+            }
+          }
+        })
+      })
+
+      sheet.autoFilter = {
+        from: { row: 1, column: 1 },
+        to: { row: Math.max(sheet.rowCount, 1), column: sheet.columnCount },
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `revisiones_${dayjs().format('YYYYMMDD_HHmm')}.xlsx`
+      link.click()
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error exportando revisiones', error)
+      push({
+        id: `export-error-${Date.now()}`,
+        title: 'No pudimos generar el Excel',
+        body: 'Revisa la conexión e inténtalo nuevamente.',
+        type: 'error',
+      })
+    } finally {
+      setExporting(false)
+    }
   }
 
   const exportPdf = () => {
@@ -227,8 +362,9 @@ export const RecordsPage = () => {
           </Select>
         </div>
         <div className="mt-4 flex flex-wrap gap-3">
-          <Button variant="outline" onClick={exportXlsx}>
-            Exportar XLSX
+          <Button variant="outline" onClick={exportXlsx} disabled={exporting}>
+            {exporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {exporting ? 'Generando...' : 'Exportar XLSX'}
           </Button>
           <Button variant="outline" onClick={exportPdf}>
             Exportar PDF

@@ -27,6 +27,7 @@ const ComunicacionPage = lazy(() => import('@/features/comunicacion/comunicacion
 const PersonalPage = lazy(() => import('@/features/personal/personal-page').then((module) => ({ default: module.PersonalPage })))
 const ConfiguracionPage = lazy(() => import('@/features/configuracion/configuracion-page').then((module) => ({ default: module.ConfiguracionPage })))
 const Mas15ModulePage = lazy(() => import('@/features/modules/mas15-page').then((module) => ({ default: module.Mas15ModulePage })))
+const NormaGraficaModulePage = lazy(() => import('@/features/modules/norma-grafica-page').then((module) => ({ default: module.NormaGraficaModulePage })))
 const PendientesPage = lazy(() => import('@/features/pendientes/pendientes-page').then((module) => ({ default: module.PendientesPage })))
 const TicketsPage = lazy(() => import('@/features/tickets/tickets-page').then((module) => ({ default: module.TicketsPage })))
 const ProfilePage = lazy(() => import('@/features/profile/profile-page').then((module) => ({ default: module.ProfilePage })))
@@ -63,6 +64,7 @@ export const router = createBrowserRouter([
       { path: 'odometro', element: supervisorOnly(<OdometroModulePage />) },
       { path: 'rack', element: supervisorOnly(<RackModulePage />) },
       { path: 'mas15', element: supervisorOnly(<Mas15ModulePage />) },
+      { path: 'norma-grafica', element: supervisorOnly(<NormaGraficaModulePage />) },
       { path: 'wifi', element: supervisorOnly(<WifiModulePage />) },
       { path: 'publicidad', element: supervisorOnly(<PublicidadModulePage />) },
       { path: 'flota', element: supervisorOnly(<FlotaPage />) },

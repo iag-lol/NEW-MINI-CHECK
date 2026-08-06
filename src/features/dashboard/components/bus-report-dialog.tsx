@@ -46,7 +46,25 @@ type OdometroRow = Tables<'odometro'>
 type RackRow = Tables<'rack'>
 type PublicidadRow = Tables<'publicidad'>
 type WifiRow = Tables<'wifi'>
+type Mas15Row = Tables<'mas15'>
+type NormaGraficaRow = Tables<'norma_grafica'>
 type TicketRow = Tables<'tickets'>
+
+/** Elementos de la norma gráfica, en el orden del levantamiento en terreno */
+const ELEMENTOS_NORMA = [
+  { columna: 'interno_delantero', label: 'N° interno delantero' },
+  { columna: 'interno_trasero', label: 'N° interno trasero' },
+  { columna: 'ppu_lateral_derecho', label: 'PPU lateral derecho' },
+  { columna: 'ppu_trasera', label: 'PPU trasera' },
+  { columna: 'patente_delantera', label: 'Patente delantera' },
+  { columna: 'patente_trasera', label: 'Patente trasera' },
+] as const satisfies ReadonlyArray<{ columna: keyof NormaGraficaRow; label: string }>
+
+const ETIQUETA_NORMA = {
+  OK: 'Conforme',
+  DETERIORADO: 'Deteriorado',
+  FALTA: 'Falta',
+} as const
 
 type Rango = '1m' | '2m' | 'all'
 
@@ -61,6 +79,8 @@ interface BusReport {
   racks: Map<string, RackRow>
   publicidades: Map<string, PublicidadRow>
   wifis: Map<string, WifiRow>
+  mas15s: Map<string, Mas15Row>
+  normas: Map<string, NormaGraficaRow>
   tickets: TicketRow[]
 }
 
@@ -95,6 +115,8 @@ const fetchBusReport = async (ppu: string, rango: Rango): Promise<BusReport> => 
     { data: racks },
     { data: publicidades },
     { data: wifis },
+    { data: mas15s },
+    { data: normas },
   ] = await Promise.all([
     supabase.from('flota').select('*').eq('ppu', ppu).maybeSingle(),
     revisionesQuery,
@@ -106,6 +128,8 @@ const fetchBusReport = async (ppu: string, rango: Rango): Promise<BusReport> => 
     supabase.from('rack').select('*').eq('bus_ppu', ppu).limit(1000),
     supabase.from('publicidad').select('*').eq('bus_ppu', ppu).limit(1000),
     supabase.from('wifi').select('*').eq('bus_ppu', ppu).limit(1000),
+    supabase.from('mas15').select('*').eq('bus_ppu', ppu).limit(1000),
+    supabase.from('norma_grafica').select('*').eq('bus_ppu', ppu).limit(1000),
   ])
 
   const revisionIds = ((revisiones as RevisionRow[]) ?? []).map((rev) => rev.id)
@@ -131,6 +155,8 @@ const fetchBusReport = async (ppu: string, rango: Rango): Promise<BusReport> => 
     racks: porRevision(racks as RackRow[]),
     publicidades: porRevision(publicidades as PublicidadRow[]),
     wifis: porRevision(wifis as WifiRow[]),
+    mas15s: porRevision(mas15s as Mas15Row[]),
+    normas: porRevision(normas as NormaGraficaRow[]),
     tickets,
   }
 }
@@ -191,6 +217,17 @@ const contarProblemasRevision = (report: BusReport, revId: string): number => {
     if (wifi.ppu_visible === false) problemas += 1
     if (wifi.bus_encendido === false) problemas += 1
     if (wifi.tiene_internet === false) problemas += 1
+  }
+  // NULL en tiene_mas15 es "no se pudo medir", no un incumplimiento
+  const mas15 = report.mas15s.get(revId)
+  if (mas15?.tiene_mas15 === false) problemas += 1
+  // Cada elemento gráfico no conforme cuenta por separado: cinco piezas rotas
+  // y una son cargas de trabajo muy distintas
+  const norma = report.normas.get(revId)
+  if (norma) {
+    problemas += ELEMENTOS_NORMA.filter(
+      (elemento) => norma[elemento.columna] !== 'OK'
+    ).length
   }
   return problemas
 }
@@ -530,6 +567,58 @@ export const BusReportDialog = ({ ppu, onClose }: BusReportDialogProps) => {
             { label: 'Con daño', value: siNo(pub.danio), bad: pub.danio === true },
             { label: 'Residuos', value: siNo(pub.residuos), bad: pub.residuos === true },
             { label: 'Observación', value: pub.observacion || '—' },
+          ]
+        : [],
+    })
+
+    const mas15 = report.mas15s.get(revId)
+    cards.push({
+      title: '🔋 +15',
+      status: mas15 ? (mas15.tiene_mas15 === false ? 'problema' : 'ok') : 'sin-dato',
+      rows: mas15
+        ? [
+            {
+              label: 'Resultado',
+              value:
+                mas15.tiene_mas15 === null
+                  ? 'No evaluado'
+                  : mas15.tiene_mas15
+                    ? 'Cuenta con +15'
+                    : 'Sin +15',
+              bad: mas15.tiene_mas15 === false,
+            },
+            {
+              label: 'Encendido previo',
+              value: mas15.arranque_ok ? 'Correcto' : 'No se logró',
+              bad: !mas15.arranque_ok,
+            },
+            {
+              label: 'Consola',
+              value: siNo(mas15.consola_encendida, 'Encendida', 'Se apagó'),
+              bad: mas15.consola_encendida === false,
+            },
+            {
+              label: 'Validador',
+              value: siNo(mas15.validador_encendido, 'Encendido', 'Se apagó'),
+              bad: mas15.validador_encendido === false,
+            },
+            { label: 'Observación', value: mas15.observacion || '—' },
+          ]
+        : [],
+    })
+
+    const norma = report.normas.get(revId)
+    cards.push({
+      title: '🔤 Norma gráfica',
+      status: norma ? (norma.cumple ? 'ok' : 'problema') : 'sin-dato',
+      rows: norma
+        ? [
+            ...ELEMENTOS_NORMA.map((elemento) => ({
+              label: elemento.label,
+              value: ETIQUETA_NORMA[norma[elemento.columna]],
+              bad: norma[elemento.columna] !== 'OK',
+            })),
+            { label: 'Observación', value: norma.observacion || '—' },
           ]
         : [],
     })

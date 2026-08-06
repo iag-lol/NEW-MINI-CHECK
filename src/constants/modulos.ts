@@ -6,6 +6,7 @@ import {
   Flame,
   Gauge,
   HardDrive,
+  Hash,
   Megaphone,
   Radar,
   Tag,
@@ -32,6 +33,7 @@ export type ModuloClave =
   | 'rack'
   | 'wifi'
   | 'publicidad'
+  | 'normaGrafica'
   | 'mas15'
   | 'cierre'
 
@@ -171,6 +173,22 @@ export const MODULOS: DefinicionModulo[] = [
     obligatorioEnPanne: true,
     requiereBusOperativo: false,
     orden: 80,
+  },
+  {
+    clave: 'normaGrafica',
+    nombre: 'Norma gráfica',
+    funcion:
+      'Revisa la rotulación obligatoria del bus: números internos, PPU normada en lateral y trasera, y placas patentes.',
+    procedimiento:
+      'Recorrer el exterior del bus y revisar los seis elementos: número interno delantero y trasero, PPU normada en el lateral derecho y en la trasera, y las placas patentes delantera y trasera. Cada uno se marca CONFORME cuando está completo, legible y bien adherido; DETERIORADO cuando existe pero está despintado, rayado, despegado o ilegible; y FALTA cuando no está instalado.',
+    icono: Hash,
+    acento: 'from-cyan-500 to-teal-500',
+    tabla: 'norma_grafica',
+    fijo: false,
+    // Es una revisión visual del exterior: no necesita arrancar el bus
+    obligatorioEnPanne: true,
+    requiereBusOperativo: false,
+    orden: 85,
   },
   {
     clave: 'mas15',

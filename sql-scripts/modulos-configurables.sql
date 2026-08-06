@@ -78,8 +78,9 @@ INSERT INTO public.modulos_config (clave, activo, tipo, orden) VALUES
   ('mobileye',   TRUE, 'siempre', 50),
   ('rack',       TRUE, 'siempre', 60),
   ('wifi',       TRUE, 'siempre', 70),
-  ('publicidad', TRUE, 'siempre', 80),
-  ('mas15',      TRUE, 'siempre', 90)
+  ('publicidad',   TRUE, 'siempre', 80),
+  ('normaGrafica', TRUE, 'siempre', 85),
+  ('mas15',        TRUE, 'siempre', 90)
 ON CONFLICT (clave) DO NOTHING;
 
 ALTER TABLE public.modulos_config ENABLE ROW LEVEL SECURITY;
@@ -175,7 +176,8 @@ END $$;
 -- =============================================================================
 -- 4. COMPROBACIÓN
 -- =============================================================================
--- Debe devolver 9 filas de configuración y la tabla mas15 vacía.
+-- Debe devolver 10 filas de configuración y la tabla mas15 vacía.
+-- La tabla de norma gráfica se crea aparte, en sql-scripts/norma-grafica.sql.
 
 SELECT clave, activo, tipo, semanas_mes, dias_semana, meses, orden
 FROM public.modulos_config

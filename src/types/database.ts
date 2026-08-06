@@ -170,6 +170,35 @@ type Mas15Row = {
   terminal: string
 }
 
+/**
+ * Estado de cada elemento de la norma gráfica.
+ *
+ * Distinguir DETERIORADO de FALTA es lo que hace accionable el dato: uno se
+ * repone y el otro se repinta, y mezclarlos escondería cuántos buses circulan
+ * derechamente sin rotulación.
+ */
+export type EstadoNorma = 'OK' | 'DETERIORADO' | 'FALTA'
+
+type NormaGraficaRow = {
+  id: string
+  revision_id: string
+  /** Numeración interna pintada en el frontal y en la trasera */
+  interno_delantero: EstadoNorma
+  interno_trasero: EstadoNorma
+  /** PPU normada (gráfica) en el lateral derecho y en la trasera */
+  ppu_lateral_derecho: EstadoNorma
+  ppu_trasera: EstadoNorma
+  /** Placas patentes físicas */
+  patente_delantera: EstadoNorma
+  patente_trasera: EstadoNorma
+  /** Los seis elementos conformes: lo calcula la app para no repetir la regla */
+  cumple: boolean
+  observacion: string | null
+  created_at: string
+  bus_ppu: string
+  terminal: string
+}
+
 type ModuloConfigRow = {
   clave: string
   activo: boolean
@@ -284,6 +313,10 @@ export type Database = {
       publicidad: TableRecord<PublicidadRow, Omit<PublicidadRow, 'id' | 'created_at'>>
       wifi: TableRecord<WifiRow, Omit<WifiRow, 'id' | 'created_at'>>
       mas15: TableRecord<Mas15Row, Omit<Mas15Row, 'id' | 'created_at'>>
+      norma_grafica: TableRecord<
+        NormaGraficaRow,
+        Omit<NormaGraficaRow, 'id' | 'created_at'>
+      >
       modulos_config: TableRecord<ModuloConfigRow, ModuloConfigRow, Partial<ModuloConfigRow>>
       tickets: TableRecord<TicketRow, Omit<TicketRow, 'id' | 'created_at' | 'actualizado_en'>>
       personal: TableRecord<PersonalRow, Omit<PersonalRow, 'id' | 'created_at'>>
