@@ -709,12 +709,12 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
             onClick={(event) => event.stopPropagation()}
           >
             {/* Encabezado */}
-            <div className="relative bg-gradient-to-r from-slate-900 via-indigo-900 to-indigo-600 px-4 py-4 text-white sm:px-6 sm:py-5">
+            <div className="relative bg-gradient-to-r from-slate-900 via-indigo-900 to-indigo-600 px-4 pb-4 text-white sm:px-6 sm:pb-5 dialog-header-safe">
               <button
                 type="button"
                 onClick={onClose}
                 aria-label="Cerrar rendimiento por colaborador"
-                className="absolute right-4 top-4 rounded-full p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white"
+                className="dialog-close-safe absolute right-4 rounded-full p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white"
               >
                 <X className="h-5 w-5" />
               </button>

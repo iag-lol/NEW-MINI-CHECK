@@ -791,6 +791,58 @@ export const InspectionFormPage = () => {
       : [...steps]
     return base.filter((item) => clavesActivas.has(item.key))
   }, [isEnPanne, clavesActivas])
+  /**
+   * Qué se revisa y qué se omite con el bus en panne, según lo que esté
+   * vigente HOY.
+   *
+   * Antes estos nombres estaban escritos a mano en el aviso ("TAG, Extintor,
+   * Mobileye, Rack y Publicidad"). Con módulos configurables eso pasó a ser
+   * mentira: el aviso seguía exigiendo módulos que el supervisor había
+   * apagado y callaba los que sí había añadido, mientras los pasos reales del
+   * formulario decían otra cosa.
+   */
+  const modulosPanne = useMemo(
+    () =>
+      MODULOS.filter(
+        (modulo) =>
+          !modulo.fijo && modulo.obligatorioEnPanne && clavesActivas.has(modulo.clave)
+      ),
+    [clavesActivas]
+  )
+
+  const modulosOmitidosPanne = useMemo(
+    () =>
+      MODULOS.filter(
+        (modulo) =>
+          !modulo.fijo && modulo.requiereBusOperativo && clavesActivas.has(modulo.clave)
+      ),
+    [clavesActivas]
+  )
+
+  /** Pasos que tendría el flujo con el bus operativo */
+  const pasosOperativo = useMemo(
+    () => steps.filter((item) => clavesActivas.has(item.key)).length,
+    [clavesActivas]
+  )
+
+  const listar = (nombres: string[]) =>
+    nombres.length <= 1
+      ? nombres.join('')
+      : `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`
+
+  /**
+   * Por qué no hay nada que revisar, cuando no lo hay.
+   *
+   * No es lo mismo "todos los módulos vigentes necesitan el bus encendido"
+   * que "no hay ningún módulo activo": el primero es una consecuencia del
+   * estado del bus y el segundo, de la configuración. Confundirlos manda al
+   * supervisor a buscar el problema donde no está.
+   */
+  const motivoSinModulosEnPanne =
+    modulosOmitidosPanne.length > 0
+      ? 'Todos los módulos vigentes requieren el bus encendido, así que sólo se registrará el estado y el cierre.'
+      : 'No hay módulos activos en Configuración: sólo se registrará el estado y el cierre.'
+
   const currentStep = Math.min(step, activeSteps.length - 1)
   const stepKey: StepKey = activeSteps[currentStep].key
   const progressPct = activeSteps.length > 1 ? (currentStep / (activeSteps.length - 1)) * 100 : 0
@@ -1746,7 +1798,9 @@ export const InspectionFormPage = () => {
               >
                 Operativo
               </span>
-              <span className="text-[10px] text-slate-400">Revisión completa · 10 pasos</span>
+              <span className="text-[10px] text-slate-400">
+                Revisión completa · {pasosOperativo} pasos
+              </span>
             </button>
             <button
               type="button"
@@ -1767,28 +1821,42 @@ export const InspectionFormPage = () => {
               >
                 En panne
               </span>
-              <span className="text-[10px] text-slate-400">5 módulos obligatorios</span>
+              <span className="text-[10px] text-slate-400">
+                {modulosPanne.length}{' '}
+                {modulosPanne.length === 1 ? 'módulo obligatorio' : 'módulos obligatorios'}
+              </span>
             </button>
           </div>
 
           {isEnPanne && (
             <div className="mt-3 rounded-2xl border border-red-200 bg-red-50/80 p-4 dark:border-red-900/50 dark:bg-red-950/30">
               <p className="text-sm font-bold text-red-800 dark:text-red-200">
-                🔴 Bus en panne · revisión obligatoria de:
+                Bus en panne · revisión obligatoria de:
               </p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {['TAG', 'Extintor', 'Mobileye', 'Rack', 'Publicidad'].map((mod) => (
-                  <span
-                    key={mod}
-                    className="rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-bold text-red-700 dark:bg-red-900/50 dark:text-red-200"
-                  >
-                    {mod}
-                  </span>
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-red-700/80 dark:text-red-300/80">
-                Cámaras, Odómetro y WiFi se omiten porque requieren el bus operativo.
-              </p>
+              {modulosPanne.length === 0 ? (
+                <p className="mt-2 text-xs text-red-700/80 dark:text-red-300/80">
+                  {motivoSinModulosEnPanne}
+                </p>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {modulosPanne.map((modulo) => (
+                    <span
+                      key={modulo.clave}
+                      className="rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-bold text-red-700 dark:bg-red-900/50 dark:text-red-200"
+                    >
+                      {modulo.nombre}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {modulosOmitidosPanne.length > 0 && (
+                <p className="mt-2 text-xs text-red-700/80 dark:text-red-300/80">
+                  {listar(modulosOmitidosPanne.map((modulo) => modulo.nombre))} se{' '}
+                  {modulosOmitidosPanne.length === 1 ? 'omite' : 'omiten'} porque{' '}
+                  {modulosOmitidosPanne.length === 1 ? 'requiere' : 'requieren'} el bus
+                  operativo.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -2665,7 +2733,11 @@ export const InspectionFormPage = () => {
               {isEnPanne ? 'EN PANNE' : 'OPERATIVO'}
             </p>
             <p className="text-xs text-slate-500">
-              {isEnPanne ? '5 módulos obligatorios revisados' : 'Revisión completa'}
+              {isEnPanne
+                ? `${modulosPanne.length} ${
+                    modulosPanne.length === 1 ? 'módulo obligatorio' : 'módulos obligatorios'
+                  } revisados`
+                : 'Revisión completa'}
             </p>
           </div>
         </div>
@@ -3273,8 +3345,15 @@ export const InspectionFormPage = () => {
         {/* ===== BANNER MODO PANNE ===== */}
         {isEnPanne && (
           <AlertBanner tone="error" title="Modo EN PANNE activo">
-            Debes revisar obligatoriamente: TAG, Extintor, Mobileye, Rack y Publicidad. Cámaras,
-            Odómetro y WiFi se omiten automáticamente.
+            {modulosPanne.length > 0
+              ? `Debes revisar obligatoriamente: ${listar(
+                  modulosPanne.map((modulo) => modulo.nombre)
+                )}.`
+              : motivoSinModulosEnPanne}
+            {modulosOmitidosPanne.length > 0 &&
+              ` ${listar(modulosOmitidosPanne.map((modulo) => modulo.nombre))} se ${
+                modulosOmitidosPanne.length === 1 ? 'omite' : 'omiten'
+              } automáticamente.`}
           </AlertBanner>
         )}
 

@@ -111,7 +111,10 @@ export const MobileNav = () => {
     <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
       <nav
         aria-label="Navegación principal móvil"
-        className="mobile-dock glass-panel fixed left-1.5 right-1.5 z-40 grid grid-flow-col auto-cols-fr items-stretch gap-0.5 rounded-[20px] px-1 pt-1 lg:hidden"
+        // Apoyada en el borde y de lado a lado, con las esquinas redondeadas
+        // sólo arriba: la píldora flotante dejaba una rendija por la que se
+        // veía pasar el contenido al hacer scroll.
+        className="mobile-dock glass-panel fixed inset-x-0 z-40 grid grid-flow-col auto-cols-fr items-stretch gap-0.5 rounded-t-[22px] px-1.5 pt-1 lg:hidden"
       >
         {visibleItems.map((item) => {
           const Icon = item.icon
