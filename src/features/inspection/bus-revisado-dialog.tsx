@@ -11,6 +11,14 @@ export interface RevisionPrevia {
   /** ISO de la revisión anterior */
   fecha: string
   inspector: string
+  /**
+   * Módulos vigentes que YA tienen registro del bus esta semana.
+   *
+   * El aviso sólo salta cuando están todos cubiertos, y listarlos aquí
+   * responde la pregunta obvia: "¿revisado según qué?". Sin esta lista, con
+   * sólo +15 activo el aviso parecía contradecir a la pantalla de Pendientes.
+   */
+  modulosCubiertos?: string[]
 }
 
 interface BusRevisadoDialogProps {
@@ -142,6 +150,22 @@ export const BusRevisadoDialog = ({
                     </div>
                   </div>
                 </div>
+
+                {revision.modulosCubiertos && revision.modulosCubiertos.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10.5px] font-black uppercase tracking-[0.1em] text-slate-400">
+                      Ya revisado
+                    </span>
+                    {revision.modulosCubiertos.map((nombre) => (
+                      <span
+                        key={nombre}
+                        className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                      >
+                        {nombre}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 <p className="text-[11.5px] leading-snug text-slate-500 dark:text-slate-400">
                   Si vuelves a revisarlo se guardará una inspección nueva; la anterior

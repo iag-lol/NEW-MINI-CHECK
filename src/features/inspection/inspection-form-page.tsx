@@ -931,30 +931,73 @@ export const InspectionFormPage = () => {
       setBusAlert(null)
       setRevisionPrevia(null)
 
-      const currentWeek = dayjs().isoWeek()
+      /*
+       * ¿Ya está cubierto ESTA semana según lo que se está revisando?
+       *
+       * Con módulos configurables, "ya fue revisado" no puede significar
+       * "existe una revisión de esta semana": si sólo está activo +15, un bus
+       * con la inspección completa del lunes pero SIN la prueba de +15 sigue
+       * pendiente, y saltar el aviso igual mandaba al inspector a saltárselo.
+       * Se usa la MISMA regla que la pantalla de Pendientes: cada módulo
+       * vigente debe tener registro propio del bus dentro de la semana, y
+       * sólo entonces se avisa.
+       */
+      const inicioSemana = dayjs().isoWeekday(1).startOf('day').toISOString()
+
       const { data: revisiones } = await supabase
         .from('revisiones')
-        .select('id, created_at, inspector_nombre, terminal_reportado, terminal_detectado')
+        .select(
+          'id, created_at, inspector_nombre, terminal_reportado, terminal_detectado, estado_bus'
+        )
         .eq('bus_ppu', busRecord.ppu)
+        .gte('created_at', inicioSemana)
         .order('created_at', { ascending: false })
         .limit(1)
 
-      if (revisiones?.length) {
-        const lastRevision = revisiones[0]
-        const lastDate = dayjs(lastRevision.created_at)
-        if (
-          lastDate.isoWeek() === currentWeek &&
-          getIsoWeekYear(lastDate) === getIsoWeekYear()
-        ) {
+      const revisionSemana = revisiones?.[0]
+
+      if (revisionSemana) {
+        // Un bus en panne no puede pasar los módulos que exigen arrancarlo:
+        // no se le exigen, igual que en Pendientes
+        const enPanneSemana = revisionSemana.estado_bus === 'EN_PANNE'
+        const modulosExigibles = MODULOS.filter(
+          (modulo) =>
+            modulo.tabla !== null &&
+            clavesActivas.has(modulo.clave) &&
+            !(enPanneSemana && modulo.requiereBusOperativo)
+        )
+
+        const cobertura = await Promise.all(
+          modulosExigibles.map(async (modulo) => {
+            const { data: fila, error: errorModulo } = await supabase
+              .from(modulo.tabla as 'tags')
+              .select('id')
+              .eq('bus_ppu', busRecord.ppu)
+              .gte('created_at', inicioSemana)
+              .limit(1)
+              .maybeSingle()
+            // Tabla aún sin crear: no se puede exigir lo que no se puede
+            // medir, así que ese módulo no bloquea el aviso ni sale listado
+            if (errorModulo) return { nombre: modulo.nombre, cubierto: true, medido: false }
+            return { nombre: modulo.nombre, cubierto: fila !== null, medido: true }
+          })
+        )
+
+        const faltaAlguno = cobertura.some((resultado) => !resultado.cubierto)
+
+        if (!faltaAlguno) {
           setRevisionPrevia({
             ppu: busRecord.ppu,
             interno: busRecord.numero_interno,
             terminal:
-              lastRevision.terminal_reportado ||
-              lastRevision.terminal_detectado ||
+              revisionSemana.terminal_reportado ||
+              revisionSemana.terminal_detectado ||
               busRecord.terminal,
-            fecha: lastRevision.created_at,
-            inspector: lastRevision.inspector_nombre ?? 'otro inspector',
+            fecha: revisionSemana.created_at,
+            inspector: revisionSemana.inspector_nombre ?? 'otro inspector',
+            modulosCubiertos: cobertura
+              .filter((resultado) => resultado.medido)
+              .map((resultado) => resultado.nombre),
           })
         }
       }
