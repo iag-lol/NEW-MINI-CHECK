@@ -11,6 +11,23 @@
 
 
 -- =============================================================================
+-- 0. COMPROBACIÓN PREVIA
+-- =============================================================================
+-- `mas15` referencia a `revisiones`. Si esa tabla no existe, PostgreSQL corta
+-- con un escueto «42P01: relation "revisiones" does not exist» que no dice
+-- qué hacer. Esta guarda lo traduce a algo accionable y, sobre todo, evita
+-- crear tablas sueltas en una base de datos que no es la de la aplicación.
+
+DO $$
+BEGIN
+  IF to_regclass('public.revisiones') IS NULL THEN
+    RAISE EXCEPTION
+      'No existe public.revisiones en esta base de datos (%). Casi siempre significa que el editor SQL está apuntando a otro proyecto de Supabase. Comprueba que el proyecto coincide con VITE_SUPABASE_URL de tu hosting, o ejecuta antes supabase-schema.sql si la base está vacía. Ejecuta sql-scripts/00-diagnostico.sql para confirmarlo.',
+      current_database();
+  END IF;
+END $$;
+
+-- =============================================================================
 -- 1. CONFIGURACIÓN DE MÓDULOS
 -- =============================================================================
 -- Una fila por módulo del formulario. `tipo = 'siempre'` lo muestra en todas
@@ -23,7 +40,7 @@
 -- meses:       1 = enero … 12 = diciembre.
 -- La regla se repite indefinidamente mientras no se cambie.
 
-CREATE TABLE IF NOT EXISTS modulos_config (
+CREATE TABLE IF NOT EXISTS public.modulos_config (
   clave           TEXT PRIMARY KEY,
   activo          BOOLEAN NOT NULL DEFAULT TRUE,
   tipo            TEXT    NOT NULL DEFAULT 'siempre'
@@ -39,21 +56,21 @@ CREATE TABLE IF NOT EXISTS modulos_config (
 );
 
 -- Rangos válidos: evita que un error de la app deje datos sin sentido
-ALTER TABLE modulos_config DROP CONSTRAINT IF EXISTS modulos_config_semanas_validas;
-ALTER TABLE modulos_config ADD CONSTRAINT modulos_config_semanas_validas
+ALTER TABLE public.modulos_config DROP CONSTRAINT IF EXISTS modulos_config_semanas_validas;
+ALTER TABLE public.modulos_config ADD CONSTRAINT modulos_config_semanas_validas
   CHECK (semanas_mes <@ ARRAY[1,2,3,4,5]);
 
-ALTER TABLE modulos_config DROP CONSTRAINT IF EXISTS modulos_config_dias_validos;
-ALTER TABLE modulos_config ADD CONSTRAINT modulos_config_dias_validos
+ALTER TABLE public.modulos_config DROP CONSTRAINT IF EXISTS modulos_config_dias_validos;
+ALTER TABLE public.modulos_config ADD CONSTRAINT modulos_config_dias_validos
   CHECK (dias_semana <@ ARRAY[1,2,3,4,5,6,7]);
 
-ALTER TABLE modulos_config DROP CONSTRAINT IF EXISTS modulos_config_meses_validos;
-ALTER TABLE modulos_config ADD CONSTRAINT modulos_config_meses_validos
+ALTER TABLE public.modulos_config DROP CONSTRAINT IF EXISTS modulos_config_meses_validos;
+ALTER TABLE public.modulos_config ADD CONSTRAINT modulos_config_meses_validos
   CHECK (meses <@ ARRAY[1,2,3,4,5,6,7,8,9,10,11,12]);
 
 -- Semilla: todos los módulos activos y sin programación.
 -- ON CONFLICT DO NOTHING conserva lo que ya hayas configurado.
-INSERT INTO modulos_config (clave, activo, tipo, orden) VALUES
+INSERT INTO public.modulos_config (clave, activo, tipo, orden) VALUES
   ('tag',        TRUE, 'siempre', 10),
   ('camaras',    TRUE, 'siempre', 20),
   ('extintores', TRUE, 'siempre', 30),
@@ -65,17 +82,17 @@ INSERT INTO modulos_config (clave, activo, tipo, orden) VALUES
   ('mas15',      TRUE, 'siempre', 90)
 ON CONFLICT (clave) DO NOTHING;
 
-ALTER TABLE modulos_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.modulos_config ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Lectura pública de modulos_config" ON modulos_config;
-CREATE POLICY "Lectura pública de modulos_config" ON modulos_config
+DROP POLICY IF EXISTS "Lectura pública de modulos_config" ON public.modulos_config;
+CREATE POLICY "Lectura pública de modulos_config" ON public.modulos_config
   FOR SELECT USING (TRUE);
 
 -- La app entra con bcrypt contra la tabla `usuarios`, no con Supabase Auth,
 -- así que auth.uid() es NULL: la escritura no puede exigir sesión autenticada
 -- o la pantalla de Configuración no podría guardar nada.
-DROP POLICY IF EXISTS "Escritura pública de modulos_config" ON modulos_config;
-CREATE POLICY "Escritura pública de modulos_config" ON modulos_config
+DROP POLICY IF EXISTS "Escritura pública de modulos_config" ON public.modulos_config;
+CREATE POLICY "Escritura pública de modulos_config" ON public.modulos_config
   FOR ALL USING (TRUE) WITH CHECK (TRUE);
 
 
@@ -94,9 +111,9 @@ CREATE POLICY "Escritura pública de modulos_config" ON modulos_config
 -- Queda en NULL cuando el bus no llegó a encender: no es un "no tiene",
 -- es un "no se pudo medir", y mezclarlos falsearía los porcentajes.
 
-CREATE TABLE IF NOT EXISTS mas15 (
+CREATE TABLE IF NOT EXISTS public.mas15 (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  revision_id         UUID NOT NULL REFERENCES revisiones(id) ON DELETE CASCADE,
+  revision_id         UUID NOT NULL REFERENCES public.revisiones(id) ON DELETE CASCADE,
   arranque_ok         BOOLEAN NOT NULL DEFAULT FALSE,
   consola_encendida   BOOLEAN,
   validador_encendido BOOLEAN,
@@ -107,28 +124,28 @@ CREATE TABLE IF NOT EXISTS mas15 (
   terminal            TEXT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_mas15_created_at  ON mas15(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_mas15_revision_id ON mas15(revision_id);
-CREATE INDEX IF NOT EXISTS idx_mas15_bus_ppu     ON mas15(bus_ppu);
-CREATE INDEX IF NOT EXISTS idx_mas15_terminal    ON mas15(terminal);
-CREATE INDEX IF NOT EXISTS idx_mas15_resultado   ON mas15(tiene_mas15);
+CREATE INDEX IF NOT EXISTS idx_mas15_created_at  ON public.mas15(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_mas15_revision_id ON public.mas15(revision_id);
+CREATE INDEX IF NOT EXISTS idx_mas15_bus_ppu     ON public.mas15(bus_ppu);
+CREATE INDEX IF NOT EXISTS idx_mas15_terminal    ON public.mas15(terminal);
+CREATE INDEX IF NOT EXISTS idx_mas15_resultado   ON public.mas15(tiene_mas15);
 
-ALTER TABLE mas15 ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mas15 ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Lectura pública de mas15" ON mas15;
-CREATE POLICY "Lectura pública de mas15" ON mas15
+DROP POLICY IF EXISTS "Lectura pública de mas15" ON public.mas15;
+CREATE POLICY "Lectura pública de mas15" ON public.mas15
   FOR SELECT USING (TRUE);
 
-DROP POLICY IF EXISTS "Inserción pública en mas15" ON mas15;
-CREATE POLICY "Inserción pública en mas15" ON mas15
+DROP POLICY IF EXISTS "Inserción pública en mas15" ON public.mas15;
+CREATE POLICY "Inserción pública en mas15" ON public.mas15
   FOR INSERT WITH CHECK (TRUE);
 
-DROP POLICY IF EXISTS "Actualización pública de mas15" ON mas15;
-CREATE POLICY "Actualización pública de mas15" ON mas15
+DROP POLICY IF EXISTS "Actualización pública de mas15" ON public.mas15;
+CREATE POLICY "Actualización pública de mas15" ON public.mas15
   FOR UPDATE USING (TRUE) WITH CHECK (TRUE);
 
-DROP POLICY IF EXISTS "Borrado público de mas15" ON mas15;
-CREATE POLICY "Borrado público de mas15" ON mas15
+DROP POLICY IF EXISTS "Borrado público de mas15" ON public.mas15;
+CREATE POLICY "Borrado público de mas15" ON public.mas15
   FOR DELETE USING (TRUE);
 
 
@@ -140,7 +157,7 @@ CREATE POLICY "Borrado público de mas15" ON mas15
 
 DO $$
 BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE mas15;
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.mas15;
 EXCEPTION
   WHEN duplicate_object THEN NULL;
   WHEN undefined_object THEN NULL;
@@ -148,7 +165,7 @@ END $$;
 
 DO $$
 BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE modulos_config;
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.modulos_config;
 EXCEPTION
   WHEN duplicate_object THEN NULL;
   WHEN undefined_object THEN NULL;
@@ -161,10 +178,10 @@ END $$;
 -- Debe devolver 9 filas de configuración y la tabla mas15 vacía.
 
 SELECT clave, activo, tipo, semanas_mes, dias_semana, meses, orden
-FROM modulos_config
+FROM public.modulos_config
 ORDER BY orden;
 
-SELECT COUNT(*) AS revisiones_mas15 FROM mas15;
+SELECT COUNT(*) AS revisiones_mas15 FROM public.mas15;
 
 
 -- =============================================================================
@@ -172,22 +189,22 @@ SELECT COUNT(*) AS revisiones_mas15 FROM mas15;
 -- =============================================================================
 
 -- +15 sólo la 1ª y la 3ª semana de cada mes, indefinidamente:
--- UPDATE modulos_config
+-- UPDATE public.modulos_config
 --    SET tipo = 'programado', semanas_mes = ARRAY[1,3], activo = TRUE
 --  WHERE clave = 'mas15';
 
 -- Publicidad sólo la última semana del mes:
--- UPDATE modulos_config
+-- UPDATE public.modulos_config
 --    SET tipo = 'programado', semanas_mes = ARRAY[4,5]
 --  WHERE clave = 'publicidad';
 
 -- Odómetro sólo los lunes:
--- UPDATE modulos_config
+-- UPDATE public.modulos_config
 --    SET tipo = 'programado', dias_semana = ARRAY[1]
 --  WHERE clave = 'odometro';
 
 -- Campaña acotada a un trimestre concreto:
--- UPDATE modulos_config
+-- UPDATE public.modulos_config
 --    SET tipo = 'programado',
 --        vigente_desde = '2026-01-01',
 --        vigente_hasta = '2026-03-31'
