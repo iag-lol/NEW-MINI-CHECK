@@ -108,7 +108,9 @@ export const ModulosActivos = ({
           <Loader2 className="h-4 w-4 animate-spin text-brand-500" />
         </div>
       ) : (
-        <div className="space-y-1.5">
+        /* Rejilla en pantallas anchas: nueve módulos apilados a una columna
+           eran una torre de scroll; en dos o tres columnas se leen de una vez */
+        <div className="grid gap-1.5 md:grid-cols-2 2xl:grid-cols-3">
           {modulosMedibles.map((modulo) => {
             const hechas = conteos?.[modulo.clave] ?? 0
             const pct =

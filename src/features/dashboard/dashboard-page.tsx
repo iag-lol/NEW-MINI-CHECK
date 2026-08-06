@@ -7,8 +7,10 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
+  Cell,
+  LabelList,
+  Pie,
+  PieChart,
   ResponsiveContainer,
   Tooltip as RechartsTooltip,
   XAxis,
@@ -17,12 +19,13 @@ import {
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronRight,
   DownloadCloud,
   Activity,
   Bus,
   AlertCircle,
-  Clock,
   FileSpreadsheet,
+  FileText,
   Search,
   Globe,
 } from 'lucide-react'
@@ -34,7 +37,7 @@ import { BusReportDialog } from '@/features/dashboard/components/bus-report-dial
 import { IpPerformanceDialog } from '@/features/dashboard/components/ip-performance-dialog'
 import { LiveMap } from '@/features/dashboard/components/live-map'
 import { ModulosActivos } from '@/features/dashboard/components/modulos-activos'
-import { Card, CardTitle } from '@/components/ui/card'
+import { Card, CardEyebrow, CardTitle } from '@/components/ui/card'
 import { StatCard } from '@/components/ui/stat-card'
 import { Skeleton, SkeletonCard, SkeletonChart } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
@@ -46,6 +49,7 @@ import { useActiveInspectors } from '@/hooks/use-active-inspectors'
 import { useAuthStore } from '@/store/auth-store'
 import { useWeekFilter } from '@/hooks/use-week-filter'
 import { WeekSelector } from '@/components/week-selector'
+import { cn } from '@/lib/utils'
 
 /**
  * Segundos máximos desde el último pulso GPS para considerar a un inspector
@@ -60,6 +64,26 @@ const MAX_INACTIVITY_HOURS = 24
 
 /** Usuarios ocultos del centro geoespacial */
 const HIDDEN_RUTS = ['15.839.906-7', '18.866.264-1']
+
+/* Estilo compartido de los tooltips de Recharts: los de fábrica salen con
+   fondo blanco fijo y son ilegibles en modo noche */
+const TOOLTIP_STYLE = {
+  borderRadius: 12,
+  border: 'none',
+  fontSize: 12,
+  padding: '8px 12px',
+  background: 'rgba(15,23,42,0.92)',
+  color: '#fff',
+  boxShadow: '0 10px 24px -12px rgba(15,23,42,.6)',
+} as const
+
+const TOOLTIP_LABEL_STYLE = { color: '#cbd5e1', fontSize: 11 } as const
+
+const GRID_STROKE = 'rgba(148,163,184,0.18)'
+const AXIS_STROKE = '#94a3b8'
+
+const COLOR_OPERATIVO = '#22c55e'
+const COLOR_PANNE = '#f97316'
 
 const useWeeklyRevisions = (start: string, end: string) => {
   return useQuery({
@@ -113,6 +137,19 @@ export const DashboardPage = () => {
     weekInfo.startISO,
     weekInfo.endISO
   )
+
+  // Semana anterior: da contexto a las cifras. "142 revisiones" no dice nada
+  // hasta saber si la semana pasada fueron 90 o 200.
+  const prevStartISO = useMemo(
+    () => weekInfo.start.subtract(7, 'day').toISOString(),
+    [weekInfo.start]
+  )
+  const prevEndISO = useMemo(
+    () => weekInfo.start.subtract(1, 'millisecond').toISOString(),
+    [weekInfo.start]
+  )
+  const { data: prevRevisions } = useWeeklyRevisions(prevStartISO, prevEndISO)
+
   const { data: tickets } = useTickets(weekInfo.startISO, weekInfo.endISO)
   const { data: flotaList } = useQuery({
     queryKey: ['flota-search'],
@@ -161,6 +198,7 @@ export const DashboardPage = () => {
         total: 0,
         panne: 0,
         operativo: 0,
+        busesUnicos: 0,
         terminalTop: '—',
         activity: [],
         status: [],
@@ -175,6 +213,7 @@ export const DashboardPage = () => {
       const daily = revisions.filter((rev) => dayjs(rev.created_at).isSame(day, 'day'))
       return {
         day: day.format('ddd'),
+        esHoy: day.isSame(dayjs(), 'day'),
         total: daily.length,
       }
     })
@@ -194,12 +233,18 @@ export const DashboardPage = () => {
       total,
       panne,
       operativo,
+      busesUnicos: new Set(revisions.map((rev) => rev.bus_ppu)).size,
       terminalTop: orderedTerminal[0]?.terminal ?? '—',
       activity: byDay,
       status: byStatus,
       terminals: orderedTerminal,
     }
   }, [revisions, weekInfo.start])
+
+  // Variación frente a la semana anterior, sólo cuando hay base de comparación
+  const prevTotal = prevRevisions?.length ?? 0
+  const variacionSemanal =
+    prevTotal > 0 ? Math.round(((stats.total - prevTotal) / prevTotal) * 100) : null
 
   const revisionById = useMemo(() => {
     const map = new Map<string, Tables<'revisiones'>>()
@@ -222,7 +267,7 @@ export const DashboardPage = () => {
 
   const pendingTickets = tickets?.filter((ticket) => ticket.estado !== 'RESUELTO') ?? []
 
-  const latestRevisions = revisions?.slice(0, 6) ?? []
+  const latestRevisions = revisions?.slice(0, 8) ?? []
 
   // Un solo ícono de bus por PPU: la revisión más reciente con coordenadas
   const busMapMarkers = useMemo(() => {
@@ -237,13 +282,14 @@ export const DashboardPage = () => {
 
   if (revisionsLoading) {
     return (
-      <div className="space-y-3 sm:space-y-6">
+      <div className="space-y-3 sm:space-y-5">
+        <SkeletonCard />
         <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <SkeletonCard key={i} />
           ))}
         </div>
-        <div className="grid gap-3 sm:gap-5 lg:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
             <Skeleton className="mb-2 h-6 w-1/3" />
             <Skeleton className="mb-4 h-4 w-1/2" />
@@ -256,38 +302,43 @@ export const DashboardPage = () => {
   }
 
   const operationalRate = stats.total > 0 ? (stats.operativo / stats.total) * 100 : 0
+  const esSupervisor = user?.cargo === 'SUPERVISOR'
 
   return (
-    <div className="space-y-3 sm:space-y-6">
-      {/* Header */}
+    <div className="space-y-3 sm:space-y-5">
+      {/* ------------------------------------------------- Barra de mando */}
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: -14 }}
         animate={{ opacity: 1, y: 0 }}
-        className="glass-panel relative overflow-hidden rounded-[var(--app-radius-lg)] p-3 sm:p-5"
+        className="glass-panel relative overflow-hidden rounded-[var(--app-radius-lg)] p-3 sm:p-4"
       >
-        <div aria-hidden="true" className="pointer-events-none absolute -right-12 -top-20 h-52 w-52 rounded-full bg-brand-400/15 blur-3xl" />
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="relative min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-600 dark:text-brand-400">Centro de control</p>
-            <h1 className="text-[19px] font-extrabold tracking-[-0.04em] text-slate-950 dark:text-white sm:text-2xl">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-12 -top-20 h-52 w-52 rounded-full bg-brand-400/12 blur-3xl"
+        />
+        <div className="relative flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <CardEyebrow>Centro de control</CardEyebrow>
+            <h1 className="text-[19px] font-extrabold leading-tight tracking-[-0.04em] text-slate-950 dark:text-white sm:text-2xl">
               Dashboard de Supervisión
             </h1>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              Vista consolidada · Semana {weekInfo.weekNumber} de {weekInfo.year}
+            <p className="mt-0.5 text-[11.5px] text-slate-500 dark:text-slate-400 sm:text-sm">
+              Semana {weekInfo.weekNumber} · {weekInfo.label} · actualizado{' '}
+              {dayjs().format('HH:mm')} hrs
             </p>
           </div>
 
-          <div className="relative flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center lg:max-w-[48rem] lg:justify-end">
-            {/* Buscador de PPU */}
-            <div className="relative w-full sm:w-auto">
-              <div className="glass-control flex h-11 items-center gap-2 rounded-xl border px-3 transition focus-within:border-brand-400 focus-within:ring-4 focus-within:ring-brand-300/20">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
+            {/* Buscador de bus: abre el informe completo de la PPU */}
+            <div className="relative w-full sm:w-56">
+              <div className="glass-control flex h-10 items-center gap-2 rounded-[var(--app-radius-sm)] border px-3 transition focus-within:border-brand-400 focus-within:ring-4 focus-within:ring-brand-300/20">
                 <Search className="h-4 w-4 shrink-0 text-slate-400" />
                 <input
                   value={busSearch}
                   onChange={(event) => setBusSearch(event.target.value)}
                   placeholder="Buscar PPU o N° bus…"
                   aria-label="Buscar bus por PPU o número interno"
-                  className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400 sm:w-40 dark:text-slate-100"
+                  className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100"
                   spellCheck={false}
                 />
                 {busSearch && (
@@ -338,54 +389,50 @@ export const DashboardPage = () => {
               )}
             </div>
 
-            {/* Rendimiento por IP y colaborador */}
-            <Button
-              className="gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 shadow-lg shadow-indigo-500/25 hover:from-indigo-500 hover:to-indigo-400"
-              onClick={() => setIpPerformanceOpen(true)}
-            >
+            <Button className="h-10 gap-2" onClick={() => setIpPerformanceOpen(true)}>
               <Globe className="h-4 w-4" />
               Rendimiento IP
             </Button>
 
-            {/* Selector de Semana Global */}
             <WeekSelector />
-
-            {/* Última actualización */}
-            <div className="glass-control flex h-10 items-center gap-2 rounded-xl border px-3">
-              <Clock className="h-4 w-4 text-slate-400" />
-              <span className="text-xs text-slate-600 dark:text-slate-400">
-                {dayjs().format('HH:mm')}
-              </span>
-            </div>
           </div>
         </div>
       </motion.div>
 
-      {/* Stats Cards */}
+      {/* ---------------------------------------------------- Indicadores */}
       <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
         <StatCard
-          title="Revisiones Totales"
+          title="Revisiones"
           value={stats.total}
-          description="Buses revisados esta semana"
+          description={`${stats.busesUnicos} buses distintos`}
           icon={Activity}
-          variant="default"
+          variant="info"
+          trend={
+            variacionSemanal !== null
+              ? { value: variacionSemanal, label: 'vs semana previa' }
+              : undefined
+          }
         />
         <StatCard
-          title="Buses Operativos"
-          value={stats.operativo}
-          description={`${operationalRate.toFixed(1)}% de operatividad`}
+          title="Operatividad"
+          value={`${operationalRate.toFixed(0)}%`}
+          description={`${stats.operativo} buses operativos`}
           icon={Bus}
           variant="success"
         />
         <StatCard
-          title="Buses en Panne"
+          title="En panne"
           value={stats.panne}
-          description="Requieren atención inmediata"
+          description={
+            prevTotal > 0
+              ? `Semana previa: ${prevRevisions?.filter((r) => r.estado_bus === 'EN_PANNE').length ?? 0}`
+              : 'Requieren atención'
+          }
           icon={AlertTriangle}
           variant={stats.panne > 0 ? 'danger' : 'default'}
         />
         <StatCard
-          title="Tickets Abiertos"
+          title="Tickets abiertos"
           value={pendingTickets.length}
           description={`${pendingTickets.filter((t) => t.estado === 'EN_PROCESO').length} en proceso`}
           icon={AlertCircle}
@@ -393,228 +440,372 @@ export const DashboardPage = () => {
         />
       </div>
 
+      {/* -------------------------------------------- Operación en vivo */}
+      {esSupervisor && (
+        <Card className="space-y-2.5 !p-2 sm:!p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1.5 pt-1">
+            <div className="min-w-0">
+              <CardEyebrow>En vivo</CardEyebrow>
+              <CardTitle>Centro geoespacial</CardTitle>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              Buses revisados, inspectores conectados y tickets críticos
+            </p>
+          </div>
+          <LiveMap
+            inspectores={visibleInspectors}
+            buses={busMapMarkers}
+            tickets={ticketMarkers}
+            umbralEnVivoSeg={ONLINE_THRESHOLD_SEC}
+            rutPropio={user?.rut}
+            onSeleccionarBus={setReportPpu}
+            tick={pulseTick}
+            tokenMapbox={mapToken}
+          />
+        </Card>
+      )}
+
+      {/* --------------------------------------------------- Análisis */}
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardEyebrow>Análisis</CardEyebrow>
+          <CardTitle>Actividad diaria</CardTitle>
+          <p className="text-[12px] text-slate-500 dark:text-slate-400">
+            Revisiones por día · lunes a domingo
+          </p>
+          <div className="mt-4 h-56 sm:h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={stats.activity} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="actividad" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="5%" stopColor="var(--color-brand-500)" stopOpacity={0.28} />
+                    <stop offset="95%" stopColor="var(--color-brand-500)" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
+                <XAxis
+                  dataKey="day"
+                  stroke={AXIS_STROKE}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 11 }}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  stroke={AXIS_STROKE}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 11 }}
+                />
+                <RechartsTooltip
+                  contentStyle={TOOLTIP_STYLE}
+                  labelStyle={TOOLTIP_LABEL_STYLE}
+                  formatter={(valor: number) => [valor, 'Revisiones']}
+                  cursor={{ stroke: 'rgba(148,163,184,0.3)' }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="total"
+                  stroke="var(--color-brand-500)"
+                  strokeWidth={2.5}
+                  fill="url(#actividad)"
+                  dot={({ cx, cy, payload, index }) => (
+                    <circle
+                      key={`dot-${index}`}
+                      cx={cx}
+                      cy={cy}
+                      r={payload.esHoy ? 5 : 3}
+                      fill="var(--color-brand-500)"
+                      stroke="#fff"
+                      strokeWidth={payload.esHoy ? 2 : 0}
+                    />
+                  )}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        {/* Donut: dos categorías se comparan como partes de un todo, no con
+            un gráfico de área que sugiere evolución temporal inexistente */}
+        <Card>
+          <CardEyebrow>Distribución</CardEyebrow>
+          <CardTitle>Estado operativo</CardTitle>
+          <p className="text-[12px] text-slate-500 dark:text-slate-400">
+            Semana {weekInfo.weekNumber}
+          </p>
+          {stats.total === 0 ? (
+            <div className="mt-4 flex h-56 items-center justify-center text-[12.5px] text-slate-400 sm:h-64">
+              Sin revisiones esta semana todavía.
+            </div>
+          ) : (
+            <>
+              <div className="relative mx-auto mt-4 h-44 w-44 sm:h-48 sm:w-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={stats.status}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius="68%"
+                      outerRadius="100%"
+                      paddingAngle={stats.panne > 0 ? 3 : 0}
+                      strokeWidth={0}
+                    >
+                      <Cell fill={COLOR_OPERATIVO} />
+                      <Cell fill={COLOR_PANNE} />
+                    </Pie>
+                    <RechartsTooltip
+                      contentStyle={TOOLTIP_STYLE}
+                      labelStyle={TOOLTIP_LABEL_STYLE}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                  <p className="text-[26px] font-extrabold leading-none tabular-nums text-slate-900 dark:text-white">
+                    {operationalRate.toFixed(0)}%
+                  </p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                    operatividad
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 space-y-1.5">
+                <FilaLeyenda
+                  color={COLOR_OPERATIVO}
+                  etiqueta="Operativos"
+                  valor={stats.operativo}
+                  total={stats.total}
+                />
+                <FilaLeyenda
+                  color={COLOR_PANNE}
+                  etiqueta="En panne"
+                  valor={stats.panne}
+                  total={stats.total}
+                />
+              </div>
+            </>
+          )}
+        </Card>
+      </div>
+
+      {/* --------------------------------------- Terminales + exportar */}
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardEyebrow>Comparativo</CardEyebrow>
+          <CardTitle>Revisiones por terminal</CardTitle>
+          <p className="text-[12px] text-slate-500 dark:text-slate-400">
+            Semana seleccionada · ordenado de mayor a menor
+          </p>
+          {stats.terminals.length === 0 ? (
+            <div className="mt-4 flex h-48 items-center justify-center text-[12.5px] text-slate-400">
+              Sin datos por terminal.
+            </div>
+          ) : (
+            <div
+              className="mt-4"
+              style={{ height: Math.max(160, stats.terminals.length * 52) }}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                {/* Barras horizontales: los nombres de terminal se leen
+                    completos sin girar la cabeza ni truncarse */}
+                <BarChart
+                  data={stats.terminals}
+                  layout="vertical"
+                  margin={{ top: 0, right: 34, left: 8, bottom: 0 }}
+                  barCategoryGap="28%"
+                >
+                  <XAxis type="number" hide />
+                  <YAxis
+                    type="category"
+                    dataKey="terminal"
+                    width={118}
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 11.5, fill: AXIS_STROKE }}
+                  />
+                  <RechartsTooltip
+                    contentStyle={TOOLTIP_STYLE}
+                    labelStyle={TOOLTIP_LABEL_STYLE}
+                    formatter={(valor: number) => [valor, 'Revisiones']}
+                    cursor={{ fill: 'rgba(148,163,184,0.1)' }}
+                  />
+                  <Bar dataKey="value" fill="var(--color-brand-500)" radius={[6, 6, 6, 6]}>
+                    <LabelList
+                      dataKey="value"
+                      position="right"
+                      style={{ fontSize: 11, fontWeight: 700, fill: AXIS_STROKE }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Card>
+
+        <Card className="flex flex-col">
+          <CardEyebrow>Documentos</CardEyebrow>
+          <CardTitle>Exportar semana {weekInfo.weekNumber}</CardTitle>
+          <p className="text-[12px] text-slate-500 dark:text-slate-400">
+            Reportes oficiales de la semana seleccionada
+          </p>
+
+          <div className="mt-4 flex flex-1 flex-col gap-2">
+            <BotonExportar
+              icono={FileSpreadsheet}
+              titulo="Consolidados semanales"
+              detalle="Los 4 archivos oficiales: Cámaras, Mobileye, TAG y Revisión"
+              destacado
+              onClick={() => setConsolidadosOpen(true)}
+            />
+            <BotonExportar
+              icono={DownloadCloud}
+              titulo="XLSX de todos los módulos"
+              detalle="Una hoja por módulo, con cada registro"
+              deshabilitado={exporting}
+              onClick={async () => {
+                setExporting(true)
+                await exportAllModulesToXlsx(weekInfo.startISO, weekInfo.endISO).catch(
+                  (error) => console.error('Error exportando XLSX', error)
+                )
+                setExporting(false)
+              }}
+            />
+            <BotonExportar
+              icono={FileText}
+              titulo="PDF ejecutivo"
+              detalle="Resumen imprimible de la semana"
+              deshabilitado={exporting}
+              onClick={async () => {
+                setExporting(true)
+                await exportExecutivePdf(weekInfo.startISO, weekInfo.endISO).catch(
+                  (error) => console.error('Error exportando PDF', error)
+                )
+                setExporting(false)
+              }}
+            />
+          </div>
+
+          <p className="mt-3 text-[10.5px] leading-snug text-slate-400">
+            Reportes granulares por módulo en la sección Reportes.
+          </p>
+        </Card>
+      </div>
+
+      {/* --------------------------------------------- Cobertura de módulos */}
       <ModulosActivos
         desde={weekInfo.startISO}
         hasta={weekInfo.endISO}
         totalRevisiones={revisions?.length ?? 0}
       />
 
-      <div className="grid gap-3 sm:gap-5 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardTitle>Actividad diaria</CardTitle>
-          <p className="text-sm text-slate-500">Conteo por día · lunes a domingo</p>
-          <div className="mt-6 h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={stats.activity}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="day" stroke="#94a3b8" />
-                <YAxis allowDecimals={false} stroke="#94a3b8" />
-                <RechartsTooltip />
-                <Line
-                  type="monotone"
-                  dataKey="total"
-                  stroke="#3b5bff"
-                  strokeWidth={3}
-                  dot={{ r: 5, fill: '#3b5bff' }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+      {/* ------------------------------------------------------- Detalle */}
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+        <Card className="!p-0">
+          <div className="flex items-center justify-between gap-2 border-b border-white/50 px-3.5 py-3 dark:border-white/[0.06] sm:px-4">
+            <div>
+              <CardEyebrow>Actividad</CardEyebrow>
+              <CardTitle>Últimas revisiones</CardTitle>
+            </div>
+            <Badge variant="outline">{stats.total} esta semana</Badge>
           </div>
-        </Card>
-        <Card>
-          <CardTitle>Estado operativo</CardTitle>
-          <p className="text-sm text-slate-500">Distribución semanal</p>
-          <div className="mt-6 h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={stats.status}>
-                <defs>
-                  <linearGradient id="operativo" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.9} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0.2} />
-                  </linearGradient>
-                  <linearGradient id="panne" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="5%" stopColor="#f97316" stopOpacity={0.9} />
-                    <stop offset="95%" stopColor="#f97316" stopOpacity={0.2} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="name" stroke="#94a3b8" />
-                <YAxis allowDecimals={false} stroke="#94a3b8" />
-                <RechartsTooltip />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke="#22c55e"
-                  fill="url(#operativo)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid gap-3 sm:gap-5 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardTitle>Terminales</CardTitle>
-          <p className="text-sm text-slate-500">Comparativo por terminal en la semana</p>
-          <div className="mt-6 h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={stats.terminals}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="terminal" stroke="#94a3b8" />
-                <YAxis allowDecimals={false} stroke="#94a3b8" />
-                <RechartsTooltip />
-                <Bar dataKey="value" fill="#6366f1" radius={[8, 8, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-        <Card>
-          <CardTitle>Exportar</CardTitle>
-          <p className="text-sm text-slate-500">Descarga inmediata</p>
-          <Button
-            className="mt-6 w-full gap-2 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 shadow-lg shadow-brand-500/25 hover:from-brand-500 hover:to-brand-400"
-            onClick={() => setConsolidadosOpen(true)}
-          >
-            <FileSpreadsheet className="h-4 w-4" />
-            Consolidados semanales
-          </Button>
-          <Button
-            className="mt-3 w-full gap-2 rounded-2xl"
-            variant="outline"
-            disabled={exporting}
-            onClick={async () => {
-              setExporting(true)
-              await exportAllModulesToXlsx(weekInfo.startISO, weekInfo.endISO).catch((error) =>
-                console.error('Error exportando XLSX', error)
-              )
-              setExporting(false)
-            }}
-          >
-            <DownloadCloud className="h-4 w-4" />
-            XLSX semana {weekInfo.weekNumber}
-          </Button>
-          <Button
-            className="mt-3 w-full gap-2 rounded-2xl"
-            variant="outline"
-            disabled={exporting}
-            onClick={async () => {
-              setExporting(true)
-              await exportExecutivePdf(weekInfo.startISO, weekInfo.endISO).catch((error) =>
-                console.error('Error exportando PDF', error)
-              )
-              setExporting(false)
-            }}
-          >
-            <DownloadCloud className="h-4 w-4" />
-            PDF semana {weekInfo.weekNumber}
-          </Button>
-          <p className="mt-4 text-xs text-slate-400">
-            Consolidados semanales descarga los 4 archivos oficiales (Cámaras, Mobileye, TAG y
-            Revisión Semanal). También puedes descargar reportes granulares desde Reportes.
-          </p>
-        </Card>
-      </div>
-
-      {user?.cargo === 'SUPERVISOR' ? (
-      <Card className="space-y-2.5 !p-2 sm:!p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-1.5 pt-1">
-          <div className="min-w-0">
-            <CardTitle>Centro geoespacial en vivo</CardTitle>
-            <p className="text-[11.5px] text-slate-500 dark:text-slate-400">
-              Buses revisados, inspectores conectados y tickets críticos.
-            </p>
-          </div>
-        </div>
-        <LiveMap
-          inspectores={visibleInspectors}
-          buses={busMapMarkers}
-          tickets={ticketMarkers}
-          umbralEnVivoSeg={ONLINE_THRESHOLD_SEC}
-          rutPropio={user?.rut}
-          onSeleccionarBus={setReportPpu}
-          tick={pulseTick}
-          tokenMapbox={mapToken}
-        />
-      </Card>
-      ) : (
-        <Card className="space-y-3">
-          <div>
-            <CardTitle>Centro geoespacial</CardTitle>
-            <p className="text-sm text-slate-500">
-              Esta vista solo está disponible para supervisores. Contacta a tu supervisor si necesitas acceso.
-            </p>
-          </div>
-        </Card>
-      )}
-
-      <div className="grid gap-3 sm:gap-5 lg:grid-cols-2">
-        <Card>
-          <CardTitle>Últimas revisiones</CardTitle>
-          <ScrollArea className="mt-4 h-80 pr-4">
-            <div className="space-y-4">
-              {latestRevisions.map((revision) => (
-                <div
-                  key={revision.id}
-                  className="flex items-center justify-between rounded-2xl border border-slate-100/80 px-4 py-3 text-sm dark:border-slate-900"
-                >
-                  <div>
-                    <p className="text-base font-semibold text-slate-900 dark:text-white">
-                      {revision.bus_ppu}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      {revision.estado_bus === 'EN_PANNE' ? 'En panne' : 'Operativo'} ·{' '}
-                      {dayjs(revision.created_at).format('ddd HH:mm')}
-                    </p>
-                  </div>
-                  {revision.estado_bus === 'EN_PANNE' ? (
-                    <Badge variant="danger" className="gap-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      En panne
-                    </Badge>
-                  ) : (
-                    <Badge variant="success" className="gap-1">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Operativo
-                    </Badge>
-                  )}
-                </div>
-              ))}
+          <ScrollArea className="h-72">
+            <div className="divide-y divide-white/40 dark:divide-white/[0.04]">
+              {latestRevisions.map((revision) => {
+                const enPanne = revision.estado_bus === 'EN_PANNE'
+                return (
+                  <button
+                    key={revision.id}
+                    type="button"
+                    onClick={() => setReportPpu(revision.bus_ppu)}
+                    className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition hover:bg-white/50 dark:hover:bg-white/[0.05] sm:px-4"
+                  >
+                    <span
+                      className={cn(
+                        'flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px]',
+                        enPanne
+                          ? 'bg-orange-500/12 text-orange-600 dark:text-orange-400'
+                          : 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400'
+                      )}
+                    >
+                      {enPanne ? (
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                      ) : (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline gap-2">
+                        <span className="truncate text-[13px] font-extrabold text-slate-900 dark:text-white">
+                          {revision.bus_ppu}
+                        </span>
+                        <span className="shrink-0 text-[10.5px] tabular-nums text-slate-400">
+                          {dayjs(revision.created_at).format('ddd HH:mm')}
+                        </span>
+                      </span>
+                      <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">
+                        {revision.inspector_nombre} ·{' '}
+                        {revision.terminal_detectado || revision.terminal_reportado}
+                      </span>
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600" />
+                  </button>
+                )
+              })}
               {latestRevisions.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-slate-200/80 p-6 text-center text-sm text-slate-400 dark:border-slate-800">
+                <p className="px-4 py-10 text-center text-[12.5px] text-slate-400">
                   Sin revisiones esta semana todavía.
-                </div>
+                </p>
               )}
             </div>
           </ScrollArea>
         </Card>
-        <Card>
-          <CardTitle>Tickets activos</CardTitle>
-          <ScrollArea className="mt-4 h-80 pr-4">
-            <div className="space-y-4">
+
+        <Card className="!p-0">
+          <div className="flex items-center justify-between gap-2 border-b border-white/50 px-3.5 py-3 dark:border-white/[0.06] sm:px-4">
+            <div>
+              <CardEyebrow>Seguimiento</CardEyebrow>
+              <CardTitle>Tickets activos</CardTitle>
+            </div>
+            <Badge variant={pendingTickets.length > 0 ? 'warning' : 'success'}>
+              {pendingTickets.length} abiertos
+            </Badge>
+          </div>
+          <ScrollArea className="h-72">
+            <div className="divide-y divide-white/40 dark:divide-white/[0.04]">
               {pendingTickets.map((ticket) => (
-                <div
-                  key={ticket.id}
-                  className="rounded-2xl border border-slate-100/80 p-4 text-sm dark:border-slate-900"
-                >
-                  <p className="text-base font-semibold text-slate-900 dark:text-white">
-                    {ticket.modulo}
+                <div key={ticket.id} className="px-3.5 py-2.5 sm:px-4">
+                  <div className="flex items-center gap-2">
+                    <p className="min-w-0 flex-1 truncate text-[13px] font-extrabold text-slate-900 dark:text-white">
+                      {ticket.modulo}
+                    </p>
+                    <Badge
+                      variant={
+                        ticket.prioridad === 'ALTA'
+                          ? 'danger'
+                          : ticket.prioridad === 'MEDIA'
+                            ? 'warning'
+                            : 'outline'
+                      }
+                    >
+                      {ticket.prioridad}
+                    </Badge>
+                    <Badge variant={ticket.estado === 'PENDIENTE' ? 'danger' : 'warning'}>
+                      {ticket.estado === 'EN_PROCESO' ? 'En proceso' : 'Pendiente'}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-[11.5px] leading-snug text-slate-600 dark:text-slate-300">
+                    {ticket.descripcion}
                   </p>
-                  <p className="text-xs text-slate-500">
-                    {ticket.terminal} · prioridad {ticket.prioridad.toLowerCase()}
+                  <p className="mt-0.5 text-[10.5px] text-slate-400">
+                    {ticket.terminal} · {dayjs(ticket.created_at).format('DD MMM HH:mm')}
                   </p>
-                  <p className="mt-2 text-slate-600 dark:text-slate-300">{ticket.descripcion}</p>
-                  <Badge
-                    className="mt-3 uppercase"
-                    variant={ticket.estado === 'PENDIENTE' ? 'danger' : 'warning'}
-                  >
-                    {ticket.estado}
-                  </Badge>
                 </div>
               ))}
               {pendingTickets.length === 0 && (
-                <div className="rounded-2xl border border-dashed border-slate-200/80 p-6 text-center text-sm text-slate-400 dark:border-slate-800">
+                <p className="px-4 py-10 text-center text-[12.5px] text-slate-400">
                   Todos los tickets están resueltos.
-                </div>
+                </p>
               )}
             </div>
           </ScrollArea>
@@ -636,3 +827,78 @@ export const DashboardPage = () => {
     </div>
   )
 }
+
+/* ------------------------------------------------------------------ Piezas */
+
+const FilaLeyenda = ({
+  color,
+  etiqueta,
+  valor,
+  total,
+}: {
+  color: string
+  etiqueta: string
+  valor: number
+  total: number
+}) => (
+  <div className="flex items-center gap-2">
+    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+    <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-slate-600 dark:text-slate-300">
+      {etiqueta}
+    </span>
+    <span className="shrink-0 text-[12px] font-extrabold tabular-nums text-slate-900 dark:text-white">
+      {valor}
+    </span>
+    <span className="w-10 shrink-0 text-right text-[10.5px] tabular-nums text-slate-400">
+      {total > 0 ? `${Math.round((valor / total) * 100)}%` : '—'}
+    </span>
+  </div>
+)
+
+const BotonExportar = ({
+  icono: Icono,
+  titulo,
+  detalle,
+  destacado,
+  deshabilitado,
+  onClick,
+}: {
+  icono: typeof FileSpreadsheet
+  titulo: string
+  detalle: string
+  destacado?: boolean
+  deshabilitado?: boolean
+  onClick: () => void
+}) => (
+  <button
+    type="button"
+    disabled={deshabilitado}
+    onClick={onClick}
+    className={cn(
+      'press-feedback flex w-full items-center gap-3 rounded-[var(--app-radius-sm)] border p-3 text-left transition disabled:opacity-50',
+      destacado
+        ? 'border-brand-400/40 bg-gradient-to-r from-brand-500/12 to-violet-500/8 hover:border-brand-400/60'
+        : 'border-white/60 bg-white/40 hover:bg-white/60 dark:border-white/[0.07] dark:bg-white/[0.04] dark:hover:bg-white/[0.07]'
+    )}
+  >
+    <span
+      className={cn(
+        'flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px]',
+        destacado
+          ? 'bg-gradient-to-br from-brand-500 to-violet-600 text-white shadow-md'
+          : 'bg-brand-500/10 text-brand-600 dark:text-brand-300'
+      )}
+    >
+      <Icono className="h-4 w-4" />
+    </span>
+    <span className="min-w-0 flex-1">
+      <span className="block text-[12.5px] font-bold leading-tight text-slate-900 dark:text-white">
+        {titulo}
+      </span>
+      <span className="mt-0.5 block text-[10.5px] leading-tight text-slate-500 dark:text-slate-400">
+        {detalle}
+      </span>
+    </span>
+    <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600" />
+  </button>
+)
