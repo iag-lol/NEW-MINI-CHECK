@@ -440,31 +440,6 @@ export const DashboardPage = () => {
         />
       </div>
 
-      {/* -------------------------------------------- Operación en vivo */}
-      {esSupervisor && (
-        <Card className="space-y-2.5 !p-2 sm:!p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 px-1.5 pt-1">
-            <div className="min-w-0">
-              <CardEyebrow>En vivo</CardEyebrow>
-              <CardTitle>Centro geoespacial</CardTitle>
-            </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Buses revisados, inspectores conectados y tickets críticos
-            </p>
-          </div>
-          <LiveMap
-            inspectores={visibleInspectors}
-            buses={busMapMarkers}
-            tickets={ticketMarkers}
-            umbralEnVivoSeg={ONLINE_THRESHOLD_SEC}
-            rutPropio={user?.rut}
-            onSeleccionarBus={setReportPpu}
-            tick={pulseTick}
-            tokenMapbox={mapToken}
-          />
-        </Card>
-      )}
-
       {/* --------------------------------------------------- Análisis */}
       <div className="grid gap-3 sm:gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -698,6 +673,31 @@ export const DashboardPage = () => {
         hasta={weekInfo.endISO}
         totalRevisiones={revisions?.length ?? 0}
       />
+
+      {/* -------------------------------------------- Operación en vivo */}
+      {esSupervisor && (
+        <Card className="space-y-2.5 !p-2 sm:!p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1.5 pt-1">
+            <div className="min-w-0">
+              <CardEyebrow>En vivo</CardEyebrow>
+              <CardTitle>Centro geoespacial</CardTitle>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              Buses revisados, inspectores conectados y tickets críticos
+            </p>
+          </div>
+          <LiveMap
+            inspectores={visibleInspectors}
+            buses={busMapMarkers}
+            tickets={ticketMarkers}
+            umbralEnVivoSeg={ONLINE_THRESHOLD_SEC}
+            rutPropio={user?.rut}
+            onSeleccionarBus={setReportPpu}
+            tick={pulseTick}
+            tokenMapbox={mapToken}
+          />
+        </Card>
+      )}
 
       {/* ------------------------------------------------------- Detalle */}
       <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
