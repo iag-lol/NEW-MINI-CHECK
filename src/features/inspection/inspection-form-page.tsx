@@ -47,6 +47,10 @@ import { useNotificationStore } from '@/store/notification-store'
 import { useTracking } from '@/hooks/use-tracking'
 import { MODULOS, type ModuloClave } from '@/constants/modulos'
 import { useModulosVigentes } from '@/hooks/use-modulos-config'
+import {
+  BusRevisadoDialog,
+  type RevisionPrevia,
+} from '@/features/inspection/bus-revisado-dialog'
 
 const publicidadAreaSchema = z
   .object({
@@ -717,6 +721,13 @@ export const InspectionFormPage = () => {
   })
   const [step, setStep] = useState(0)
   const [busQuery, setBusQuery] = useState('')
+  // El desplegable se calculaba sólo del texto escrito, así que al elegir un
+  // bus el texto pasaba a ser su PPU, seguía coincidiendo y la lista no se
+  // cerraba nunca: quedaba flotando encima de la ficha del bus.
+  const [sugerenciasAbiertas, setSugerenciasAbiertas] = useState(false)
+  // Revisión previa de esta semana, si la hay: se avisa con un diálogo en vez
+  // de una franja de texto que pasaba desapercibida
+  const [revisionPrevia, setRevisionPrevia] = useState<RevisionPrevia | null>(null)
   const [bus, setBus] = useState<Tables<'flota'> | null>(null)
   const [busAlert, setBusAlert] = useState<string | null>(null)
 
@@ -753,7 +764,6 @@ export const InspectionFormPage = () => {
     location: trackingLocation,
     error: trackingError,
     refreshLocation,
-    lastLocationUpdate,
     isTracking: gpsActive,
   } = useTracking()
   const estadoBus = methods.watch('estadoBus')
@@ -797,7 +807,7 @@ export const InspectionFormPage = () => {
   }, [bus?.marca])
   const suggestions = useMemo(() => {
     const query = busQuery.trim().toUpperCase()
-    if (!query || !flotaCatalog) return []
+    if (!sugerenciasAbiertas || !query || !flotaCatalog) return []
     return flotaCatalog
       .filter(
         (record) =>
@@ -805,7 +815,7 @@ export const InspectionFormPage = () => {
           record.numero_interno.toUpperCase().includes(query)
       )
       .slice(0, 5)
-  }, [busQuery, flotaCatalog])
+  }, [busQuery, flotaCatalog, sugerenciasAbiertas])
 
   // Auto-relleno de publicidad: SOLO cuando cambia el "tiene" de ese lateral.
   // Antes se recorrían los tres lados en cada ejecución y tocar un lateral
@@ -867,11 +877,12 @@ export const InspectionFormPage = () => {
       const busRecord = data as Tables<'flota'>
       setBus(busRecord)
       setBusAlert(null)
+      setRevisionPrevia(null)
 
       const currentWeek = dayjs().isoWeek()
       const { data: revisiones } = await supabase
         .from('revisiones')
-        .select('id, created_at, inspector_nombre')
+        .select('id, created_at, inspector_nombre, terminal_reportado, terminal_detectado')
         .eq('bus_ppu', busRecord.ppu)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -879,16 +890,20 @@ export const InspectionFormPage = () => {
       if (revisiones?.length) {
         const lastRevision = revisiones[0]
         const lastDate = dayjs(lastRevision.created_at)
-        const currentWeekYear = getIsoWeekYear()
-        const lastWeekYear = getIsoWeekYear(lastDate)
-        if (lastDate.isoWeek() === currentWeek && lastWeekYear === currentWeekYear) {
-          setBusAlert(
-            `Este bus ya tiene revisión registrada esta semana (${lastDate.format(
-              'dddd D MMM · HH:mm'
-            )} hrs por ${lastRevision.inspector_nombre ?? 'otro inspector'}).`
-          )
-        } else {
-          setBusAlert(null)
+        if (
+          lastDate.isoWeek() === currentWeek &&
+          getIsoWeekYear(lastDate) === getIsoWeekYear()
+        ) {
+          setRevisionPrevia({
+            ppu: busRecord.ppu,
+            interno: busRecord.numero_interno,
+            terminal:
+              lastRevision.terminal_reportado ||
+              lastRevision.terminal_detectado ||
+              busRecord.terminal,
+            fecha: lastRevision.created_at,
+            inspector: lastRevision.inspector_nombre ?? 'otro inspector',
+          })
         }
       }
 
@@ -1783,53 +1798,28 @@ export const InspectionFormPage = () => {
             value={methods.watch('terminalReportado')}
             onChange={(event) => methods.setValue('terminalReportado', event.target.value)}
           />
-          {terminalDetected && (
-            <p className="mt-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              📍 Detectado por GPS: {terminalDetected.name} ({terminalDetected.distance} m)
-            </p>
-          )}
-          <div className="mt-3 rounded-2xl border border-dashed border-slate-200/70 p-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-300">
-            <div className="flex items-center justify-between text-[11px] uppercase tracking-wide">
-              <span className="flex items-center gap-1.5 font-semibold text-slate-600 dark:text-slate-100">
-                <span
-                  className={`inline-block h-2 w-2 rounded-full ${
-                    gpsActive ? 'marker-live-dot bg-emerald-500' : 'bg-red-500'
-                  }`}
-                />
-                GPS en vivo {gpsActive ? '· activo' : '· inactivo'}
-              </span>
-              <span className="text-slate-400">
-                {lastLocationUpdate ? dayjs(lastLocationUpdate).fromNow() : 'sin lectura'}
-              </span>
-            </div>
-            <p className="mt-2 font-mono text-sm text-slate-700 dark:text-white">
-              {trackingLocation
-                ? `${trackingLocation.lat.toFixed(6)}, ${trackingLocation.lon.toFixed(6)}`
-                : 'Sin coordenadas'}
-            </p>
-            <p className="text-[11px] text-slate-500">
-              Precisión:&nbsp;
-              {trackingLocation ? `±${Math.round(trackingLocation.accuracy)} m` : 'no disponible'}
-            </p>
-            {trackingError && (
-              <p className="mt-1 text-[11px] font-semibold text-red-500">Error: {trackingError}</p>
-            )}
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="mt-2 gap-2 text-xs text-brand-600"
-              onClick={handleRefreshGps}
-              disabled={refreshingGPS}
+          {/* Sólo el terminal, no la telemetría. Las coordenadas, la precisión
+              y el botón de refrescar no le dicen nada a quien está de pie
+              junto a un bus: lo único que necesita confirmar es que la app
+              reconoció el terminal correcto. Si el GPS falla, el aviso rojo
+              del encabezado ya lo explica y ofrece reintentar. */}
+          <p className="mt-1.5 flex items-center gap-1.5 text-xs">
+            <MapPin
+              className={`h-3.5 w-3.5 shrink-0 ${
+                terminalDetected ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'
+              }`}
+            />
+            <span className="text-slate-500 dark:text-slate-400">Terminal detectado:</span>
+            <span
+              className={`font-semibold ${
+                terminalDetected
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-slate-400'
+              }`}
             >
-              {refreshingGPS ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <MapPin className="h-3.5 w-3.5" />
-              )}
-              {refreshingGPS ? 'Actualizando...' : 'Actualizar GPS'}
-            </Button>
-          </div>
+              {terminalDetected ? terminalDetected.name : 'sin detectar'}
+            </span>
+          </p>
         </div>
       </div>
       <div>
@@ -3122,7 +3112,12 @@ export const InspectionFormPage = () => {
                     placeholder="Ej: SHRS75 o 1694"
                     className="pl-9"
                     value={busQuery}
-                    onChange={(event) => setBusQuery(event.target.value.toUpperCase())}
+                    autoComplete="off"
+                    onChange={(event) => {
+                      setBusQuery(event.target.value.toUpperCase())
+                      setSugerenciasAbiertas(true)
+                    }}
+                    onFocus={() => setSugerenciasAbiertas(true)}
                   />
                 </div>
                 {suggestions.length > 0 && (
@@ -3135,6 +3130,7 @@ export const InspectionFormPage = () => {
                         onClick={() => {
                           const value = record.ppu.toUpperCase()
                           setBusQuery(value)
+                          setSugerenciasAbiertas(false)
                           searchBus(value)
                         }}
                       >
@@ -3155,7 +3151,10 @@ export const InspectionFormPage = () => {
               <Button
                 type="button"
                 className="w-full gap-2 rounded-2xl sm:w-auto"
-                onClick={() => searchBus()}
+                onClick={() => {
+                  setSugerenciasAbiertas(false)
+                  void searchBus()
+                }}
               >
                 <Search className="h-4 w-4" /> Buscar bus
               </Button>
@@ -3186,6 +3185,7 @@ export const InspectionFormPage = () => {
                     setBus(null)
                     setBusQuery('')
                     setBusAlert(null)
+                    setRevisionPrevia(null)
                   }}
                 >
                   <X className="h-3.5 w-3.5" /> Cambiar
@@ -3400,6 +3400,22 @@ export const InspectionFormPage = () => {
           </div>
         </div>
       </form>
+
+      <BusRevisadoDialog
+        revision={revisionPrevia}
+        onConsultarOtro={() => {
+          // Se suelta el bus y se devuelve el foco a la búsqueda: el caso
+          // habitual es seguir con el siguiente de la hoja de pendientes
+          setRevisionPrevia(null)
+          setBus(null)
+          setBusQuery('')
+          setStep(0)
+          window.requestAnimationFrame(() =>
+            document.getElementById('busSearch')?.focus()
+          )
+        }}
+        onVolverARevisar={() => setRevisionPrevia(null)}
+      />
     </FormProvider>
   )
 }

@@ -28,6 +28,8 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { WeekSelector } from '@/components/week-selector'
 import { useWeekFilter } from '@/hooks/use-week-filter'
+import { MODULOS, type ModuloClave } from '@/constants/modulos'
+import { useModulosVigentes } from '@/hooks/use-modulos-config'
 
 type FlotaRow = Tables<'flota'>
 type RevisionRow = Tables<'revisiones'>
@@ -66,6 +68,59 @@ export const PendientesPage = () => {
     refetchInterval: 15_000,
   })
 
+  // Alcance vigente: qué se está revisando hoy según Configuración
+  const { clavesActivas, cargando: modulosCargando } = useModulosVigentes()
+
+  const modulosMedibles = useMemo(
+    () =>
+      MODULOS.filter((modulo) => modulo.tabla !== null && clavesActivas.has(modulo.clave)),
+    [clavesActivas]
+  )
+
+  /**
+   * Buses que ya tienen dato de cada módulo activo dentro de la semana.
+   *
+   * "Pendiente" no significa lo mismo todas las semanas: si el supervisor dejó
+   * activo sólo +15, el bus con una inspección completa de la semana pasada
+   * pero sin la prueba de +15 sigue pendiente, y contarlo como hecho mandaba a
+   * la calle a buscar buses equivocados. Por eso se pregunta por la tabla de
+   * cada módulo vigente y no sólo por la existencia de una revisión.
+   */
+  const { data: cobertura, isLoading: coberturaLoading } = useQuery({
+    queryKey: [
+      'pendientes-cobertura',
+      weekInfo.startISO,
+      weekInfo.endISO,
+      modulosMedibles.map((modulo) => modulo.clave).sort().join(','),
+    ],
+    enabled: modulosMedibles.length > 0,
+    refetchInterval: 15_000,
+    queryFn: async () => {
+      const porModulo = new Map<ModuloClave, Set<string>>()
+      await Promise.all(
+        modulosMedibles.map(async (modulo) => {
+          const { data, error } = await supabase
+            .from(modulo.tabla as 'tags')
+            .select('bus_ppu')
+            .gte('created_at', weekInfo.startISO)
+            .lte('created_at', weekInfo.endISO)
+            .limit(20000)
+          if (error) {
+            // Tabla sin crear todavía: se informa y ese módulo no se exige,
+            // en vez de marcar la flota entera como pendiente
+            console.warn(`No se pudo leer ${modulo.tabla}`, error.message)
+            return
+          }
+          porModulo.set(
+            modulo.clave,
+            new Set((data ?? []).map((fila) => (fila as { bus_ppu: string }).bus_ppu))
+          )
+        })
+      )
+      return porModulo
+    },
+  })
+
   const buses = useMemo(() => {
     if (!flota) return []
     const latestByBus = new Map<string, RevisionRow>()
@@ -77,15 +132,43 @@ export const PendientesPage = () => {
 
     return flota.map((bus) => {
       const lastRevision = latestByBus.get(bus.ppu) ?? null
-      const pending = !lastRevision
+
+      // Un bus en panne no puede arrancar, así que los módulos que exigen el
+      // bus operativo no se le pueden hacer. Contarlos como pendientes lo
+      // dejaba en la lista indefinidamente, mandando a alguien a intentar una
+      // prueba imposible semana tras semana.
+      const enPanne = lastRevision?.estado_bus === 'EN_PANNE'
+
+      // Módulos vigentes que a este bus todavía le faltan esta semana
+      const faltantes = modulosMedibles.filter((modulo) => {
+        if (enPanne && modulo.requiereBusOperativo) return false
+        const cubiertos = cobertura?.get(modulo.clave)
+        // Sin datos del módulo (tabla ausente o consulta aún en vuelo) no se
+        // inventa un pendiente: se cae al criterio de siempre
+        if (!cubiertos) return false
+        return !cubiertos.has(bus.ppu)
+      })
+
+      // Los que quedan fuera por estar el bus en panne, para poder decirlo
+      const omitidosPorPanne = enPanne
+        ? modulosMedibles.filter((modulo) => modulo.requiereBusOperativo)
+        : []
+
+      // Con módulos medibles manda el detalle; sin ellos, la regla de antes
+      const pending =
+        modulosMedibles.length > 0 && cobertura ? faltantes.length > 0 : !lastRevision
+
       return {
         bus,
         lastRevision,
         pending,
+        faltantes,
+        enPanne,
+        omitidosPorPanne,
         lastInspectionAt: lastRevision ? dayjs(lastRevision.created_at) : null,
       }
     })
-  }, [flota, revisiones])
+  }, [flota, revisiones, modulosMedibles, cobertura])
 
   const filtered = useMemo(() => {
     const query = searchQuery.trim().toUpperCase()
@@ -145,10 +228,11 @@ export const PendientesPage = () => {
           : `Terminal ${terminalFilter}`,
       totalFlota: total,
       revisados: completedCount,
+      alcance: modulosMedibles.map((modulo) => modulo.nombre),
     })
   }
 
-  const loading = flotaLoading || revisionesLoading
+  const loading = flotaLoading || revisionesLoading || modulosCargando || coberturaLoading
 
   return (
     <div className="space-y-6">
@@ -177,6 +261,39 @@ export const PendientesPage = () => {
             </Button>
           </div>
         </div>
+        {/* Alcance vigente. Sin esto, "quedan 180 pendientes" no se puede
+            interpretar: no es lo mismo que falte el check completo a que
+            falte sólo la prueba de +15. */}
+        <div className="flex flex-wrap items-center gap-2 rounded-[var(--app-radius-sm)] border border-brand-200/60 bg-brand-50/60 px-3 py-2.5 dark:border-brand-900/40 dark:bg-brand-950/20">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-brand-700 dark:text-brand-300">
+            Se está revisando
+          </span>
+          {modulosMedibles.length === 0 ? (
+            <span className="text-[12px] text-slate-500 dark:text-slate-400">
+              Ningún módulo activo · se cuenta como pendiente el bus sin ninguna
+              inspección de la semana
+            </span>
+          ) : (
+            <>
+              {modulosMedibles.map((modulo) => {
+                const Icono = modulo.icono
+                return (
+                  <span
+                    key={modulo.clave}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-2.5 py-1 text-[11.5px] font-bold text-slate-700 shadow-sm dark:bg-white/10 dark:text-slate-200"
+                  >
+                    <Icono className="h-3 w-3 text-brand-500" />
+                    {modulo.nombre}
+                  </span>
+                )
+              })}
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                · un bus queda pendiente mientras le falte alguno
+              </span>
+            </>
+          )}
+        </div>
+
         <div className="grid gap-3 md:grid-cols-[240px,1fr]">
           <div>
             <Select value={terminalFilter} onValueChange={setTerminalFilter}>
@@ -208,14 +325,22 @@ export const PendientesPage = () => {
         <StatCard
           title="Pendientes"
           value={pendingCount}
-          description="Sin revisión esta semana"
+          description={
+            modulosMedibles.length > 0
+              ? `Les falta algún módulo activo`
+              : 'Sin revisión esta semana'
+          }
           icon={AlertTriangle}
           variant={pendingCount > 0 ? 'warning' : 'success'}
         />
         <StatCard
           title="Completados"
           value={completedCount}
-          description="Revisados esta semana"
+          description={
+            modulosMedibles.length > 0
+              ? 'Con todos los módulos activos'
+              : 'Revisados esta semana'
+          }
           icon={CheckCircle2}
           variant="success"
         />
@@ -249,7 +374,7 @@ export const PendientesPage = () => {
             </div>
           )}
           {!loading &&
-            filtered.map(({ bus, lastRevision, pending }) => (
+            filtered.map(({ bus, lastRevision, pending, faltantes, omitidosPorPanne }) => (
               <div
                 key={bus.id}
                 className="flex flex-col gap-4 border-t border-transparent px-6 py-4 transition hover:bg-slate-50/70 dark:hover:bg-slate-900/30 md:flex-row md:items-center md:justify-between"
@@ -285,6 +410,35 @@ export const PendientesPage = () => {
                       </span>
                     )}
                   </div>
+
+                  {/* Qué le falta exactamente. Un "pendiente" a secas obliga a
+                      abrir el bus para descubrir que sólo faltaba un módulo. */}
+                  {faltantes.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                        Falta:
+                      </span>
+                      {faltantes.map((modulo) => {
+                        const Icono = modulo.icono
+                        return (
+                          <span
+                            key={modulo.clave}
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                          >
+                            <Icono className="h-2.5 w-2.5" />
+                            {modulo.nombre}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {omitidosPorPanne.length > 0 && (
+                    <p className="pt-0.5 text-[11px] text-slate-400">
+                      No aplica con el bus en panne:{' '}
+                      {omitidosPorPanne.map((modulo) => modulo.nombre).join(', ')}
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-col items-start gap-2 md:items-end">
                   <Badge variant={pending ? 'warning' : 'success'}>

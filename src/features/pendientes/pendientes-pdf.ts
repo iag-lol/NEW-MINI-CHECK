@@ -14,6 +14,14 @@ export interface DatosHojaPendientes {
   terminal: string
   totalFlota: number
   revisados: number
+  /**
+   * Módulos vigentes sobre los que se calculó el pendiente.
+   *
+   * La hoja se imprime y se lleva a terreno; sin decir qué se estaba pidiendo
+   * esa semana, dentro de tres meses nadie sabe si "180 pendientes" era el
+   * check completo o sólo la prueba de +15.
+   */
+  alcance?: string[]
 }
 
 /* Paleta del documento, alineada con la marca de la app */
@@ -38,6 +46,7 @@ export const generarHojaPendientes = ({
   terminal,
   totalFlota,
   revisados,
+  alcance = [],
 }: DatosHojaPendientes) => {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' })
 
@@ -70,6 +79,12 @@ export const generarHojaPendientes = ({
     margen,
     19.5
   )
+
+  if (alcance.length > 0) {
+    doc.setFontSize(7.4)
+    doc.setTextColor(150, 165, 190)
+    doc.text(`Se revisa: ${alcance.join(' · ')}`, margen, 24)
+  }
 
   // Contador grande a la derecha: el dato que se busca de un vistazo
   const contador = String(ordenados.length)
