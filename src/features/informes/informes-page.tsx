@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { WeekSelector } from '@/components/week-selector'
 import { useWeekFilter } from '@/hooks/use-week-filter'
 import type { Tables } from '@/types/database'
-import { exportExecutivePdf } from '@/lib/exporters'
 import { useNotificationStore } from '@/store/notification-store'
 
 export const InformesPage = () => {
@@ -42,6 +41,7 @@ export const InformesPage = () => {
   const downloadReport = async () => {
     setDownloading(true)
     try {
+      const { exportExecutivePdf } = await import('@/lib/pdf-ejecutivo')
       await exportExecutivePdf(weekInfo.startISO, weekInfo.endISO)
       push({
         id: `weekly-report-${Date.now()}`,

@@ -28,7 +28,6 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { WeekSelector } from '@/components/week-selector'
 import { useWeekFilter } from '@/hooks/use-week-filter'
-import { generarHojaPendientes } from '@/features/pendientes/pendientes-pdf'
 
 type FlotaRow = Tables<'flota'>
 type RevisionRow = Tables<'revisiones'>
@@ -122,7 +121,7 @@ export const PendientesPage = () => {
     navigate(`/app/formulario?ppu=${encodeURIComponent(bus.ppu)}`)
   }
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     const pendientes = filtered.filter((item) => item.pending)
 
     if (pendientes.length === 0) {
@@ -130,6 +129,8 @@ export const PendientesPage = () => {
       return
     }
 
+    // jsPDF pesa ~620 kB con sus dependencias: se trae al pulsar
+    const { generarHojaPendientes } = await import('@/features/pendientes/pendientes-pdf')
     generarHojaPendientes({
       buses: pendientes.map((item) => ({
         ppu: item.bus.ppu,
@@ -167,7 +168,7 @@ export const PendientesPage = () => {
           <div className="flex flex-col gap-3 md:items-end">
             <WeekSelector />
             <Button
-              onClick={handleDownloadPDF}
+              onClick={() => void handleDownloadPDF()}
               disabled={pendingCount === 0}
               className="gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600"
             >

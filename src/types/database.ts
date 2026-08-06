@@ -325,7 +325,53 @@ export type Database = {
       mensajes: TableRecord<MensajeRow, Omit<MensajeRow, 'id' | 'created_at' | 'editado' | 'editado_en' | 'deleted' | 'leido_por'>>
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    /**
+     * Funciones RPC del servidor.
+     *
+     * Existen para que la contraseña se verifique dentro de la base de datos:
+     * el hash nunca viaja al navegador y nadie con la clave anónima puede
+     * descargarse la tabla de credenciales. Las crea sql-scripts/seguridad.sql.
+     */
+    Functions: {
+      autenticar_usuario: {
+        Args: { p_rut: string; p_password: string }
+        Returns: {
+          ok: boolean
+          motivo: string
+          espera_seg: number | null
+          rut: string | null
+          nombre: string | null
+          cargo: string | null
+          terminal: string | null
+          foto_url: string | null
+        }[]
+      }
+      cambiar_password: {
+        Args: { p_rut: string; p_actual: string; p_nueva: string }
+        Returns: { ok: boolean; motivo: string }[]
+      }
+      admin_establecer_password: {
+        Args: {
+          p_rut_admin: string
+          p_password_admin: string
+          p_rut_objetivo: string
+          p_nueva: string
+        }
+        Returns: { ok: boolean; motivo: string }[]
+      }
+      admin_crear_usuario: {
+        Args: {
+          p_rut_admin: string
+          p_password_admin: string
+          p_rut: string
+          p_nombre: string
+          p_cargo: string
+          p_terminal: string
+          p_password: string
+        }
+        Returns: { ok: boolean; motivo: string }[]
+      }
+    }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>
   }

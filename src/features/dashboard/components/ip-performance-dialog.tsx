@@ -48,7 +48,6 @@ import {
   formatearMinutos,
   type Severidad,
 } from '@/features/dashboard/lib/analisis-rendimiento'
-import { generarInformeRendimiento } from '@/features/dashboard/lib/pdf-rendimiento'
 
 type RevisionRow = Tables<'revisiones'>
 type Rango = 'semana' | '1m' | '2m' | 'all'
@@ -609,10 +608,14 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
 
   const [generandoPdf, setGenerandoPdf] = useState(false)
 
-  const descargarInforme = () => {
+  const descargarInforme = async () => {
     if (!analisis) return
     setGenerandoPdf(true)
     try {
+      // jsPDF sólo se descarga cuando alguien pide de verdad el informe
+      const { generarInformeRendimiento } = await import(
+        '@/features/dashboard/lib/pdf-rendimiento'
+      )
       generarInformeRendimiento(analisis)
     } catch (error) {
       console.error('No se pudo generar el informe de rendimiento', error)
@@ -902,7 +905,7 @@ export const IpPerformanceDialog = ({ open, onClose }: IpPerformanceDialogProps)
                       size="sm"
                       className="gap-1.5"
                       disabled={generandoPdf || !analisis}
-                      onClick={descargarInforme}
+                      onClick={() => void descargarInforme()}
                     >
                       <FileDown className="h-3.5 w-3.5" />
                       {generandoPdf ? 'Generando…' : 'Informe PDF'}

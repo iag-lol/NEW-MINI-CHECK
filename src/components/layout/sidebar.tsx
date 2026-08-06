@@ -249,7 +249,7 @@ export const Sidebar = () => {
             variant="ghost"
             size="sm"
             className="relative mt-3 w-full justify-center gap-2 rounded-xl text-sm font-semibold"
-            onClick={logout}
+            onClick={() => void logout()}
           >
             <LogOut className="h-4 w-4" />
             Cerrar sesión

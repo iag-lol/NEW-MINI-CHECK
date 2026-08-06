@@ -211,7 +211,9 @@ const fetchUltimoPorBus = async <T extends { bus_ppu: string; created_at: string
     .order('created_at', { ascending: false })
     .limit(10000)
   const latest = new Map<string, T>()
-  ;((data as T[]) ?? []).forEach((row) => {
+  // La consulta es genérica sobre varias tablas: TypeScript sólo ve la
+  // unión de todas sus filas y no puede estrecharla al T concreto
+  ;((data as unknown as T[]) ?? []).forEach((row) => {
     if (!latest.has(row.bus_ppu)) latest.set(row.bus_ppu, row)
   })
   return latest

@@ -1,0 +1,53 @@
+# Cabeceras de seguridad (Netlify las lee de este archivo tal cual).
+# El equivalente para Vercel está en vercel.json: hay que tocar los dos.
+
+/*
+  # Content-Security-Policy: la defensa de fondo contra XSS. Aunque alguien
+  # consiga inyectar HTML en la página, el navegador se niega a ejecutar
+  # scripts que no vengan de este mismo origen.
+  #
+  # 'unsafe-inline' en style-src es necesario: Tailwind y framer-motion
+  # escriben estilos en línea. En script-src NO está, que es donde importa.
+  #
+  # connect-src y img-src abren exactamente los orígenes que la app llama:
+  # Supabase (API y websocket de realtime), los tres proveedores de tiles del
+  # mapa y los tres servicios de IP. Ni uno más: cada host de esta lista es
+  # un sitio desde el que se podría exfiltrar datos si hubiera una inyección.
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://api.mapbox.com https://server.arcgisonline.com https://*.supabase.co; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://ipapi.co https://api.ipify.org https://api.my-ip.io; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+  # Nadie puede meter la app en un iframe. Sin esto, una web cualquiera puede
+  # superponer botones invisibles sobre la nuestra y hacer que un supervisor
+  # pulse lo que el atacante quiera creyendo que pulsa otra cosa.
+  X-Frame-Options: DENY
+
+  # Fuerza HTTPS durante dos años, incluidos subdominios. Cierra el hueco de
+  # la primera visita por http:// donde un intermediario puede colarse.
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+
+  # El navegador respeta el Content-Type declarado y no "adivina" que un
+  # .json subido por alguien es en realidad JavaScript ejecutable.
+  X-Content-Type-Options: nosniff
+
+  # Al salir hacia otro sitio no se filtra la ruta interna que se estaba
+  # viendo (puede llevar RUT o identificadores en la URL).
+  Referrer-Policy: strict-origin-when-cross-origin
+
+  # Sólo se pide lo que la app usa de verdad. La geolocalización se necesita
+  # para el geocercado de terminales; cámara, micrófono y pagos, no.
+  Permissions-Policy: geolocation=(self), camera=(), microphone=(), payment=(), usb=(), magnetometer=(), gyroscope=()
+
+  # Aísla la pestaña de otras ventanas que pudiera abrir.
+  Cross-Origin-Opener-Policy: same-origin
+
+# Los assets con hash en el nombre no cambian nunca: se cachean un año y
+# dejan de pedirse en cada visita.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# El HTML y el service worker NO se cachean: si se quedan pegados, el usuario
+# sigue viendo la versión antigua después de un despliegue.
+/index.html
+  Cache-Control: no-cache
+
+/sw.js
+  Cache-Control: no-cache

@@ -31,7 +31,6 @@ import {
 } from 'lucide-react'
 import dayjs from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
-import { exportAllModulesToXlsx, exportExecutivePdf } from '@/lib/exporters'
 import { ConsolidadosDialog } from '@/features/dashboard/components/consolidados-dialog'
 import { BusReportDialog } from '@/features/dashboard/components/bus-report-dialog'
 import { IpPerformanceDialog } from '@/features/dashboard/components/ip-performance-dialog'
@@ -118,6 +117,15 @@ const useTickets = (start: string, end: string) =>
     refetchInterval: 30_000,
   })
 
+/**
+ * Los exportadores se cargan al pulsar, no al abrir la pantalla.
+ *
+ * ExcelJS y jsPDF suman ~1,7 MB. Importados de forma estática, el navegador
+ * los descarga y compila ANTES de pintar el dashboard, aunque nadie vaya a
+ * exportar nada: era la causa principal de la lentitud al entrar. Con la
+ * importación dinámica, esa descarga sólo ocurre —y sólo una vez— cuando de
+ * verdad se pulsa un botón de exportación.
+ */
 export const DashboardPage = () => {
   const [exporting, setExporting] = useState(false)
   const [consolidadosOpen, setConsolidadosOpen] = useState(false)
@@ -640,9 +648,11 @@ export const DashboardPage = () => {
               deshabilitado={exporting}
               onClick={async () => {
                 setExporting(true)
-                await exportAllModulesToXlsx(weekInfo.startISO, weekInfo.endISO).catch(
-                  (error) => console.error('Error exportando XLSX', error)
-                )
+                await import('@/lib/exporters')
+                  .then((modulo) =>
+                    modulo.exportAllModulesToXlsx(weekInfo.startISO, weekInfo.endISO)
+                  )
+                  .catch((error) => console.error('Error exportando XLSX', error))
                 setExporting(false)
               }}
             />
@@ -653,9 +663,11 @@ export const DashboardPage = () => {
               deshabilitado={exporting}
               onClick={async () => {
                 setExporting(true)
-                await exportExecutivePdf(weekInfo.startISO, weekInfo.endISO).catch(
-                  (error) => console.error('Error exportando PDF', error)
-                )
+                await import('@/lib/pdf-ejecutivo')
+                  .then((modulo) =>
+                    modulo.exportExecutivePdf(weekInfo.startISO, weekInfo.endISO)
+                  )
+                  .catch((error) => console.error('Error exportando PDF', error))
                 setExporting(false)
               }}
             />

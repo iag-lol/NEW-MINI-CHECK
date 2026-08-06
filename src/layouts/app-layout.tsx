@@ -6,6 +6,7 @@ import { MobileNav } from '@/components/layout/mobile-nav'
 import { TopBar } from '@/components/layout/top-bar'
 import { RealtimeNotifications } from '@/components/realtime-notifications'
 import { InstallAppBanner } from '@/components/install-app'
+import { SessionTimeout } from '@/components/session-timeout'
 import { useRealtimeSubscriptions } from '@/hooks/use-realtime'
 import { useRealtimeLocation } from '@/hooks/use-realtime-location'
 import { useTheme } from '@/hooks/use-theme'
@@ -55,6 +56,7 @@ export const AppLayout = () => {
         <MobileNav />
         <RealtimeNotifications />
         <InstallAppBanner />
+        <SessionTimeout />
       </div>
     </TrackingProvider>
   )

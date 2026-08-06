@@ -11,12 +11,13 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+// Sólo lo ligero se importa de forma estática. `exportConsolidadosSemanales`
+// arrastra ExcelJS (~940 kB) y se carga al pulsar "Generar", no al abrir.
 import {
-  exportConsolidadosSemanales,
   loadRevisionSemanal,
   parseTablaWeb,
   type MergeStats,
-} from '@/lib/consolidados'
+} from '@/lib/consolidados-datos'
 
 interface ConsolidadosDialogProps {
   open: boolean
@@ -69,6 +70,7 @@ export const ConsolidadosDialog = ({
     setError(null)
     setResult(null)
     try {
+      const { exportConsolidadosSemanales } = await import('@/lib/consolidados')
       const stats = await exportConsolidadosSemanales({
         startISO,
         endISO,

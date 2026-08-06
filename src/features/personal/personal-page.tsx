@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import bcrypt from 'bcryptjs'
 import { UserPlus, Users, ShieldCheck, Phone, Mail, RefreshCw, MapPin, Trash2, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/auth-store'
@@ -12,6 +11,12 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { TERMINAL_GEOFENCES, type TerminalSlug } from '@/constants/geofences'
 import { formatRut, validateRut } from '@/lib/rut'
+import { AdminConfirmDialog } from '@/components/admin-confirm-dialog'
+import {
+  crearUsuarioComoAdmin,
+  establecerPasswordComoAdmin,
+  mensajeCredencial,
+} from '@/lib/credenciales'
 import dayjs from '@/lib/dayjs'
 import type { Role, Tables } from '@/types/database'
 
@@ -50,6 +55,14 @@ export const PersonalPage = () => {
   })
   const [saving, setSaving] = useState(false)
   const [deletingRut, setDeletingRut] = useState<string | null>(null)
+  // Crear un acceso o resetear una contraseña exige acreditar quién lo hace:
+  // el servidor pide la contraseña del administrador en cada operación.
+  const [confirmacion, setConfirmacion] = useState<
+    | { tipo: 'crear' }
+    | { tipo: 'reset'; rut: string; nombre: string }
+    | null
+  >(null)
+  const [errorConfirmacion, setErrorConfirmacion] = useState<string | null>(null)
   const { user: currentUser } = useAuthStore()
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(
     null
@@ -102,24 +115,34 @@ export const PersonalPage = () => {
       setFeedback({ type: 'error', message: 'El RUT ingresado no es válido.' })
       return
     }
-    if (form.password.length < 6) {
-      setFeedback({ type: 'error', message: 'La contraseña debe tener al menos 6 caracteres.' })
+    // 8 caracteres, no 6: con 6 el espacio de búsqueda cabe en un ataque de
+    // diccionario de una tarde, y el servidor rechaza cualquier cosa menor.
+    if (form.password.length < 8) {
+      setFeedback({ type: 'error', message: 'La contraseña debe tener al menos 8 caracteres.' })
       return
     }
+    setErrorConfirmacion(null)
+    setConfirmacion({ tipo: 'crear' })
+  }
+
+  const crearAcceso = async (passwordAdmin: string) => {
+    if (!currentUser) return
     setSaving(true)
     try {
       const formattedRut = formatRut(form.rut)
-      const hashedPassword = await bcrypt.hash(form.password, 10)
 
-      const { error: userError } = await supabase.from('usuarios').insert({
+      const resultado = await crearUsuarioComoAdmin(currentUser.rut, passwordAdmin, {
         rut: formattedRut,
         nombre: form.nombre.trim(),
         cargo: form.cargo,
         terminal: form.terminal,
-        password: hashedPassword,
-        foto_url: null,
+        password: form.password,
       })
-      if (userError) throw userError
+      if (!resultado.ok) {
+        setErrorConfirmacion(mensajeCredencial(resultado.motivo))
+        return
+      }
+      setConfirmacion(null)
 
       if (form.telefono || form.correo) {
         await supabase.from('personal').insert({
@@ -145,10 +168,11 @@ export const PersonalPage = () => {
       await Promise.all([refetchUsuarios(), refetchPersonal()])
     } catch (error: unknown) {
       console.error('Error creando usuario', error)
-      setFeedback({
-        type: 'error',
-        message: getErrorMessage(error, 'No pudimos crear el acceso. Intenta nuevamente.'),
-      })
+      // El mensaje va al diálogo, que es lo que el usuario tiene delante:
+      // ponerlo detrás dejaba la impresión de que el botón no hizo nada
+      setErrorConfirmacion(
+        getErrorMessage(error, 'No pudimos crear el acceso. Intenta nuevamente.')
+      )
     } finally {
       setSaving(false)
     }
@@ -195,15 +219,36 @@ export const PersonalPage = () => {
     }
   }
 
-  const resetPassword = async (rut: string) => {
-    const nueva = prompt('Ingresa la nueva contraseña para este usuario:')
-    if (!nueva || nueva.length < 6) {
-      alert('La contraseña debe tener al menos 6 caracteres.')
-      return
+  const resetPassword = (rut: string, nombre: string) => {
+    setErrorConfirmacion(null)
+    setConfirmacion({ tipo: 'reset', rut, nombre })
+  }
+
+  const aplicarReset = async (passwordAdmin: string, nueva: string) => {
+    if (!currentUser || confirmacion?.tipo !== 'reset') return
+    setSaving(true)
+    try {
+      const resultado = await establecerPasswordComoAdmin(
+        currentUser.rut,
+        passwordAdmin,
+        confirmacion.rut,
+        nueva
+      )
+      if (!resultado.ok) {
+        setErrorConfirmacion(mensajeCredencial(resultado.motivo))
+        return
+      }
+      setConfirmacion(null)
+      setFeedback({
+        type: 'success',
+        message: `Contraseña actualizada para ${confirmacion.nombre}.`,
+      })
+    } catch (error) {
+      console.error('Error reseteando contraseña', error)
+      setErrorConfirmacion(getErrorMessage(error, 'No pudimos actualizar la contraseña.'))
+    } finally {
+      setSaving(false)
     }
-    const hashed = await bcrypt.hash(nueva, 10)
-    await supabase.from('usuarios').update({ password: hashed }).eq('rut', rut)
-    setFeedback({ type: 'success', message: `Contraseña actualizada para ${rut}.` })
   }
 
   return (
@@ -313,7 +358,7 @@ export const PersonalPage = () => {
                   variant="subtle"
                   size="sm"
                   className="flex-1 text-[11px]"
-                  onClick={() => resetPassword(usuario.rut)}
+                  onClick={() => resetPassword(usuario.rut, usuario.nombre)}
                 >
                   Resetear clave
                 </Button>
@@ -390,7 +435,7 @@ export const PersonalPage = () => {
                           variant="outline"
                           size="sm"
                           className="rounded-2xl text-xs"
-                          onClick={() => resetPassword(usuario.rut)}
+                          onClick={() => resetPassword(usuario.rut, usuario.nombre)}
                         >
                           Resetear contraseña
                         </Button>
@@ -501,7 +546,7 @@ export const PersonalPage = () => {
               type="password"
               value={form.password}
               onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mínimo 8 caracteres"
               required
             />
           </div>
@@ -563,6 +608,31 @@ export const PersonalPage = () => {
           )}
         </div>
       </Card>
+
+      <AdminConfirmDialog
+        abierto={confirmacion !== null}
+        titulo={
+          confirmacion?.tipo === 'reset'
+            ? 'Resetear contraseña'
+            : 'Crear acceso a la plataforma'
+        }
+        descripcion={
+          confirmacion?.tipo === 'reset'
+            ? `Vas a asignar una contraseña nueva a ${confirmacion.nombre}. Su acceso anterior dejará de funcionar de inmediato.`
+            : `Vas a dar de alta a ${form.nombre.trim() || 'un nuevo usuario'} como ${form.cargo} en ${form.terminal}.`
+        }
+        pedirNueva={confirmacion?.tipo === 'reset'}
+        procesando={saving}
+        error={errorConfirmacion}
+        onCancelar={() => {
+          setConfirmacion(null)
+          setErrorConfirmacion(null)
+        }}
+        onConfirmar={(passwordAdmin, nueva) => {
+          if (confirmacion?.tipo === 'reset') void aplicarReset(passwordAdmin, nueva)
+          else void crearAcceso(passwordAdmin)
+        }}
+      />
     </div>
   )
 }

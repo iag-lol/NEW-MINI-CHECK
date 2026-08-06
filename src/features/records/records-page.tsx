@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import ExcelJS from 'exceljs'
-import jsPDF from 'jspdf'
 import dayjs from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
@@ -149,6 +147,8 @@ export const RecordsPage = () => {
         ((normaData as Tables<'norma_grafica'>[]) ?? []).map((fila) => [fila.revision_id, fila])
       )
 
+      // ExcelJS pesa ~940 kB: se trae al pulsar, no al abrir la pantalla
+      const { default: ExcelJS } = await import('exceljs')
       const workbook = new ExcelJS.Workbook()
       workbook.creator = 'Mini-Check'
       workbook.created = new Date()
@@ -278,8 +278,9 @@ export const RecordsPage = () => {
     }
   }
 
-  const exportPdf = () => {
+  const exportPdf = async () => {
     if (!revisiones?.length) return
+    const { default: jsPDF } = await import('jspdf')
     const doc = new jsPDF()
     doc.setFontSize(16)
     doc.text('New Mini-Check · Resumen de revisiones', 14, 20)
@@ -366,7 +367,7 @@ export const RecordsPage = () => {
             {exporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {exporting ? 'Generando...' : 'Exportar XLSX'}
           </Button>
-          <Button variant="outline" onClick={exportPdf}>
+          <Button variant="outline" onClick={() => void exportPdf()}>
             Exportar PDF
           </Button>
         </div>

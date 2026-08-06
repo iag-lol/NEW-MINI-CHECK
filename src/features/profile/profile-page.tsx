@@ -30,9 +30,9 @@ import {
   User,
   Loader2,
 } from 'lucide-react'
-import bcrypt from 'bcryptjs'
 import dayjs from '@/lib/dayjs'
 import { supabase } from '@/lib/supabase'
+import { cambiarPassword, mensajeCredencial } from '@/lib/credenciales'
 import { cn } from '@/lib/utils'
 import { prepararAvatar } from '@/lib/image'
 import { useAuthStore } from '@/store/auth-store'
@@ -127,23 +127,10 @@ export function ProfilePage() {
     }) => {
       if (!user) throw new Error('Usuario no autenticado')
 
-      const { data: credentials, error: credentialsError } = await supabase
-        .from('usuarios')
-        .select('password')
-        .eq('rut', user.rut)
-        .single()
-
-      if (credentialsError) throw credentialsError
-
-      const coincide = await bcrypt.compare(currentPassword, credentials.password)
-      if (!coincide) throw new Error('La contraseña actual no es correcta')
-
-      const passwordHash = await bcrypt.hash(newPassword, 10)
-      const { error } = await supabase
-        .from('usuarios')
-        .update({ password: passwordHash })
-        .eq('rut', user.rut)
-      if (error) throw error
+      // La verificación ocurre en el servidor: ni el hash actual sale de la
+      // base de datos ni el navegador puede escribir la columna `password`.
+      const resultado = await cambiarPassword(user.rut, currentPassword, newPassword)
+      if (!resultado.ok) throw new Error(mensajeCredencial(resultado.motivo))
     },
     onSuccess: () => {
       setPasswordActual('')

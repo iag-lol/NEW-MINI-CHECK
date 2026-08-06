@@ -1,11 +1,19 @@
 import { useState } from 'react'
 import { FileDown, Loader2 } from 'lucide-react'
-import { exportAllModulesToXlsx, exportExecutivePdf } from '@/lib/exporters'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { WeekSelector } from '@/components/week-selector'
 import { useWeekFilter } from '@/hooks/use-week-filter'
 
+/**
+ * Los exportadores se cargan al pulsar, no al abrir la pantalla.
+ *
+ * ExcelJS y jsPDF suman ~1,7 MB. Importados de forma estática, el navegador
+ * los descarga y compila ANTES de pintar el dashboard, aunque nadie vaya a
+ * exportar nada: era la causa principal de la lentitud al entrar. Con la
+ * importación dinámica, esa descarga sólo ocurre —y sólo una vez— cuando de
+ * verdad se pulsa un botón de exportación.
+ */
 export const ReportesPage = () => {
   const [processing, setProcessing] = useState(false)
   const { weekInfo } = useWeekFilter()
@@ -13,6 +21,7 @@ export const ReportesPage = () => {
   const downloadWorkbook = async () => {
     setProcessing(true)
     try {
+      const { exportAllModulesToXlsx } = await import('@/lib/exporters')
       await exportAllModulesToXlsx(weekInfo.startISO, weekInfo.endISO)
     } catch (error) {
       console.error('No pudimos generar el XLSX', error)
@@ -24,6 +33,7 @@ export const ReportesPage = () => {
   const downloadPdf = async () => {
     setProcessing(true)
     try {
+      const { exportExecutivePdf } = await import('@/lib/pdf-ejecutivo')
       await exportExecutivePdf(weekInfo.startISO, weekInfo.endISO)
     } catch (error) {
       console.error('No pudimos generar el PDF', error)

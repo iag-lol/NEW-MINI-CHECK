@@ -27,9 +27,12 @@ export function WorkerReports({ startDate, endDate }: WorkerReportsProps) {
   const loadWorkerStats = useCallback(async () => {
     try {
       // Obtener todos los inspectores
+      // Columnas explícitas: `select('*')` arrastraba también el hash de la
+      // contraseña, y desde sql-scripts/seguridad.sql esa columna ya no es
+      // legible con la clave anónima (la consulta entera fallaría).
       const { data: usuariosData } = await supabase
         .from('usuarios')
-        .select('*')
+        .select('rut, nombre, cargo, terminal, foto_url, created_at')
         .eq('cargo', 'INSPECTOR')
 
       const usuarios = (usuariosData || []) as Worker[]

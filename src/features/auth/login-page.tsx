@@ -8,6 +8,7 @@ import {
   Loader2,
   LockKeyhole,
   Radio,
+  ShieldAlert,
   ShieldCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuthStore } from '@/store/auth-store'
 import { formatRut } from '@/lib/rut'
+import { INACTIVIDAD_MS } from '@/lib/sesion'
+
+const MINUTOS_INACTIVIDAD = Math.round(INACTIVIDAD_MS / 60_000)
 
 const platformFeatures = [
   {
@@ -37,7 +41,7 @@ const platformFeatures = [
 export const LoginPage = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, login, loading, error, lastVisitedPath } = useAuthStore()
+  const { user, login, loading, error, lastVisitedPath, motivoCierre } = useAuthStore()
   const [rut, setRut] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -190,6 +194,21 @@ export const LoginPage = () => {
                   </button>
                 </div>
               </div>
+
+              {/* La sesión cerrada por inactividad no es un error del usuario:
+                  sin explicarlo, volver de golpe al login parece un fallo */}
+              {motivoCierre === 'inactividad' && !error && (
+                <div
+                  role="status"
+                  className="flex items-start gap-2.5 rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm leading-5 text-amber-100"
+                >
+                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    Cerramos tu sesión por seguridad tras {MINUTOS_INACTIVIDAD} minutos sin
+                    actividad. Vuelve a entrar para continuar.
+                  </span>
+                </div>
+              )}
 
               {error && (
                 <div

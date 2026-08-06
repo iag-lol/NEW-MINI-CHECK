@@ -3,3 +3,9 @@
   to = "/index.html"
   status = 200
   force = false
+
+# Las cabeceras de seguridad viven en public/_headers, que Netlify publica
+# junto al sitio. Se declaran ahí y no aquí para no tener dos copias de la
+# misma CSP que se desincronicen a la primera modificación.
+# El equivalente para Vercel sí está en vercel.json, porque Vercel no lee
+# _headers.

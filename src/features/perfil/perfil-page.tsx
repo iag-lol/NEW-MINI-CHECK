@@ -12,7 +12,7 @@ export const PerfilPage = () => {
       <p className="text-sm text-slate-500">
         {user.cargo} · Terminal {user.terminal}
       </p>
-      <Button variant="outline" onClick={logout} className="rounded-2xl">
+      <Button variant="outline" onClick={() => void logout()} className="rounded-2xl">
         Cerrar sesión
       </Button>
     </Card>

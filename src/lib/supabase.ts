@@ -20,9 +20,15 @@ export const supabase = createClient<Database>(
   resolvedSupabaseAnonKey,
   {
     auth: {
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      persistSession: true,
+      // La aplicación no usa Supabase Auth: valida contra la tabla `usuarios`
+      // mediante la función `autenticar_usuario` del servidor. Dejar activas
+      // las tres opciones hacía que el cliente mantuviera una maquinaria de
+      // sesión que nunca existe, y `detectSessionInUrl` además lee tokens de
+      // la barra de direcciones: es una vía de entrada que aquí no hace falta
+      // y que conviene no tener abierta.
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
     },
     global: {
       fetch: (...args) =>
