@@ -192,6 +192,22 @@ export const useRealtimeSubscriptions = () => {
         }
       })
 
+    // Cambios en el alcance de la revisión: si el supervisor apaga o
+    // programa un módulo, TODAS las sesiones abiertas deben enterarse al
+    // momento. Sin esto, un formulario abierto seguía pidiendo módulos
+    // recién desactivados hasta recargar la página.
+    const canalModulos = supabase
+      .channel('realtime:modulos_config')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'modulos_config' },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['modulos-config'] })
+          queryClient.invalidateQueries({ queryKey: ['modulos-avance'] })
+        }
+      )
+      .subscribe()
+
     const canalTickets = supabase
       .channel('realtime:tickets')
       .on(
@@ -259,6 +275,7 @@ export const useRealtimeSubscriptions = () => {
       pendientes.forEach((entrada) => window.clearTimeout(entrada.timer))
       pendientes.clear()
       void supabase.removeChannel(canalRevisiones)
+      void supabase.removeChannel(canalModulos)
       void supabase.removeChannel(canalTickets)
     }
   }, [push, queryClient, user])

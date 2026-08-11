@@ -778,7 +778,7 @@ export const InspectionFormPage = () => {
   // EN PANNE → TAG, Extintor, Mobileye, Rack y Publicidad son OBLIGATORIOS
   // Módulos vigentes hoy según lo configurado en Configuración: un módulo
   // apagado o fuera de su programación no aparece como paso ni se guarda.
-  const { clavesActivas } = useModulosVigentes()
+  const { clavesActivas, cargando: cargandoModulos, fallo: falloModulos } = useModulosVigentes()
 
   const moduloVigente = useCallback(
     (clave: ModuloClave) => clavesActivas.has(clave),
@@ -3179,6 +3179,31 @@ export const InspectionFormPage = () => {
   // LAYOUT PRINCIPAL
   // ============================================================
 
+  /*
+   * Sin la configuración cargada NO se arma el formulario.
+   *
+   * Mientras la consulta estaba en vuelo, el catálogo entraba con su valor
+   * por defecto —todos los módulos activos— y el formulario alcanzaba a
+   * pedir pasos desactivados (+15, Norma gráfica). Quien entraba rápido los
+   * respondía sin que correspondiera. Un instante de espera honesto evita
+   * revisar de más; sólo aplica a la primera carga, los refrescos usan caché.
+   */
+  if (cargandoModulos) {
+    return (
+      <Card className="flex min-h-[45dvh] flex-col items-center justify-center gap-3 text-center">
+        <Loader2 className="h-6 w-6 animate-spin text-brand-500" />
+        <div>
+          <p className="text-[14px] font-extrabold text-slate-900 dark:text-white">
+            Preparando la revisión
+          </p>
+          <p className="mt-0.5 text-[12px] text-slate-500 dark:text-slate-400">
+            Cargando qué módulos corresponde revisar hoy...
+          </p>
+        </div>
+      </Card>
+    )
+  }
+
   return (
     <FormProvider {...methods}>
       <form
@@ -3313,6 +3338,16 @@ export const InspectionFormPage = () => {
             </AnimatePresence>
           </div>
         </Card>
+
+        {/* Si la configuración no se pudo leer y no hay caché, se muestran
+            todos los módulos; eso NUNCA debe pasar en silencio */}
+        {falloModulos && (
+          <AlertBanner tone="warning" title="Configuración no disponible">
+            No pudimos cargar qué módulos están activos, así que se muestran todos
+            los pasos. Verifica tu conexión: lo desactivado en Configuración no
+            debería revisarse.
+          </AlertBanner>
+        )}
 
         {/* ===== BANNER GPS NO AUTORIZADO ===== */}
         {(!gpsActive || !trackingLocation) && (

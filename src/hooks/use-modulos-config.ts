@@ -36,8 +36,19 @@ const cargarConfiguracion = async (): Promise<{
     .select('clave, activo, tipo, semanas_mes, dias_semana, meses, vigente_desde, vigente_hasta, orden')
 
   if (error) {
+    // El respaldo "todos activos" existe SÓLO para cuando la tabla aún no se
+    // ha creado. Aplicarlo a cualquier error hacía que un corte de red
+    // reactivara en silencio módulos que el supervisor había apagado, y el
+    // formulario los volvía a pedir. Un error transitorio se relanza: react
+    // query reintenta y, si hay datos en caché, los conserva.
+    const tablaAusente =
+      error.code === '42P01' ||
+      error.code === 'PGRST205' ||
+      /does not exist|schema cache/i.test(error.message ?? '')
+    if (!tablaAusente) throw error
+
     console.warn(
-      'No se pudo leer modulos_config; se asumen todos los módulos activos.',
+      'modulos_config no existe todavía; se asumen todos los módulos activos.',
       error.message
     )
     return {
@@ -68,7 +79,13 @@ export const useModulosConfig = () => {
   const consulta = useQuery({
     queryKey: CLAVE_CACHE,
     queryFn: cargarConfiguracion,
-    staleTime: 60_000,
+    staleTime: 30_000,
+    // El alcance de la revisión manda sobre qué se pide en el formulario:
+    // una sesión abierta toda la jornada no puede quedarse con la
+    // configuración de la mañana. El canal realtime la refresca al instante
+    // y esto es la red de seguridad si ese canal no está publicado.
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
   })
 
   const guardar = useMutation({
@@ -102,6 +119,8 @@ export const useModulosConfig = () => {
     /** `false` cuando la tabla aún no existe en la base de datos */
     disponible: consulta.data?.disponible ?? false,
     cargando: consulta.isLoading,
+    /** La consulta falló y no hay caché: se está mostrando todo por defecto */
+    fallo: consulta.isError && !consulta.data,
     guardar,
     configurables: MODULOS_CONFIGURABLES,
   }
@@ -118,7 +137,7 @@ export interface ModuloVigente {
  * para armar sus pasos, y el dashboard, para saber qué está midiendo.
  */
 export const useModulosVigentes = (fechaISO?: string) => {
-  const { porClave, disponible, cargando } = useModulosConfig()
+  const { porClave, disponible, cargando, fallo } = useModulosConfig()
 
   // La fecha viaja como texto, no como objeto Dayjs: `dayjs()` devuelve una
   // instancia nueva en cada render y el memo se invalidaría siempre, con lo
@@ -144,5 +163,5 @@ export const useModulosVigentes = (fechaISO?: string) => {
     [vigentes]
   )
 
-  return { vigentes, clavesActivas, disponible, cargando }
+  return { vigentes, clavesActivas, disponible, cargando, fallo }
 }
