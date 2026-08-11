@@ -27,11 +27,11 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { z } from 'zod'
 import dayjs, { getIsoWeekYear } from '@/lib/dayjs'
-import { supabase } from '@/lib/supabase'
+import { esTablaAusente, supabase } from '@/lib/supabase'
 import { detectTerminal } from '@/lib/geofence'
 import { getUserIP, getIPGeoLocation } from '@/lib/ip-utils'
 import { Button } from '@/components/ui/button'
@@ -45,7 +45,7 @@ import { useAnunciarInspeccion } from '@/hooks/use-inspeccion-presence'
 import type { Tables, Database } from '@/types/database'
 import { useNotificationStore } from '@/store/notification-store'
 import { useTracking } from '@/hooks/use-tracking'
-import { MODULOS, type ModuloClave } from '@/constants/modulos'
+import { MODULOS, moduloAplicaAlBus, type ModuloClave } from '@/constants/modulos'
 import {
   BORRADOR_INSPECCION_KEY,
   BORRADOR_MAX_HORAS,
@@ -285,6 +285,9 @@ const PANNE_SKIPPED_STEPS: readonly StepKey[] = MODULOS.filter(
 // Marcadores de registros que NO representan una revisión real del rack
 const OBS_PANNE = 'Bus en panne - no revisado'
 const OBS_SIN_LLAVE = 'Sin llave'
+
+/** Fila de Mobileye guardada sin medición: el inspector marcó que no aplica */
+const OBS_MOBILEYE_NO_APLICA = 'Marcado como no aplica en terreno'
 
 /**
  * Último registro de rack que sí fue una revisión real del bus:
@@ -807,6 +810,7 @@ export const InspectionFormPage = () => {
   // de supervisores hasta que se termina la revisión o se cierra el formulario)
   useAnunciarInspeccion(bus, user)
   const [saving, setSaving] = useState(false)
+  const queryClient = useQueryClient()
   const [terminalDetected, setTerminalDetected] = useState<{ name: string; distance: number } | null>(null)
   const [refreshingGPS, setRefreshingGPS] = useState(false)
   const { data: flotaCatalog } = useQuery({
@@ -827,8 +831,6 @@ export const InspectionFormPage = () => {
     title: string
     items: string[]
   } | null>(null)
-  const [wifiWaitingTime, setWifiWaitingTime] = useState(0)
-  const [isWifiWaiting, setIsWifiWaiting] = useState(false)
   // Último registro real del rack, para mostrarlo y conservarlo si no hay llave
   const [ultimoRack, setUltimoRack] = useState<Tables<'rack'> | null>(null)
   const [cargandoUltimoRack, setCargandoUltimoRack] = useState(false)
@@ -1063,6 +1065,37 @@ export const InspectionFormPage = () => {
     methods,
   ])
 
+  /**
+   * Soltar el bus en pantalla y dejar el formulario como recién abierto.
+   *
+   * Es UN solo camino a propósito. Cuando cada botón (Cambiar, "Consultar
+   * otro bus") limpiaba el bus por su cuenta, se olvidaban del formulario: las
+   * respuestas del bus anterior —serie del TAG, cámaras, extintor— seguían
+   * cargadas y se guardaban bajo la PPU del bus siguiente, porque la marca de
+   * "cambio de bus" ya se había borrado y el reset no volvía a saltar.
+   *
+   * "Sin llave" se conserva: describe al inspector (no tiene la llave del
+   * rack en todo el turno), no al bus.
+   */
+  const soltarBus = useCallback(() => {
+    // Invalida cualquier búsqueda en vuelo: su resultado ya no debe tocar
+    // el estado del formulario
+    busquedaRef.current += 1
+    busPpuRef.current = null
+    const conservarSinLlave = methods.getValues('rack.sinLlave')
+    limpiarBorrador()
+    methods.reset()
+    methods.setValue('rack.sinLlave', conservarSinLlave)
+    setBuscando(false)
+    setVerificandoSemana(false)
+    setBus(null)
+    setBusQuery('')
+    setBusAlert(null)
+    setRevisionPrevia(null)
+    setValidationMessage(null)
+    setStep(0)
+  }, [methods])
+
   const searchBus = async (override?: string) => {
     const source = override ?? busQuery
     if (!source.trim()) return
@@ -1156,90 +1189,122 @@ export const InspectionFormPage = () => {
         busRecord
       )
 
-      const [respuestaRevisiones, respuestaTag, ...respuestasModulos] = await Promise.all([
-        supabase
-          .from('revisiones')
-          .select(
-            'id, created_at, inspector_nombre, terminal_reportado, terminal_detectado, estado_bus'
-          )
-          .eq('bus_ppu', busRecord.ppu)
-          .gte('created_at', inicioSemana)
-          .order('created_at', { ascending: false })
-          .limit(1),
-        supabase
-          .from('tags')
-          .select('tiene, serie')
-          .eq('bus_ppu', busRecord.ppu)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        ...modulosMedibles.map((modulo) =>
+      /*
+       * La verificación va en su propio try: si se cae la red DESPUÉS de
+       * encontrar el bus, el bus encontrado no se pierde.
+       *
+       * Antes cualquier fallo aquí caía al catch general, que ponía el bus en
+       * null y mostraba "Error al buscar el bus": en pantalla se veía el bus
+       * cargado junto a un error de búsqueda que no correspondía, y el
+       * inspector tenía que buscarlo otra vez sin saber por qué.
+       */
+      try {
+        const [respuestaRevisiones, respuestaTag, ...respuestasModulos] = await Promise.all([
           supabase
-            .from(modulo.tabla as 'tags')
-            .select('id')
+            .from('revisiones')
+            .select(
+              'id, created_at, inspector_nombre, terminal_reportado, terminal_detectado, estado_bus'
+            )
             .eq('bus_ppu', busRecord.ppu)
             .gte('created_at', inicioSemana)
+            .order('created_at', { ascending: false })
+            .limit(1),
+          supabase
+            .from('tags')
+            .select('tiene, serie')
+            .eq('bus_ppu', busRecord.ppu)
+            .order('created_at', { ascending: false })
             .limit(1)
-            .maybeSingle()
-        ),
-      ])
-      if (!vigente()) return
+            .maybeSingle(),
+          ...modulosMedibles.map((modulo) =>
+            supabase
+              .from(modulo.tabla as 'tags')
+              .select('id')
+              .eq('bus_ppu', busRecord.ppu)
+              .gte('created_at', inicioSemana)
+              .limit(1)
+              .maybeSingle()
+          ),
+        ])
+        if (!vigente()) return
 
-      const revisionSemana = (respuestaRevisiones.data as
-        | Array<{
-            id: string
-            created_at: string
-            inspector_nombre: string | null
-            terminal_reportado: string | null
-            terminal_detectado: string | null
-            estado_bus: string
-          }>
-        | null)?.[0]
+        // La consulta de revisiones falló: NO se puede afirmar que el bus esté
+        // sin revisar. Callar aquí es justo lo que mandaba a repetir buses ya
+        // hechos, así que se dice en pantalla en lugar de seguir como si nada.
+        if (respuestaRevisiones.error) throw respuestaRevisiones.error
 
-      if (revisionSemana) {
-        // Un bus en panne no puede pasar los módulos que exigen arrancarlo:
-        // no se le exigen, igual que en Pendientes
-        const enPanneSemana = revisionSemana.estado_bus === 'EN_PANNE'
-        const cobertura = modulosMedibles.map((modulo, indice) => {
-          if (enPanneSemana && modulo.requiereBusOperativo) {
-            return { nombre: modulo.nombre, cubierto: true, medido: false }
-          }
-          const respuesta = respuestasModulos[indice]
-          // Tabla aún sin crear: no se puede exigir lo que no se puede medir
-          if (respuesta.error) return { nombre: modulo.nombre, cubierto: true, medido: false }
-          return { nombre: modulo.nombre, cubierto: respuesta.data !== null, medido: true }
-        })
+        const revisionSemana = (respuestaRevisiones.data as
+          | Array<{
+              id: string
+              created_at: string
+              inspector_nombre: string | null
+              terminal_reportado: string | null
+              terminal_detectado: string | null
+              estado_bus: string
+            }>
+          | null)?.[0]
 
-        if (!cobertura.some((resultado) => !resultado.cubierto)) {
-          setRevisionPrevia({
-            ppu: busRecord.ppu,
-            interno: busRecord.numero_interno,
-            terminal:
-              revisionSemana.terminal_reportado ||
-              revisionSemana.terminal_detectado ||
-              busRecord.terminal,
-            fecha: revisionSemana.created_at,
-            inspector: revisionSemana.inspector_nombre ?? 'otro inspector',
-            modulosCubiertos: cobertura
-              .filter((resultado) => resultado.medido)
-              .map((resultado) => resultado.nombre),
+        if (revisionSemana) {
+          // Un bus en panne no puede pasar los módulos que exigen arrancarlo:
+          // no se le exigen, igual que en Pendientes
+          const enPanneSemana = revisionSemana.estado_bus === 'EN_PANNE'
+          const cobertura = modulosMedibles.map((modulo, indice) => {
+            if (enPanneSemana && modulo.requiereBusOperativo) {
+              return { nombre: modulo.nombre, cubierto: true, medido: false }
+            }
+            const respuesta = respuestasModulos[indice]
+            if (respuesta.error) {
+              // Tabla aún sin crear: no se puede exigir lo que no se puede
+              // medir. Cualquier otro error (red, permisos) se relanza: darlo
+              // por cubierto fabricaba un "ya revisado" que nadie hizo.
+              if (esTablaAusente(respuesta.error)) {
+                return { nombre: modulo.nombre, cubierto: true, medido: false }
+              }
+              throw respuesta.error
+            }
+            return { nombre: modulo.nombre, cubierto: respuesta.data !== null, medido: true }
           })
-        }
-      }
 
-      // Auto-relleno del TAG con su último registro conocido
-      const lastTag = respuestaTag.data
-      if (!respuestaTag.error && lastTag) {
-        if (lastTag.tiene === true && lastTag.serie) {
-          methods.setValue('tag.tiene', true, { shouldDirty: true })
-          methods.setValue('tag.serie', lastTag.serie, { shouldDirty: true })
-          methods.setValue('tag.observacion', '', { shouldDirty: true })
-        } else if (lastTag.tiene === false) {
-          methods.setValue('tag.tiene', false, { shouldDirty: true })
-          methods.setValue('tag.serie', '', { shouldDirty: true })
-          methods.setValue('tag.observacion', '', { shouldDirty: true })
+          if (!cobertura.some((resultado) => !resultado.cubierto)) {
+            setRevisionPrevia({
+              ppu: busRecord.ppu,
+              interno: busRecord.numero_interno,
+              terminal:
+                revisionSemana.terminal_reportado ||
+                revisionSemana.terminal_detectado ||
+                busRecord.terminal,
+              fecha: revisionSemana.created_at,
+              inspector: revisionSemana.inspector_nombre ?? 'otro inspector',
+              modulosCubiertos: cobertura
+                .filter((resultado) => resultado.medido)
+                .map((resultado) => resultado.nombre),
+            })
+          }
         }
-        // Con TAG pero sin serie se conserva el valor por defecto (instalado)
+
+        // Auto-relleno del TAG con su último registro conocido
+        const lastTag = respuestaTag.data
+        if (!respuestaTag.error && lastTag) {
+          if (lastTag.tiene === true && lastTag.serie) {
+            methods.setValue('tag.tiene', true, { shouldDirty: true })
+            methods.setValue('tag.serie', lastTag.serie, { shouldDirty: true })
+            methods.setValue('tag.observacion', '', { shouldDirty: true })
+          } else if (lastTag.tiene === false) {
+            methods.setValue('tag.tiene', false, { shouldDirty: true })
+            methods.setValue('tag.serie', '', { shouldDirty: true })
+            methods.setValue('tag.observacion', '', { shouldDirty: true })
+          }
+          // Con TAG pero sin serie se conserva el valor por defecto (instalado)
+        }
+      } catch (errorVerificacion) {
+        console.error('No se pudo verificar la semana del bus:', errorVerificacion)
+        if (!vigente()) return
+        // El bus SE QUEDA: ya está encontrado y es válido. Lo que no se pudo
+        // hacer es comprobar si alguien lo revisó, y eso se dice tal cual.
+        setBusAlert(
+          'Bus encontrado, pero no pudimos verificar si ya fue revisado esta semana. ' +
+            'Revisa tu conexión y vuelve a buscarlo antes de continuar.'
+        )
       }
     } catch (err) {
       console.error('Error in searchBus:', err)
@@ -1361,19 +1426,6 @@ export const InspectionFormPage = () => {
       vigente = false
     }
   }, [rackState.sinLlave, bus?.ppu])
-
-  // Timer de espera WiFi de 3 minutos
-  useEffect(() => {
-    if (isWifiWaiting && wifiWaitingTime < 180) {
-      const timer = setTimeout(() => {
-        setWifiWaitingTime(wifiWaitingTime + 1)
-      }, 1000)
-      return () => clearTimeout(timer)
-    } else if (isWifiWaiting && wifiWaitingTime >= 180) {
-      setIsWifiWaiting(false)
-      setWifiWaitingTime(0)
-    }
-  }, [isWifiWaiting, wifiWaitingTime])
 
   const handleNext = () => {
     // La comprobación de "bus ya revisado" sigue en vuelo: avanzar ahora era
@@ -1770,18 +1822,33 @@ export const InspectionFormPage = () => {
         }))
       }
 
-      // Mobileye aplica solo a buses Volvo (operativos o en panne)
-      if (moduloVigente('mobileye') && values.mobileye.aplica) {
+      /*
+       * Mobileye: la fila se guarda siempre que el módulo esté vigente y el
+       * bus sea de la flota que lo lleva (Volvo), MARQUE O NO el inspector
+       * que aplica.
+       *
+       * Antes bastaba con desmarcar "aplica" en un Volvo para que no se
+       * guardara nada. Pero las reglas de cobertura —el aviso de bus ya
+       * revisado y Pendientes— sí se lo exigen a todo Volvo: el bus quedaba
+       * pendiente para siempre y su aviso de "ya revisado" nunca saltaba, así
+       * que la gente lo volvía a revisar semana tras semana. Ahora lo que se
+       * inserta y lo que se exige son exactamente lo mismo.
+       */
+      const mobileyeCorresponde = moduloAplicaAlBus('mobileye', bus)
+      if (moduloVigente('mobileye') && (values.mobileye.aplica || mobileyeCorresponde)) {
+        const revisado = values.mobileye.aplica
         inserciones.push(supabase.from('mobileye').insert({
           revision_id: revisionData.id,
           bus_marca: bus.marca,
-          alerta_izq: values.mobileye.alertaIzq ?? null,
-          alerta_der: values.mobileye.alertaDer ?? null,
-          consola: values.mobileye.consola ?? null,
-          sensor_frontal: values.mobileye.sensorFrontal ?? null,
-          sensor_izq: values.mobileye.sensorIzq ?? null,
-          sensor_der: values.mobileye.sensorDer ?? null,
-          observacion: values.mobileye.observacion ?? null,
+          alerta_izq: revisado ? values.mobileye.alertaIzq ?? null : null,
+          alerta_der: revisado ? values.mobileye.alertaDer ?? null : null,
+          consola: revisado ? values.mobileye.consola ?? null : null,
+          sensor_frontal: revisado ? values.mobileye.sensorFrontal ?? null : null,
+          sensor_izq: revisado ? values.mobileye.sensorIzq ?? null : null,
+          sensor_der: revisado ? values.mobileye.sensorDer ?? null : null,
+          observacion: revisado
+            ? values.mobileye.observacion ?? null
+            : OBS_MOBILEYE_NO_APLICA,
           bus_ppu: bus.ppu,
           terminal: values.terminalReportado,
         }))
@@ -2022,7 +2089,7 @@ export const InspectionFormPage = () => {
       }
 
       if (tickets.length) {
-        await supabase.from('tickets').insert(
+        const { error: errorTickets } = await supabase.from('tickets').insert(
           tickets.map((ticket) => ({
             revision_id: revisionData.id,
             descripcion: enPanne ? `${ticket.descripcion} (bus en panne)` : ticket.descripcion,
@@ -2032,6 +2099,19 @@ export const InspectionFormPage = () => {
             terminal: values.terminalReportado,
           }))
         )
+        // Los tickets NO deshacen la revisión: la inspección ya está guardada
+        // y perderla por un aviso derivado sería mucho peor. Pero tampoco se
+        // callan: sin esto, un hallazgo crítico no llegaba a mantención y
+        // nadie se enteraba nunca.
+        if (errorTickets) {
+          console.error('No se pudieron crear los tickets', errorTickets)
+          push({
+            id: `tickets-${revisionData.id}`,
+            type: 'warning',
+            title: 'Revisión guardada, tickets no',
+            body: `Avisa a mantención de los hallazgos del bus ${bus.ppu}.`,
+          })
+        }
       }
 
       push({
@@ -2039,6 +2119,18 @@ export const InspectionFormPage = () => {
         title: 'Revisión enviada',
         body: `Bus ${bus.ppu} · ${values.terminalReportado}`,
       })
+
+      /*
+       * Refrescar lo que acaba de quedar obsoleto en ESTE teléfono.
+       *
+       * El canal en vivo sólo llega si la tabla está publicada, y el sondeo de
+       * respaldo es sólo para supervisores: el inspector que enviaba una
+       * revisión seguía viendo su bus en Pendientes hasta un minuto después y
+       * más de alguno lo volvía a abrir creyendo que no se había guardado.
+       */
+      queryClient.invalidateQueries({ queryKey: ['pendientes-revisiones'] })
+      queryClient.invalidateQueries({ queryKey: ['pendientes-cobertura'] })
+      queryClient.invalidateQueries({ queryKey: ['mis-revisiones'] })
 
       // Si no hay llaves disponibles suele ser así todo el turno: se conserva
       // la elección para no re-marcarla en cada bus
@@ -2726,12 +2818,6 @@ export const InspectionFormPage = () => {
     const busEncendido = wifiState.busEncendido
     const tieneInternet = wifiState.tieneInternet
 
-    const formatTime = (seconds: number) => {
-      const mins = Math.floor(seconds / 60)
-      const secs = seconds % 60
-      return `${mins}:${secs.toString().padStart(2, '0')}`
-    }
-
     return (
       <SectionCard
         title="WiFi"
@@ -2763,53 +2849,20 @@ export const InspectionFormPage = () => {
               value={busEncendido}
               positiveLabel="Sí, está encendido"
               negativeLabel="No, está apagado"
-              onChange={(value) => {
+              onChange={(value) =>
+                // La espera se cancela sola: el recuadro sólo existe con el
+                // bus encendido y su reloj se va con él al desmontarse
                 methods.setValue('wifi.busEncendido', value, { shouldDirty: true })
-                if (value === false) {
-                  setIsWifiWaiting(false)
-                  setWifiWaitingTime(0)
-                }
-              }}
+              }
             />
 
             {busEncendido === true && (
               <div className="space-y-3">
-                {!isWifiWaiting ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => {
-                      setIsWifiWaiting(true)
-                      setWifiWaitingTime(0)
-                    }}
-                  >
-                    Esperar 3 minutos y revisar nuevamente
-                  </Button>
-                ) : (
-                  <div className="rounded-lg border border-blue-300 bg-blue-50 p-4 dark:border-blue-900/50 dark:bg-blue-950/30">
-                    <p className="mb-2 text-sm font-semibold text-blue-900 dark:text-blue-100">
-                      Esperando... {formatTime(180 - wifiWaitingTime)}
-                    </p>
-                    <p className="text-xs text-blue-800 dark:text-blue-200">
-                      Por favor espera al menos 3 minutos antes de revisar nuevamente.
-                    </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-3"
-                      onClick={() => {
-                        setIsWifiWaiting(false)
-                        setWifiWaitingTime(0)
-                        // Permitir revisar nuevamente
-                        methods.setValue('wifi.ppuVisible', null, { shouldDirty: true })
-                      }}
-                    >
-                      Revisar nuevamente
-                    </Button>
-                  </div>
-                )}
+                <EsperaWifi
+                  onRevisarNuevamente={() =>
+                    methods.setValue('wifi.ppuVisible', null, { shouldDirty: true })
+                  }
+                />
                 <div>
                   <Label>Observación</Label>
                   <Textarea
@@ -3592,19 +3645,7 @@ export const InspectionFormPage = () => {
                   variant="ghost"
                   size="sm"
                   className="gap-1.5 text-xs text-slate-400 hover:text-red-500"
-                  onClick={() => {
-                    // Invalida cualquier búsqueda en vuelo: su resultado ya no
-                    // debe tocar el estado del formulario
-                    busquedaRef.current += 1
-                    busPpuRef.current = null
-                    setBuscando(false)
-                    setVerificandoSemana(false)
-                    limpiarBorrador()
-                    setBus(null)
-                    setBusQuery('')
-                    setBusAlert(null)
-                    setRevisionPrevia(null)
-                  }}
+                  onClick={soltarBus}
                 >
                   <X className="h-3.5 w-3.5" /> Cambiar
                 </Button>
@@ -3859,12 +3900,7 @@ export const InspectionFormPage = () => {
         onConsultarOtro={() => {
           // Se suelta el bus y se devuelve el foco a la búsqueda: el caso
           // habitual es seguir con el siguiente de la hoja de pendientes
-          limpiarBorrador()
-          busPpuRef.current = null
-          setRevisionPrevia(null)
-          setBus(null)
-          setBusQuery('')
-          setStep(0)
+          soltarBus()
           window.requestAnimationFrame(() =>
             document.getElementById('busSearch')?.focus()
           )
@@ -3872,6 +3908,86 @@ export const InspectionFormPage = () => {
         onVolverARevisar={() => setRevisionPrevia(null)}
       />
     </FormProvider>
+  )
+}
+
+/**
+ * Espera de 3 minutos del módulo WiFi, con su cuenta atrás.
+ *
+ * Vive en su propio componente porque el contador AVANZA CADA SEGUNDO: con el
+ * reloj en el estado del formulario, cada tic volvía a dibujar los ~3.900
+ * líneas de la página completa —180 renders seguidos— y en los teléfonos de
+ * terreno se notaba como tirones al escribir. Aquí sólo se redibuja este
+ * recuadro.
+ *
+ * El estado también es suyo: el recuadro se desmonta cuando el inspector
+ * responde que el bus está apagado, así que la espera se cancela sola y no
+ * hacen falta reinicios desde fuera (que era otra vía para dejarla colgada).
+ */
+const ESPERA_WIFI_SEG = 180
+
+const EsperaWifi = ({ onRevisarNuevamente }: { onRevisarNuevamente: () => void }) => {
+  const [esperando, setEsperando] = useState(false)
+  const [transcurrido, setTranscurrido] = useState(0)
+
+  useEffect(() => {
+    if (!esperando) return
+    // Un intervalo con actualización funcional: la versión anterior recreaba
+    // el temporizador en cada tic porque el propio contador era dependencia
+    const tic = window.setInterval(() => {
+      setTranscurrido((segundos) => segundos + 1)
+    }, 1000)
+    return () => window.clearInterval(tic)
+  }, [esperando])
+
+  useEffect(() => {
+    if (esperando && transcurrido >= ESPERA_WIFI_SEG) {
+      setEsperando(false)
+      setTranscurrido(0)
+    }
+  }, [esperando, transcurrido])
+
+  const restante = Math.max(0, ESPERA_WIFI_SEG - transcurrido)
+  const reloj = `${Math.floor(restante / 60)}:${String(restante % 60).padStart(2, '0')}`
+
+  if (!esperando) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={() => {
+          setTranscurrido(0)
+          setEsperando(true)
+        }}
+      >
+        Esperar 3 minutos y revisar nuevamente
+      </Button>
+    )
+  }
+
+  return (
+    <div className="rounded-lg border border-blue-300 bg-blue-50 p-4 dark:border-blue-900/50 dark:bg-blue-950/30">
+      <p className="mb-2 text-sm font-semibold text-blue-900 dark:text-blue-100">
+        Esperando... {reloj}
+      </p>
+      <p className="text-xs text-blue-800 dark:text-blue-200">
+        Por favor espera al menos 3 minutos antes de revisar nuevamente.
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="mt-3"
+        onClick={() => {
+          setEsperando(false)
+          setTranscurrido(0)
+          onRevisarNuevamente()
+        }}
+      >
+        Revisar nuevamente
+      </Button>
+    </div>
   )
 }
 

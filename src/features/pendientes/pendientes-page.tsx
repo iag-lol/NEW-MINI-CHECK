@@ -11,7 +11,7 @@ import {
   Search,
 } from 'lucide-react'
 import dayjs from '@/lib/dayjs'
-import { supabase } from '@/lib/supabase'
+import { esTablaAusente, supabase } from '@/lib/supabase'
 import type { Tables } from '@/types/database'
 import { useAuthStore } from '@/store/auth-store'
 import { Card } from '@/components/ui/card'
@@ -29,7 +29,7 @@ import { Badge } from '@/components/ui/badge'
 import { WeekSelector } from '@/components/week-selector'
 import { useWeekFilter } from '@/hooks/use-week-filter'
 import { MODULOS, type ModuloClave } from '@/constants/modulos'
-import { useModulosConfig } from '@/hooks/use-modulos-config'
+import { useModulosConfig, useModulosVigentes } from '@/hooks/use-modulos-config'
 import { clavesVigentesEnSemana, modulosExigiblesPara } from '@/lib/cobertura-semanal'
 
 type FlotaRow = Tables<'flota'>
@@ -104,6 +104,11 @@ export const PendientesPage = () => {
     () => clavesVigentesEnSemana(porClave, weekInfo.startISO),
     [porClave, weekInfo.startISO]
   )
+  // Lo vigente HOY, que es lo que el formulario va a pedir de verdad. Sin
+  // esto la lista decía "Falta: +15" un lunes y el formulario ni siquiera
+  // mostraba ese paso, porque está programado para el viernes: se mandaba a
+  // gente a un bus a hacer algo que la app no le iba a dejar hacer.
+  const { clavesActivas: clavesHoy } = useModulosVigentes()
 
   const modulosMedibles = useMemo(
     () =>
@@ -146,9 +151,13 @@ export const PendientesPage = () => {
             )
             porModulo.set(modulo.clave, new Set(filas.map((fila) => fila.bus_ppu)))
           } catch (error) {
-            // Tabla sin crear todavía: se informa y ese módulo no se exige,
-            // en vez de marcar la flota entera como pendiente
-            console.warn(`No se pudo leer ${modulo.tabla}`, error)
+            // SÓLO la tabla sin crear se puede ignorar: ese módulo no se
+            // exige y se sigue. Un corte de red o un permiso denegado se
+            // relanzan para que react-query reintente; tragárselos dejaba de
+            // exigir ese módulo y los buses que le faltaban aparecían como
+            // completados, que es justo lo que manda a nadie a revisarlos.
+            if (!esTablaAusente(error)) throw error
+            console.warn(`La tabla ${modulo.tabla} aún no existe`, error)
           }
         })
       )
@@ -195,6 +204,10 @@ export const PendientesPage = () => {
         ? modulosMedibles.filter((modulo) => modulo.requiereBusOperativo)
         : []
 
+      // De lo que falta, qué se puede hacer HOY y qué corresponde otro día
+      const faltantesHoy = faltantes.filter((modulo) => clavesHoy.has(modulo.clave))
+      const faltantesOtroDia = faltantes.filter((modulo) => !clavesHoy.has(modulo.clave))
+
       // Con módulos medibles manda el detalle; sin ellos, la regla de antes
       const pending =
         modulosMedibles.length > 0 && cobertura ? faltantes.length > 0 : !lastRevision
@@ -204,12 +217,14 @@ export const PendientesPage = () => {
         lastRevision,
         pending,
         faltantes,
+        faltantesHoy,
+        faltantesOtroDia,
         enPanne,
         omitidosPorPanne,
         lastInspectionAt: lastRevision ? dayjs(lastRevision.created_at) : null,
       }
     })
-  }, [flota, revisiones, modulosMedibles, cobertura])
+  }, [flota, revisiones, modulosMedibles, cobertura, clavesActivas, clavesHoy])
 
   const filtered = useMemo(() => {
     const query = searchQuery.trim().toUpperCase()
@@ -421,7 +436,14 @@ export const PendientesPage = () => {
             </div>
           )}
           {!loading &&
-            filtered.map(({ bus, lastRevision, pending, faltantes, omitidosPorPanne }) => (
+            filtered.map(({
+              bus,
+              lastRevision,
+              pending,
+              faltantesHoy,
+              faltantesOtroDia,
+              omitidosPorPanne,
+            }) => (
               <div
                 key={bus.id}
                 className="flex flex-col gap-4 border-t border-transparent px-6 py-4 transition hover:bg-slate-50/70 dark:hover:bg-slate-900/30 md:flex-row md:items-center md:justify-between"
@@ -460,12 +482,12 @@ export const PendientesPage = () => {
 
                   {/* Qué le falta exactamente. Un "pendiente" a secas obliga a
                       abrir el bus para descubrir que sólo faltaba un módulo. */}
-                  {faltantes.length > 0 && (
+                  {faltantesHoy.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                       <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">
                         Falta:
                       </span>
-                      {faltantes.map((modulo) => {
+                      {faltantesHoy.map((modulo) => {
                         const Icono = modulo.icono
                         return (
                           <span
@@ -478,6 +500,16 @@ export const PendientesPage = () => {
                         )
                       })}
                     </div>
+                  )}
+
+                  {/* Falta, pero su programación es de otro día: el formulario
+                      no lo va a pedir hoy. Mezclarlo con lo anterior mandaba
+                      al bus a hacer algo que la app no deja hacer todavía. */}
+                  {faltantesOtroDia.length > 0 && (
+                    <p className="pt-0.5 text-[11px] text-slate-400">
+                      Falta pero corresponde otro día:{' '}
+                      {faltantesOtroDia.map((modulo) => modulo.nombre).join(', ')}
+                    </p>
                   )}
 
                   {omitidosPorPanne.length > 0 && (

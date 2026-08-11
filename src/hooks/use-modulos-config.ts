@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Dayjs } from 'dayjs'
 import dayjs from '@/lib/dayjs'
-import { supabase } from '@/lib/supabase'
+import { esTablaAusente, supabase } from '@/lib/supabase'
 import {
   MODULOS,
   MODULOS_CONFIGURABLES,
@@ -44,11 +44,7 @@ const cargarConfiguracion = async (): Promise<{
     // SOLO tabla inexistente. El patrón amplio anterior también atrapaba
     // "column ... does not exist" (42703, típico de un despliegue antes de su
     // migración) y reactivaba en silencio todos los módulos apagados.
-    const tablaAusente =
-      error.code === '42P01' ||
-      error.code === 'PGRST205' ||
-      /relation .* does not exist|could not find the table/i.test(error.message ?? '')
-    if (!tablaAusente) throw error
+    if (!esTablaAusente(error)) throw error
 
     console.warn(
       'modulos_config no existe todavía; se asumen todos los módulos activos.',

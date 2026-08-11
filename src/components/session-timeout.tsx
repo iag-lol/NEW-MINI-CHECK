@@ -81,9 +81,13 @@ export const SessionTimeout = () => {
                 />
               </div>
 
+              {/* El texto anterior decía que los datos sin enviar se perdían.
+                  Dejó de ser cierto —la revisión a medias se guarda en el
+                  teléfono y el reloj ni siquiera corre con un bus abierto— y
+                  asustaba sin motivo a quien estaba en terreno. */}
               <p className="mt-3 text-[11px] leading-snug text-slate-500 dark:text-slate-400">
-                Si estabas llenando una inspección, continúa antes de que se cierre: los
-                datos sin enviar no se guardan.
+                Si tenías una revisión a medias, queda guardada en este teléfono: al
+                volver a entrar la retomas en el mismo bus y el mismo paso.
               </p>
 
               <div className="mt-4 flex gap-2">

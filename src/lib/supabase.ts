@@ -15,6 +15,29 @@ if (!supabaseUrl || !supabaseAnonKey) {
 const resolvedSupabaseUrl = supabaseUrl || 'https://example.supabase.co'
 const resolvedSupabaseAnonKey = supabaseAnonKey || 'public-anon-key-not-configured'
 
+/**
+ * ¿El error es "esa tabla todavía no existe"?
+ *
+ * La diferencia no es cosmética. Una tabla que aún no se ha creado (el script
+ * SQL se ejecuta aparte) se puede ignorar: ese módulo simplemente no se mide.
+ * Un corte de red o un permiso denegado, en cambio, NO se pueden tratar igual:
+ * dar el módulo por "no medible" hacía que buses sin revisar aparecieran como
+ * completados y que el aviso de bus ya revisado callara. Esos errores se
+ * relanzan para que la consulta se reintente.
+ *
+ * `42P01` es el código de PostgreSQL y `PGRST205` el de PostgREST cuando no
+ * encuentra la tabla en su caché de esquema.
+ */
+export const esTablaAusente = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') return false
+  const { code, message } = error as { code?: string; message?: string }
+  return (
+    code === '42P01' ||
+    code === 'PGRST205' ||
+    /relation .* does not exist|could not find the table/i.test(message ?? '')
+  )
+}
+
 export const supabase = createClient<Database>(
   resolvedSupabaseUrl,
   resolvedSupabaseAnonKey,
