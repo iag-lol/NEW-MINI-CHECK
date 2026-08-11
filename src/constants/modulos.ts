@@ -226,3 +226,21 @@ export const MODULOS_POR_CLAVE = new Map(MODULOS.map((modulo) => [modulo.clave, 
 export const MODULOS_CONFIGURABLES = MODULOS.filter((modulo) => !modulo.fijo)
 
 export const obtenerModulo = (clave: ModuloClave) => MODULOS_POR_CLAVE.get(clave)
+
+/**
+ * ¿Este módulo tiene sentido para este bus concreto?
+ *
+ * Mobileye sólo está instalado en la flota Volvo, y el formulario nunca
+ * inserta su fila en los demás buses. Exigirlo igual en las reglas de
+ * cobertura dejaba a cada Scania "pendiente" para siempre y silenciaba el
+ * aviso de bus ya revisado: la gente volvía a revisar buses ya hechos.
+ */
+export const moduloAplicaAlBus = (
+  clave: ModuloClave,
+  bus: { marca?: string | null }
+): boolean => {
+  if (clave === 'mobileye') {
+    return (bus.marca ?? '').toLowerCase().includes('volvo')
+  }
+  return true
+}

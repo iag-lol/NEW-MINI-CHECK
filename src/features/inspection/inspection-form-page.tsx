@@ -45,7 +45,8 @@ import { useAnunciarInspeccion } from '@/hooks/use-inspeccion-presence'
 import type { Tables, Database } from '@/types/database'
 import { useNotificationStore } from '@/store/notification-store'
 import { useTracking } from '@/hooks/use-tracking'
-import { MODULOS, type ModuloClave } from '@/constants/modulos'
+import { MODULOS, moduloAplicaAlBus, type ModuloClave } from '@/constants/modulos'
+import { BORRADOR_INSPECCION_KEY, marcarInspeccionEnCurso } from '@/lib/sesion'
 import { useModulosVigentes } from '@/hooks/use-modulos-config'
 import {
   BusRevisadoDialog,
@@ -334,6 +335,52 @@ const mobileyeQuestionList = [
 type MobileyeField = (typeof mobileyeQuestionList)[number]['field']
 
 type InspectionForm = z.infer<typeof inspectionSchema>
+
+/*
+ * Borrador persistente de la inspección en curso.
+ *
+ * En terreno la revisión se pierde por mil caminos que no dependen del
+ * inspector: el navegador desaloja la pestaña al bloquear el teléfono, la
+ * página se recarga, la app se cae o la sesión se cierra. Veinte campos
+ * rellenados no pueden depender de que nada de eso ocurra: cada cambio se
+ * guarda en localStorage y, al volver, la revisión continúa donde quedó.
+ */
+const BORRADOR_KEY = BORRADOR_INSPECCION_KEY
+const BORRADOR_VERSION = 1
+/** Un borrador más viejo que esto ya no describe el estado real del bus */
+const BORRADOR_MAX_HORAS = 12
+
+interface BorradorInspeccion {
+  version: number
+  rut: string
+  guardadoEn: string
+  paso: number
+  bus: Tables<'flota'>
+  valores: InspectionForm
+}
+
+const leerBorrador = (rut: string): BorradorInspeccion | null => {
+  try {
+    const crudo = window.localStorage.getItem(BORRADOR_KEY)
+    if (!crudo) return null
+    const borrador = JSON.parse(crudo) as BorradorInspeccion
+    // Otro usuario, otra versión del esquema o demasiado viejo: se descarta
+    if (borrador.version !== BORRADOR_VERSION || borrador.rut !== rut) return null
+    if (dayjs().diff(dayjs(borrador.guardadoEn), 'hour') >= BORRADOR_MAX_HORAS) return null
+    if (!borrador.bus?.ppu) return null
+    return borrador
+  } catch {
+    return null
+  }
+}
+
+const limpiarBorrador = () => {
+  try {
+    window.localStorage.removeItem(BORRADOR_KEY)
+  } catch {
+    // Sin almacenamiento no hay nada que limpiar
+  }
+}
 type CameraPath = `camaras.${CameraHardwareField}`
 type MobileyePath = `mobileye.${MobileyeField}`
 type PublicidadPath = `publicidad.${PublicidadAreaKey}.${'tiene' | 'danio' | 'residuos'}`
@@ -847,11 +894,87 @@ export const InspectionFormPage = () => {
   const stepKey: StepKey = activeSteps[currentStep].key
   const progressPct = activeSteps.length > 1 ? (currentStep / (activeSteps.length - 1)) * 100 : 0
 
+  // La restauración del borrador puede cambiar estadoBus; sin esta marca, el
+  // efecto de abajo devolvería al paso 0 justo después de restaurar el paso
+  const restaurandoRef = useRef(false)
+
   // Al cambiar el estado del bus cambia el flujo de pasos → volver al inicio
   useEffect(() => {
+    if (restaurandoRef.current) {
+      restaurandoRef.current = false
+      return
+    }
     setStep(0)
     setValidationMessage(null)
   }, [estadoBus])
+
+  /*
+   * Con un bus seleccionado, la sesión no caduca y todo cambio se guarda.
+   *
+   * La bandera de inspección en curso frena el cierre por inactividad: el
+   * procedimiento de +15 deja el teléfono sin tocar más de diez minutos y el
+   * cierre botaba la revisión a medias.
+   */
+  useEffect(() => {
+    marcarInspeccionEnCurso(bus !== null)
+    return () => marcarInspeccionEnCurso(false)
+  }, [bus])
+
+  // Restaurar el borrador al montar: si quedó una revisión a medias, se
+  // retoma con su bus, sus respuestas y su paso exactos.
+  useEffect(() => {
+    if (!user) return
+    const borrador = leerBorrador(user.rut)
+    if (!borrador) return
+
+    restaurandoRef.current = true
+    setBus(borrador.bus)
+    setBusQuery(borrador.bus.ppu)
+    methods.reset(borrador.valores)
+    setStep(borrador.paso)
+    push({
+      id: `borrador-${borrador.bus.ppu}-${borrador.guardadoEn}`,
+      type: 'info',
+      title: 'Revisión recuperada',
+      body: `Continúa el bus ${borrador.bus.ppu} donde quedaste.`,
+    })
+    // Sólo al montar: restaurar de nuevo pisaría lo que se esté escribiendo
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Guardar el borrador: al elegir bus, al cambiar de paso y en cada cambio
+  // del formulario (con un pequeño freno para no escribir por cada tecla)
+  useEffect(() => {
+    if (!bus || !user) return
+
+    let temporizador: number | undefined
+    const guardar = () => {
+      try {
+        const borrador: BorradorInspeccion = {
+          version: BORRADOR_VERSION,
+          rut: user.rut,
+          guardadoEn: new Date().toISOString(),
+          paso: step,
+          bus,
+          valores: methods.getValues(),
+        }
+        window.localStorage.setItem(BORRADOR_KEY, JSON.stringify(borrador))
+      } catch {
+        // Almacenamiento lleno o bloqueado: la app sigue, sin borrador
+      }
+    }
+
+    guardar()
+    const subscripcion = methods.watch(() => {
+      if (temporizador) window.clearTimeout(temporizador)
+      temporizador = window.setTimeout(guardar, 700)
+    })
+
+    return () => {
+      subscripcion.unsubscribe()
+      if (temporizador) window.clearTimeout(temporizador)
+    }
+  }, [bus, user, step, methods])
 
   const expectedRackLocks = useMemo(() => {
     const marca = bus?.marca?.toLowerCase() ?? ''
@@ -964,7 +1087,10 @@ export const InspectionFormPage = () => {
           (modulo) =>
             modulo.tabla !== null &&
             clavesActivas.has(modulo.clave) &&
-            !(enPanneSemana && modulo.requiereBusOperativo)
+            !(enPanneSemana && modulo.requiereBusOperativo) &&
+            // Mobileye no existe en buses no-Volvo y el formulario nunca lo
+            // inserta ahí: exigirlo silenciaba este aviso para cada Scania
+            moduloAplicaAlBus(modulo.clave, busRecord)
         )
 
         const cobertura = await Promise.all(
@@ -1781,6 +1907,8 @@ export const InspectionFormPage = () => {
       // Si no hay llaves disponibles suele ser así todo el turno: se conserva
       // la elección para no re-marcarla en cada bus
       const conservarSinLlave = values.rack.sinLlave
+      // La revisión ya está en la base de datos: el borrador cumplió
+      limpiarBorrador()
       methods.reset()
       if (conservarSinLlave) {
         methods.setValue('rack.sinLlave', true)
@@ -3322,6 +3450,7 @@ export const InspectionFormPage = () => {
                   size="sm"
                   className="gap-1.5 text-xs text-slate-400 hover:text-red-500"
                   onClick={() => {
+                    limpiarBorrador()
                     setBus(null)
                     setBusQuery('')
                     setBusAlert(null)
@@ -3563,6 +3692,7 @@ export const InspectionFormPage = () => {
         onConsultarOtro={() => {
           // Se suelta el bus y se devuelve el foco a la búsqueda: el caso
           // habitual es seguir con el siguiente de la hoja de pendientes
+          limpiarBorrador()
           setRevisionPrevia(null)
           setBus(null)
           setBusQuery('')

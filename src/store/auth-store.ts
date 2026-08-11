@@ -2,7 +2,12 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { supabase } from '@/lib/supabase'
 import { formatRut, validateRut } from '@/lib/rut'
-import { limpiarActividad, marcarActividad, sesionCaducada } from '@/lib/sesion'
+import {
+  hayBorradorDeInspeccion,
+  limpiarActividad,
+  marcarActividad,
+  sesionCaducada,
+} from '@/lib/sesion'
 import type { Role } from '@/types/database'
 
 export interface AuthUser {
@@ -226,7 +231,16 @@ export const useAuthStore = create<AuthState>()(
         // Si la pestaña se cerró hace más del plazo de inactividad, la sesión
         // no debe volver sólo porque el usuario siga en localStorage: ese es
         // exactamente el caso que el cierre automático debe cubrir.
+        //
+        // EXCEPTO con una inspección a medias guardada: el navegador desaloja
+        // la pestaña cuando el teléfono se bloquea en terreno, y expulsar al
+        // inspector camino de recuperar su borrador convertía cada revisión
+        // larga en un "pantallazo" al login.
         if (estado?.user && sesionCaducada()) {
+          if (hayBorradorDeInspeccion(estado.user.rut)) {
+            marcarActividad(true)
+            return
+          }
           limpiarActividad()
           estado.user = null
           estado.motivoCierre = 'inactividad'

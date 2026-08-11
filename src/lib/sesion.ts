@@ -82,6 +82,46 @@ export const sesionCaducada = (): boolean => {
   return Date.now() - ultima >= INACTIVIDAD_MS
 }
 
+/*
+ * Inspección en curso.
+ *
+ * El procedimiento de +15 o la revisión del extintor dejan el teléfono sin
+ * tocar —y hasta con la pantalla bloqueada— más de diez minutos. El cierre
+ * por inactividad interpretaba eso como abandono y botaba la sesión con la
+ * revisión a medias: el peor resultado posible. Mientras haya un bus
+ * seleccionado en el formulario, la sesión no caduca.
+ */
+let inspeccionEnCurso = false
+
+/** Clave del borrador de inspección; el formulario escribe, aquí sólo se lee */
+export const BORRADOR_INSPECCION_KEY = 'nmcheck-borrador-inspeccion'
+
+/**
+ * ¿Este usuario tiene una inspección a medias guardada?
+ *
+ * Se consulta al rehidratar la sesión: si el navegador desalojó la pestaña
+ * con el teléfono bloqueado a mitad de una revisión, expirar la sesión
+ * obligaba a volver a entrar antes de recuperar el borrador. Una inspección
+ * en curso es la prueba de que el dispositivo estaba en uso, no abandonado.
+ */
+export const hayBorradorDeInspeccion = (rut: string): boolean => {
+  try {
+    const crudo = window.localStorage.getItem(BORRADOR_INSPECCION_KEY)
+    if (!crudo) return false
+    const borrador = JSON.parse(crudo) as { rut?: string; guardadoEn?: string }
+    if (borrador.rut !== rut || !borrador.guardadoEn) return false
+    return Date.now() - new Date(borrador.guardadoEn).getTime() < 12 * 3_600_000
+  } catch {
+    return false
+  }
+}
+
+export const marcarInspeccionEnCurso = (valor: boolean) => {
+  inspeccionEnCurso = valor
+}
+
+export const hayInspeccionEnCurso = () => inspeccionEnCurso
+
 /** Eventos que cuentan como "el usuario sigue ahí" */
 export const EVENTOS_ACTIVIDAD = [
   'pointerdown',

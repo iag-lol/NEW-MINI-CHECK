@@ -28,7 +28,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { WeekSelector } from '@/components/week-selector'
 import { useWeekFilter } from '@/hooks/use-week-filter'
-import { MODULOS, type ModuloClave } from '@/constants/modulos'
+import { MODULOS, moduloAplicaAlBus, type ModuloClave } from '@/constants/modulos'
 import { useModulosVigentes } from '@/hooks/use-modulos-config'
 
 type FlotaRow = Tables<'flota'>
@@ -142,6 +142,9 @@ export const PendientesPage = () => {
       // Módulos vigentes que a este bus todavía le faltan esta semana
       const faltantes = modulosMedibles.filter((modulo) => {
         if (enPanne && modulo.requiereBusOperativo) return false
+        // Mobileye no aplica fuera de la flota Volvo: contarlo dejaba a
+        // cada Scania "Falta: Mobileye" indefinidamente
+        if (!moduloAplicaAlBus(modulo.clave, bus)) return false
         const cubiertos = cobertura?.get(modulo.clave)
         // Sin datos del módulo (tabla ausente o consulta aún en vuelo) no se
         // inventa un pendiente: se cae al criterio de siempre

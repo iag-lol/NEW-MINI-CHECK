@@ -3,6 +3,7 @@ import { useAuthStore } from '@/store/auth-store'
 import {
   AVISO_MS,
   EVENTOS_ACTIVIDAD,
+  hayInspeccionEnCurso,
   marcarActividad,
   msRestantes,
 } from '@/lib/sesion'
@@ -73,6 +74,16 @@ export const useInactividad = () => {
     )
 
     const revisar = () => {
+      // Con una inspección abierta el reloj no corre: el inspector está
+      // trabajando en el bus aunque no toque la pantalla. La comprobación va
+      // aquí y no en el listener de eventos porque también cubre el regreso
+      // del teléfono bloqueado (visibilitychange), donde nadie tocó nada.
+      if (hayInspeccionEnCurso()) {
+        marcarActividad(true)
+        avisandoRef.current = false
+        setAvisando(false)
+        return
+      }
       const restante = msRestantes()
       if (restante <= 0) {
         cerrarAhora()
