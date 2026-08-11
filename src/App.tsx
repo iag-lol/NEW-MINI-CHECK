@@ -6,6 +6,10 @@ import { Component, useEffect, type ReactNode } from 'react'
 import { inicializarPWA } from '@/lib/pwa'
 import { desbloquearAudio } from '@/lib/sound'
 import { useNotificationStore } from '@/store/notification-store'
+import {
+  esErrorDeVersionAntigua,
+  recargarConVersionNueva,
+} from '@/lib/version-desplegada'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -40,6 +44,10 @@ class ErrorBoundary extends Component<
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('Error capturado:', error, errorInfo)
+    // Un trozo de la versión anterior que ya no existe en el servidor no es
+    // un fallo que enseñar: es esta copia de la app quedándose atrás. Se va a
+    // buscar la nueva en lugar de dejar al inspector con una pantalla de error.
+    if (esErrorDeVersionAntigua(error)) recargarConVersionNueva()
   }
 
   render() {

@@ -39,15 +39,19 @@
   # Aísla la pestaña de otras ventanas que pudiera abrir.
   Cross-Origin-Opener-Policy: same-origin
 
+  # EL HTML NO SE CACHEA, y no basta con nombrar /index.html: todas las rutas
+  # (/login, /app/formulario, ...) sirven ese mismo HTML a través de la
+  # reescritura del SPA, y es él quien nombra los trozos de JavaScript con su
+  # hash. Si se queda pegado en el navegador, tras un despliegue sigue pidiendo
+  # trozos que ya se borraron y la app muere con "Failed to fetch dynamically
+  # imported module: .../login-page-XXXX.js". Los assets se salen de esta regla
+  # justo abajo: sus nombres llevan hash y por eso sí se pueden cachear.
+  Cache-Control: no-cache
+
 # Los assets con hash en el nombre no cambian nunca: se cachean un año y
 # dejan de pedirse en cada visita.
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
-
-# El HTML y el service worker NO se cachean: si se quedan pegados, el usuario
-# sigue viendo la versión antigua después de un despliegue.
-/index.html
-  Cache-Control: no-cache
 
 /sw.js
   Cache-Control: no-cache

@@ -2,6 +2,16 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import 'leaflet/dist/leaflet.css'
 import './index.css'
+import {
+  esErrorDeVersionAntigua,
+  marcarVersionCargada,
+  recargarConVersionNueva,
+  vigilarVersionDesplegada,
+} from '@/lib/version-desplegada'
+
+// Antes de nada: si el servidor cambió de versión con la app abierta, los
+// trozos que ésta pide ya no existen. Se recarga sola en vez de morir.
+vigilarVersionDesplegada()
 
 const rootElement = document.getElementById('root')
 
@@ -27,6 +37,8 @@ const renderBootError = (error: unknown) => {
 
 import('./App.tsx')
   .then(({ default: App }) => {
+    // Arrancó: se cierra el episodio de recargas por versión
+    marcarVersionCargada()
     root.render(
       <StrictMode>
         <App />
@@ -35,5 +47,8 @@ import('./App.tsx')
   })
   .catch((error) => {
     console.error('Boot error', error)
+    // El propio arranque puede pedir un trozo de la versión anterior: ahí no
+    // hay nada que mostrar, hay que ir a buscar la nueva
+    if (esErrorDeVersionAntigua(error) && recargarConVersionNueva()) return
     renderBootError(error)
   })
