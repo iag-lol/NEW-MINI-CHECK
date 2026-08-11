@@ -777,6 +777,18 @@ export const InspectionFormPage = () => {
   const [revisionPrevia, setRevisionPrevia] = useState<RevisionPrevia | null>(null)
   const [bus, setBus] = useState<Tables<'flota'> | null>(null)
   const [busAlert, setBusAlert] = useState<string | null>(null)
+  // Una búsqueda a la vez y sólo manda la última: dos búsquedas solapadas se
+  // pisaban los estados (el error de una aparecía junto al bus de la otra)
+  const busquedaRef = useRef(0)
+  const [buscando, setBuscando] = useState(false)
+  /**
+   * La comprobación de "bus ya revisado" está en vuelo.
+   *
+   * En terreno esas consultas tardan segundos, y el inspector alcanzaba a
+   * empezar la revisión ANTES de que llegara el aviso: le saltaba a mitad de
+   * camino, o nunca. Mientras se verifica, el paso no avanza.
+   */
+  const [verificandoSemana, setVerificandoSemana] = useState(false)
 
   // Anunciar en tiempo real qué bus se está revisando (visible en el header
   // de supervisores hasta que se termina la revisión o se cierra el formulario)
@@ -1032,12 +1044,30 @@ export const InspectionFormPage = () => {
     if (!source.trim()) return
     const query = source.trim().toUpperCase()
 
+    // Sólo la búsqueda más reciente puede tocar el estado: sin esta guardia,
+    // una búsqueda lenta que llegaba tarde pisaba a la que ya había resuelto
+    const intento = ++busquedaRef.current
+    const vigente = () => intento === busquedaRef.current
+
+    setBuscando(true)
     try {
-      const { data, error } = await supabase
-        .from('flota')
-        .select('*')
-        .or(`ppu.eq.${query},numero_interno.eq.${query}`)
-        .maybeSingle()
+      // La flota se consulta con un reintento: en terreno la primera petición
+      // se cae con frecuencia y el "no pudimos buscar la PPU" era casi
+      // siempre un parpadeo de red, no un problema real
+      let data: unknown = null
+      let error: { message: string } | null = null
+      for (let intentoRed = 0; intentoRed < 2; intentoRed += 1) {
+        const respuesta = await supabase
+          .from('flota')
+          .select('*')
+          .or(`ppu.eq.${query},numero_interno.eq.${query}`)
+          .maybeSingle()
+        data = respuesta.data
+        error = respuesta.error
+        if (!error) break
+        await new Promise((listo) => setTimeout(listo, 600))
+      }
+      if (!vigente()) return
 
       if (error) {
         setBus(null)
@@ -1053,6 +1083,18 @@ export const InspectionFormPage = () => {
       setBus(busRecord)
       setBusAlert(null)
       setRevisionPrevia(null)
+      setVerificandoSemana(true)
+
+      methods.setValue(
+        'mobileye.aplica',
+        busRecord.marca?.toLowerCase().includes('volvo') ?? false,
+        { shouldDirty: true }
+      )
+      methods.setValue(
+        'rack.cantidadCerradurasEsperada',
+        busRecord.marca?.toLowerCase().includes('volvo') ? 4 : 2,
+        { shouldDirty: true }
+      )
 
       /*
        * ¿Ya está cubierto ESTA semana según lo que se está revisando?
@@ -1060,58 +1102,77 @@ export const InspectionFormPage = () => {
        * Con módulos configurables, "ya fue revisado" no puede significar
        * "existe una revisión de esta semana": si sólo está activo +15, un bus
        * con la inspección completa del lunes pero SIN la prueba de +15 sigue
-       * pendiente, y saltar el aviso igual mandaba al inspector a saltárselo.
-       * Se usa la MISMA regla que la pantalla de Pendientes: cada módulo
-       * vigente debe tener registro propio del bus dentro de la semana, y
-       * sólo entonces se avisa.
+       * pendiente. Se usa la MISMA regla que la pantalla de Pendientes.
+       *
+       * TODO va en un único Promise.all: encadenar la revisión y después la
+       * cobertura eran dos idas a la red, y en móvil esos segundos bastaban
+       * para que el aviso llegara con la revisión ya empezada.
        */
       const inicioSemana = dayjs().isoWeekday(1).startOf('day').toISOString()
+      const modulosMedibles = MODULOS.filter(
+        (modulo) =>
+          modulo.tabla !== null &&
+          clavesActivas.has(modulo.clave) &&
+          // Mobileye no existe en buses no-Volvo y el formulario nunca lo
+          // inserta ahí: exigirlo silenciaba este aviso para cada Scania
+          moduloAplicaAlBus(modulo.clave, busRecord)
+      )
 
-      const { data: revisiones } = await supabase
-        .from('revisiones')
-        .select(
-          'id, created_at, inspector_nombre, terminal_reportado, terminal_detectado, estado_bus'
-        )
-        .eq('bus_ppu', busRecord.ppu)
-        .gte('created_at', inicioSemana)
-        .order('created_at', { ascending: false })
-        .limit(1)
+      const [respuestaRevisiones, respuestaTag, ...respuestasModulos] = await Promise.all([
+        supabase
+          .from('revisiones')
+          .select(
+            'id, created_at, inspector_nombre, terminal_reportado, terminal_detectado, estado_bus'
+          )
+          .eq('bus_ppu', busRecord.ppu)
+          .gte('created_at', inicioSemana)
+          .order('created_at', { ascending: false })
+          .limit(1),
+        supabase
+          .from('tags')
+          .select('tiene, serie')
+          .eq('bus_ppu', busRecord.ppu)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        ...modulosMedibles.map((modulo) =>
+          supabase
+            .from(modulo.tabla as 'tags')
+            .select('id')
+            .eq('bus_ppu', busRecord.ppu)
+            .gte('created_at', inicioSemana)
+            .limit(1)
+            .maybeSingle()
+        ),
+      ])
+      if (!vigente()) return
 
-      const revisionSemana = revisiones?.[0]
+      const revisionSemana = (respuestaRevisiones.data as
+        | Array<{
+            id: string
+            created_at: string
+            inspector_nombre: string | null
+            terminal_reportado: string | null
+            terminal_detectado: string | null
+            estado_bus: string
+          }>
+        | null)?.[0]
 
       if (revisionSemana) {
         // Un bus en panne no puede pasar los módulos que exigen arrancarlo:
         // no se le exigen, igual que en Pendientes
         const enPanneSemana = revisionSemana.estado_bus === 'EN_PANNE'
-        const modulosExigibles = MODULOS.filter(
-          (modulo) =>
-            modulo.tabla !== null &&
-            clavesActivas.has(modulo.clave) &&
-            !(enPanneSemana && modulo.requiereBusOperativo) &&
-            // Mobileye no existe en buses no-Volvo y el formulario nunca lo
-            // inserta ahí: exigirlo silenciaba este aviso para cada Scania
-            moduloAplicaAlBus(modulo.clave, busRecord)
-        )
+        const cobertura = modulosMedibles.map((modulo, indice) => {
+          if (enPanneSemana && modulo.requiereBusOperativo) {
+            return { nombre: modulo.nombre, cubierto: true, medido: false }
+          }
+          const respuesta = respuestasModulos[indice]
+          // Tabla aún sin crear: no se puede exigir lo que no se puede medir
+          if (respuesta.error) return { nombre: modulo.nombre, cubierto: true, medido: false }
+          return { nombre: modulo.nombre, cubierto: respuesta.data !== null, medido: true }
+        })
 
-        const cobertura = await Promise.all(
-          modulosExigibles.map(async (modulo) => {
-            const { data: fila, error: errorModulo } = await supabase
-              .from(modulo.tabla as 'tags')
-              .select('id')
-              .eq('bus_ppu', busRecord.ppu)
-              .gte('created_at', inicioSemana)
-              .limit(1)
-              .maybeSingle()
-            // Tabla aún sin crear: no se puede exigir lo que no se puede
-            // medir, así que ese módulo no bloquea el aviso ni sale listado
-            if (errorModulo) return { nombre: modulo.nombre, cubierto: true, medido: false }
-            return { nombre: modulo.nombre, cubierto: fila !== null, medido: true }
-          })
-        )
-
-        const faltaAlguno = cobertura.some((resultado) => !resultado.cubierto)
-
-        if (!faltaAlguno) {
+        if (!cobertura.some((resultado) => !resultado.cubierto)) {
           setRevisionPrevia({
             ppu: busRecord.ppu,
             interno: busRecord.numero_interno,
@@ -1128,44 +1189,30 @@ export const InspectionFormPage = () => {
         }
       }
 
-      methods.setValue(
-        'mobileye.aplica',
-        busRecord.marca?.toLowerCase().includes('volvo') ?? false,
-        { shouldDirty: true }
-      )
-      methods.setValue(
-        'rack.cantidadCerradurasEsperada',
-        busRecord.marca?.toLowerCase().includes('volvo') ? 4 : 2,
-        { shouldDirty: true }
-      )
-
-      // Buscar el último registro de TAG para este bus
-      const { data: lastTag, error: tagError } = await supabase
-        .from('tags')
-        .select('tiene, serie')
-        .eq('bus_ppu', busRecord.ppu)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      if (!tagError && lastTag) {
-        // Si el último registro tiene TAG instalado y tiene serie, auto-rellenar
+      // Auto-relleno del TAG con su último registro conocido
+      const lastTag = respuestaTag.data
+      if (!respuestaTag.error && lastTag) {
         if (lastTag.tiene === true && lastTag.serie) {
           methods.setValue('tag.tiene', true, { shouldDirty: true })
           methods.setValue('tag.serie', lastTag.serie, { shouldDirty: true })
           methods.setValue('tag.observacion', '', { shouldDirty: true })
         } else if (lastTag.tiene === false) {
-          // Si el último registro dice que NO tiene TAG, marcar como "No tiene"
           methods.setValue('tag.tiene', false, { shouldDirty: true })
           methods.setValue('tag.serie', '', { shouldDirty: true })
           methods.setValue('tag.observacion', '', { shouldDirty: true })
         }
-        // Si tiene === true pero no tiene serie, mantener el valor por defecto (instalado)
+        // Con TAG pero sin serie se conserva el valor por defecto (instalado)
       }
     } catch (err) {
       console.error('Error in searchBus:', err)
+      if (!vigente()) return
       setBus(null)
       setBusAlert('Error al buscar el bus. Intenta nuevamente.')
+    } finally {
+      if (vigente()) {
+        setBuscando(false)
+        setVerificandoSemana(false)
+      }
     }
   }
 
@@ -1291,6 +1338,15 @@ export const InspectionFormPage = () => {
   }, [isWifiWaiting, wifiWaitingTime])
 
   const handleNext = () => {
+    // La comprobación de "bus ya revisado" sigue en vuelo: avanzar ahora era
+    // exactamente el hueco por el que el aviso llegaba a mitad de revisión
+    if (verificandoSemana) {
+      setValidationMessage({
+        title: 'Un segundo',
+        items: ['Estamos verificando si este bus ya fue revisado esta semana.'],
+      })
+      return
+    }
     // VALIDACIÓN GPS: Bloquear navegación si no hay GPS (solo para buses OPERATIVOS)
     if (!isEnPanne && (!gpsActive || !trackingLocation)) {
       setValidationMessage({
@@ -3419,12 +3475,18 @@ export const InspectionFormPage = () => {
               <Button
                 type="button"
                 className="w-full gap-2 rounded-2xl sm:w-auto"
+                disabled={buscando}
                 onClick={() => {
                   setSugerenciasAbiertas(false)
                   void searchBus()
                 }}
               >
-                <Search className="h-4 w-4" /> Buscar bus
+                {buscando ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+                {buscando ? 'Buscando...' : 'Buscar bus'}
               </Button>
             </div>
 
@@ -3450,6 +3512,11 @@ export const InspectionFormPage = () => {
                   size="sm"
                   className="gap-1.5 text-xs text-slate-400 hover:text-red-500"
                   onClick={() => {
+                    // Invalida cualquier búsqueda en vuelo: su resultado ya no
+                    // debe tocar el estado del formulario
+                    busquedaRef.current += 1
+                    setBuscando(false)
+                    setVerificandoSemana(false)
                     limpiarBorrador()
                     setBus(null)
                     setBusQuery('')
@@ -3460,6 +3527,15 @@ export const InspectionFormPage = () => {
                   <X className="h-3.5 w-3.5" /> Cambiar
                 </Button>
               </div>
+            )}
+
+            {/* La verificación se anuncia: sin esto parecía que la app dudaba
+                sin motivo cuando el botón Continuar no respondía */}
+            {bus && verificandoSemana && (
+              <p className="flex items-center gap-1.5 text-[11.5px] font-semibold text-slate-500 dark:text-slate-400">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-500" />
+                Verificando si este bus ya fue revisado esta semana...
+              </p>
             )}
 
             <AnimatePresence>
@@ -3677,10 +3753,19 @@ export const InspectionFormPage = () => {
               <Button
                 type="button"
                 onClick={handleNext}
+                disabled={verificandoSemana}
                 className="flex-1 gap-1.5 rounded-2xl sm:flex-initial sm:px-6"
               >
-                Continuar
-                <ChevronRight className="h-4 w-4" />
+                {verificandoSemana ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Verificando...
+                  </>
+                ) : (
+                  <>
+                    Continuar
+                    <ChevronRight className="h-4 w-4" />
+                  </>
+                )}
               </Button>
             )}
           </div>
