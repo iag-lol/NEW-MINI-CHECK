@@ -80,6 +80,9 @@ export const useRealtimeSubscriptions = () => {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['mis-revisiones'] })
       queryClient.invalidateQueries({ queryKey: ['pendientes-revisiones'] })
+      // La cobertura por módulo alimenta el listado de pendientes y el corte
+      // de "ya revisado": si no se invalida aquí, sólo se refresca por reloj
+      queryClient.invalidateQueries({ queryKey: ['pendientes-cobertura'] })
     }
 
     /** Emite UNA notificación con todo lo acumulado de un envío. */

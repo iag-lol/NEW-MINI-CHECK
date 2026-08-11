@@ -41,10 +41,13 @@ const cargarConfiguracion = async (): Promise<{
     // reactivara en silencio módulos que el supervisor había apagado, y el
     // formulario los volvía a pedir. Un error transitorio se relanza: react
     // query reintenta y, si hay datos en caché, los conserva.
+    // SOLO tabla inexistente. El patrón amplio anterior también atrapaba
+    // "column ... does not exist" (42703, típico de un despliegue antes de su
+    // migración) y reactivaba en silencio todos los módulos apagados.
     const tablaAusente =
       error.code === '42P01' ||
       error.code === 'PGRST205' ||
-      /does not exist|schema cache/i.test(error.message ?? '')
+      /relation .* does not exist|could not find the table/i.test(error.message ?? '')
     if (!tablaAusente) throw error
 
     console.warn(

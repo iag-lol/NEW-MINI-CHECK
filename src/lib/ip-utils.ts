@@ -2,7 +2,25 @@
  * Obtiene la dirección IP pública del usuario
  * Usa múltiples servicios como fallback
  */
+/** La IP pública cambia rara vez: 10 minutos de caché bastan */
+const IP_CACHE_MS = 10 * 60_000
+let ipCacheada: { valor: string; obtenidaEn: number } | null = null
+
+if (typeof window !== 'undefined') {
+  // Al cambiar de red la IP puede cambiar: se invalida la caché
+  window.addEventListener('online', () => {
+    ipCacheada = null
+  })
+}
+
 export async function getUserIP(): Promise<string | null> {
+  // El latido de ubicación llama esto cada 10 segundos; sin caché eran ~360
+  // peticiones/hora por inspector a servicios externos, con su gasto de
+  // batería y datos, y cada latido esperaba a un tercero antes de guardarse.
+  if (ipCacheada && Date.now() - ipCacheada.obtenidaEn < IP_CACHE_MS) {
+    return ipCacheada.valor
+  }
+
   const services = [
     'https://api.ipify.org?format=json',
     'https://api.my-ip.io/v2/ip.json',
@@ -20,6 +38,7 @@ export async function getUserIP(): Promise<string | null> {
       const ip = data.ip || data.address || null
 
       if (ip && typeof ip === 'string') {
+        ipCacheada = { valor: ip, obtenidaEn: Date.now() }
         return ip
       }
     } catch (error) {

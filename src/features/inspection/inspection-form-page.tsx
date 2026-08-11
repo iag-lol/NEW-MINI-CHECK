@@ -45,9 +45,19 @@ import { useAnunciarInspeccion } from '@/hooks/use-inspeccion-presence'
 import type { Tables, Database } from '@/types/database'
 import { useNotificationStore } from '@/store/notification-store'
 import { useTracking } from '@/hooks/use-tracking'
-import { MODULOS, moduloAplicaAlBus, type ModuloClave } from '@/constants/modulos'
-import { BORRADOR_INSPECCION_KEY, marcarInspeccionEnCurso } from '@/lib/sesion'
-import { useModulosVigentes } from '@/hooks/use-modulos-config'
+import { MODULOS, type ModuloClave } from '@/constants/modulos'
+import {
+  BORRADOR_INSPECCION_KEY,
+  BORRADOR_MAX_HORAS,
+  BORRADOR_VERSION,
+  marcarInspeccionEnCurso,
+} from '@/lib/sesion'
+import { useModulosConfig, useModulosVigentes } from '@/hooks/use-modulos-config'
+import {
+  clavesVigentesEnSemana,
+  inicioSemanaActualISO,
+  modulosExigiblesPara,
+} from '@/lib/cobertura-semanal'
 import {
   BusRevisadoDialog,
   type RevisionPrevia,
@@ -346,9 +356,6 @@ type InspectionForm = z.infer<typeof inspectionSchema>
  * guarda en localStorage y, al volver, la revisión continúa donde quedó.
  */
 const BORRADOR_KEY = BORRADOR_INSPECCION_KEY
-const BORRADOR_VERSION = 1
-/** Un borrador más viejo que esto ya no describe el estado real del bus */
-const BORRADOR_MAX_HORAS = 12
 
 interface BorradorInspeccion {
   version: number
@@ -780,6 +787,12 @@ export const InspectionFormPage = () => {
   // Una búsqueda a la vez y sólo manda la última: dos búsquedas solapadas se
   // pisaban los estados (el error de una aparecía junto al bus de la otra)
   const busquedaRef = useRef(0)
+  // PPU del bus en pantalla, actualizado en el acto. El estado `bus` no
+  // sirve para esta comparación: en el deep link, la restauración del
+  // borrador y la búsqueda corren en el mismo ciclo de efectos y la búsqueda
+  // aún "ve" el bus en null, con lo que el reset de cambio de bus no saltaba
+  // justo en el caso que lo necesitaba.
+  const busPpuRef = useRef<string | null>(null)
   const [buscando, setBuscando] = useState(false)
   /**
    * La comprobación de "bus ya revisado" está en vuelo.
@@ -838,6 +851,9 @@ export const InspectionFormPage = () => {
   // Módulos vigentes hoy según lo configurado en Configuración: un módulo
   // apagado o fuera de su programación no aparece como paso ni se guarda.
   const { clavesActivas, cargando: cargandoModulos, fallo: falloModulos } = useModulosVigentes()
+  // La verificación de "ya revisado" evalúa la SEMANA completa, no sólo hoy:
+  // un módulo programado para otro día de la semana también cuenta
+  const { porClave: configPorClave } = useModulosConfig()
 
   const moduloVigente = useCallback(
     (clave: ModuloClave) => clavesActivas.has(clave),
@@ -940,10 +956,18 @@ export const InspectionFormPage = () => {
     if (!borrador) return
 
     restaurandoRef.current = true
+    busPpuRef.current = borrador.bus.ppu
     setBus(borrador.bus)
     setBusQuery(borrador.bus.ppu)
     methods.reset(borrador.valores)
     setStep(borrador.paso)
+    // Si el estadoBus restaurado coincide con el por defecto, el efecto que
+    // consume la bandera nunca corre y quedaría armada: el siguiente cambio
+    // REAL de estado se saltaría el reset de paso. Los efectos del cambio
+    // corren antes que este temporizador, así que soltarla aquí es seguro.
+    window.setTimeout(() => {
+      restaurandoRef.current = false
+    }, 0)
     push({
       id: `borrador-${borrador.bus.ppu}-${borrador.guardadoEn}`,
       type: 'info',
@@ -1080,6 +1104,21 @@ export const InspectionFormPage = () => {
         return
       }
       const busRecord = data as Tables<'flota'>
+
+      // Bus DISTINTO al que está en pantalla: el formulario vuelve a cero.
+      // Sin este reset, las respuestas de un borrador restaurado del bus A
+      // se guardaban bajo la PPU del bus B (mezcla de datos real detectada
+      // con el deep link de Pendientes). "Sin llave" se conserva: suele ser
+      // así todo el turno y no describe al bus sino al inspector.
+      if (busPpuRef.current && busPpuRef.current !== busRecord.ppu) {
+        const conservarSinLlave = methods.getValues('rack.sinLlave')
+        limpiarBorrador()
+        methods.reset()
+        methods.setValue('rack.sinLlave', conservarSinLlave)
+        setStep(0)
+      }
+
+      busPpuRef.current = busRecord.ppu
       setBus(busRecord)
       setBusAlert(null)
       setRevisionPrevia(null)
@@ -1108,14 +1147,13 @@ export const InspectionFormPage = () => {
        * cobertura eran dos idas a la red, y en móvil esos segundos bastaban
        * para que el aviso llegara con la revisión ya empezada.
        */
-      const inicioSemana = dayjs().isoWeekday(1).startOf('day').toISOString()
-      const modulosMedibles = MODULOS.filter(
-        (modulo) =>
-          modulo.tabla !== null &&
-          clavesActivas.has(modulo.clave) &&
-          // Mobileye no existe en buses no-Volvo y el formulario nunca lo
-          // inserta ahí: exigirlo silenciaba este aviso para cada Scania
-          moduloAplicaAlBus(modulo.clave, busRecord)
+      const inicioSemana = inicioSemanaActualISO()
+      // Regla compartida con Pendientes: módulos vigentes en ALGÚN día de la
+      // semana (no sólo hoy) que existan en este bus. Mantenerla en un solo
+      // sitio es lo que impide que las dos pantallas vuelvan a contradecirse.
+      const modulosMedibles = modulosExigiblesPara(
+        clavesVigentesEnSemana(configPorClave, inicioSemana),
+        busRecord
       )
 
       const [respuestaRevisiones, respuestaTag, ...respuestasModulos] = await Promise.all([
@@ -1283,22 +1321,22 @@ export const InspectionFormPage = () => {
   }, [stepKey, bus?.ppu, methods])
 
   useEffect(() => {
-    let isMounted = true
     const ppuParam = searchParams.get('ppu')
+    if (!ppuParam) return
+    // El parámetro se conserva hasta que la configuración esté lista: buscar
+    // antes hacía la verificación de "ya revisado" contra el catálogo por
+    // defecto (todos los módulos) y el aviso se saltaba en silencio
+    if (cargandoModulos) return
 
-    if (ppuParam && isMounted) {
-      const normalized = ppuParam.toUpperCase()
-      setBusQuery(normalized)
-      searchBus(normalized)
-      const next = new URLSearchParams(searchParams.toString())
-      next.delete('ppu')
-      setSearchParams(next, { replace: true })
-    }
-
-    return () => {
-      isMounted = false
-    }
-  }, [searchParams, setSearchParams])
+    const normalized = ppuParam.toUpperCase()
+    setBusQuery(normalized)
+    void searchBus(normalized)
+    const next = new URLSearchParams(searchParams.toString())
+    next.delete('ppu')
+    setSearchParams(next, { replace: true })
+    // searchBus se recrea en cada render; ppu + carga son los disparos reales
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, setSearchParams, cargandoModulos])
 
   // Al marcar "sin llave" se busca el último registro real para mostrar
   // exactamente qué información se va a conservar
@@ -1567,6 +1605,15 @@ export const InspectionFormPage = () => {
 
   const attemptNavigateToStep = (targetIndex: number) => {
     if (targetIndex < 0 || targetIndex >= activeSteps.length) return false
+    // Guardia también aquí y no sólo en Continuar: los chips del stepper
+    // permitían avanzar con la verificación de "ya revisado" en vuelo
+    if (targetIndex > currentStep && verificandoSemana) {
+      setValidationMessage({
+        title: 'Un segundo',
+        items: ['Estamos verificando si este bus ya fue revisado esta semana.'],
+      })
+      return false
+    }
     if (targetIndex > currentStep) {
       const snapshot = methods.getValues()
       // Validar TODOS los pasos intermedios del flujo activo
@@ -1663,19 +1710,29 @@ export const InspectionFormPage = () => {
       // OBLIGATORIAMENTE, por lo que siempre se guardan los valores reales.
       // Solo Cámaras, Odómetro y WiFi quedan como "no revisado".
 
+      /*
+       * Los módulos se insertan EN PARALELO y con verificación.
+       *
+       * Encadenados eran hasta diez idas a la red (3-5 s extra de "Guardando"
+       * en terreno); y como nadie miraba sus errores, un corte a mitad de
+       * envío mostraba "Revisión enviada", borraba el borrador y dejaba al
+       * bus pendiente sin sus respuestas. Ahora todo viaja junto y, si algo
+       * falla, se deshace la revisión y el borrador sobrevive para reintentar.
+       */
+      const inserciones: Array<PromiseLike<{ error: unknown }>> = []
       if (moduloVigente('tag')) {
-        await supabase.from('tags').insert({
+        inserciones.push(supabase.from('tags').insert({
           revision_id: revisionData.id,
           tiene: values.tag.tiene,
           serie: values.tag.serie || null,
           observacion: values.tag.observacion || null,
           bus_ppu: bus.ppu,
           terminal: values.terminalReportado,
-        })
+        }))
       }
 
       if (moduloVigente('camaras')) {
-        await supabase.from('camaras').insert({
+        inserciones.push(supabase.from('camaras').insert({
           revision_id: revisionData.id,
           monitor_estado: enPanne ? 'SIN_SENAL' : values.camaras.monitorEstado,
           detalle: enPanne ? {} : {
@@ -1692,11 +1749,11 @@ export const InspectionFormPage = () => {
           observacion: enPanne ? 'Bus en panne - no revisado' : (values.camaras.observacion || null),
           bus_ppu: bus.ppu,
           terminal: values.terminalReportado,
-        })
+        }))
       }
 
       if (moduloVigente('extintores')) {
-        await supabase.from('extintores').insert({
+        inserciones.push(supabase.from('extintores').insert({
           revision_id: revisionData.id,
           tiene: values.extintores.tiene,
           vencimiento_mes: values.extintores.vencimientoMes ?? null,
@@ -1710,12 +1767,12 @@ export const InspectionFormPage = () => {
           observacion: values.extintores.observacion ?? null,
           bus_ppu: bus.ppu,
           terminal: values.terminalReportado,
-        })
+        }))
       }
 
       // Mobileye aplica solo a buses Volvo (operativos o en panne)
       if (moduloVigente('mobileye') && values.mobileye.aplica) {
-        await supabase.from('mobileye').insert({
+        inserciones.push(supabase.from('mobileye').insert({
           revision_id: revisionData.id,
           bus_marca: bus.marca,
           alerta_izq: values.mobileye.alertaIzq ?? null,
@@ -1727,18 +1784,18 @@ export const InspectionFormPage = () => {
           observacion: values.mobileye.observacion ?? null,
           bus_ppu: bus.ppu,
           terminal: values.terminalReportado,
-        })
+        }))
       }
 
       if (moduloVigente('odometro')) {
-        await supabase.from('odometro').insert({
+        inserciones.push(supabase.from('odometro').insert({
           revision_id: revisionData.id,
           lectura: enPanne ? 0 : values.odometro.lectura,
           estado: enPanne ? 'NO_FUNCIONA' : values.odometro.estado,
           observacion: enPanne ? 'Bus en panne - no revisado' : (values.odometro.observacion ?? null),
           bus_ppu: bus.ppu,
           terminal: values.terminalReportado,
-        })
+        }))
       }
 
       // RACK · sin llave física: no se revisó, se conserva el último
@@ -1780,16 +1837,16 @@ export const InspectionFormPage = () => {
           }
 
       if (moduloVigente('rack')) {
-        await supabase.from('rack').insert({
+        inserciones.push(supabase.from('rack').insert({
           revision_id: revisionData.id,
           ...rackInsert,
           bus_ppu: bus.ppu,
           terminal: values.terminalReportado,
-        })
+        }))
       }
 
       if (moduloVigente('wifi')) {
-        await supabase.from('wifi').insert({
+        inserciones.push(supabase.from('wifi').insert({
           revision_id: revisionData.id,
           ppu_visible: enPanne ? null : (values.wifi.ppuVisible ?? null),
           bus_encendido: enPanne ? null : (values.wifi.busEncendido ?? null),
@@ -1797,7 +1854,7 @@ export const InspectionFormPage = () => {
           observacion: enPanne ? 'Bus en panne - no revisado' : (values.wifi.observacion || null),
           bus_ppu: bus.ppu,
           terminal: values.terminalReportado,
-        })
+        }))
       }
 
       // Norma gráfica: elementos que no quedaron conformes. Se calcula fuera
@@ -1807,7 +1864,7 @@ export const InspectionFormPage = () => {
       )
 
       if (moduloVigente('normaGrafica')) {
-        await supabase.from('norma_grafica').insert({
+        inserciones.push(supabase.from('norma_grafica').insert({
           revision_id: revisionData.id,
           interno_delantero: values.normaGrafica.internoDelantero ?? 'FALTA',
           interno_trasero: values.normaGrafica.internoTrasero ?? 'FALTA',
@@ -1820,10 +1877,13 @@ export const InspectionFormPage = () => {
           observacion: values.normaGrafica.observacion || null,
           bus_ppu: bus.ppu,
           terminal: values.terminalReportado,
-        })
+        }))
       }
 
-      if (moduloVigente('mas15')) {
+      // En panne el paso de +15 ni se muestra (requiere arrancar el bus):
+      // insertar igual fabricaba un "no se logró el encendido" que nadie
+      // intentó, indistinguible de una medición real en informes y Excel
+      if (moduloVigente('mas15') && !enPanne) {
         const arranqueOk = values.mas15.arranqueOk === true
         // El resultado se deduce, no se pregunta: sólo hay +15 si AMBOS
         // equipos siguen encendidos tras retirar el corta corriente.
@@ -1832,7 +1892,7 @@ export const InspectionFormPage = () => {
             values.mas15.validadorEncendido === true
           : null
 
-        await supabase.from('mas15').insert({
+        inserciones.push(supabase.from('mas15').insert({
           revision_id: revisionData.id,
           arranque_ok: arranqueOk,
           consola_encendida: arranqueOk ? values.mas15.consolaEncendida ?? null : null,
@@ -1843,7 +1903,7 @@ export const InspectionFormPage = () => {
           observacion: values.mas15.observacion || null,
           bus_ppu: bus.ppu,
           terminal: values.terminalReportado,
-        })
+        }))
       }
 
       const publicidadTiene = publicityAreas.some((area) => values.publicidad[area.key].tiene)
@@ -1874,7 +1934,27 @@ export const InspectionFormPage = () => {
       }
 
       if (moduloVigente('publicidad')) {
-        await supabase.from('publicidad').insert(publicidadPayload)
+        inserciones.push(supabase.from('publicidad').insert(publicidadPayload))
+      }
+
+      // Todos los módulos viajan juntos; si alguno falló, la revisión se
+      // deshace (children primero: las tablas antiguas no tienen cascade) y
+      // el error sube para que el borrador siga vivo y se pueda reintentar.
+      const resultadosModulos = await Promise.all(inserciones)
+      const fallosModulos = resultadosModulos.filter((resultado) => resultado.error)
+      if (fallosModulos.length > 0) {
+        console.error('Fallaron inserts de módulos', fallosModulos)
+        const hijas = [
+          'tags', 'camaras', 'extintores', 'mobileye', 'odometro',
+          'rack', 'wifi', 'publicidad', 'mas15', 'norma_grafica',
+        ] as const
+        await Promise.all(
+          hijas.map((tabla) =>
+            supabase.from(tabla).delete().eq('revision_id', revisionData.id)
+          )
+        ).catch(() => undefined)
+        await supabase.from('revisiones').delete().eq('id', revisionData.id)
+        throw new Error('No se pudieron guardar todos los módulos de la revisión')
       }
 
       // Tickets automáticos: los módulos obligatorios generan tickets
@@ -1965,6 +2045,7 @@ export const InspectionFormPage = () => {
       const conservarSinLlave = values.rack.sinLlave
       // La revisión ya está en la base de datos: el borrador cumplió
       limpiarBorrador()
+      busPpuRef.current = null
       methods.reset()
       if (conservarSinLlave) {
         methods.setValue('rack.sinLlave', true)
@@ -3515,6 +3596,7 @@ export const InspectionFormPage = () => {
                     // Invalida cualquier búsqueda en vuelo: su resultado ya no
                     // debe tocar el estado del formulario
                     busquedaRef.current += 1
+                    busPpuRef.current = null
                     setBuscando(false)
                     setVerificandoSemana(false)
                     limpiarBorrador()
@@ -3778,6 +3860,7 @@ export const InspectionFormPage = () => {
           // Se suelta el bus y se devuelve el foco a la búsqueda: el caso
           // habitual es seguir con el siguiente de la hoja de pendientes
           limpiarBorrador()
+          busPpuRef.current = null
           setRevisionPrevia(null)
           setBus(null)
           setBusQuery('')

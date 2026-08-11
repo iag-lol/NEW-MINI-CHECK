@@ -96,6 +96,14 @@ let inspeccionEnCurso = false
 /** Clave del borrador de inspección; el formulario escribe, aquí sólo se lee */
 export const BORRADOR_INSPECCION_KEY = 'nmcheck-borrador-inspeccion'
 
+/*
+ * Versión y vigencia del borrador, aquí y NO en el formulario: cuando cada
+ * lado tenía su copia, bastaba subir la versión en uno para que la sesión se
+ * mantuviera viva "por un borrador" que el formulario luego descartaba.
+ */
+export const BORRADOR_VERSION = 1
+export const BORRADOR_MAX_HORAS = 12
+
 /**
  * ¿Este usuario tiene una inspección a medias guardada?
  *
@@ -108,9 +116,21 @@ export const hayBorradorDeInspeccion = (rut: string): boolean => {
   try {
     const crudo = window.localStorage.getItem(BORRADOR_INSPECCION_KEY)
     if (!crudo) return false
-    const borrador = JSON.parse(crudo) as { rut?: string; guardadoEn?: string }
-    if (borrador.rut !== rut || !borrador.guardadoEn) return false
-    return Date.now() - new Date(borrador.guardadoEn).getTime() < 12 * 3_600_000
+    const borrador = JSON.parse(crudo) as {
+      version?: number
+      rut?: string
+      guardadoEn?: string
+      bus?: { ppu?: string }
+    }
+    // Los MISMOS requisitos que el formulario exige para restaurar: mantener
+    // viva una sesión por un borrador irrecuperable dejaba al dispositivo
+    // conectado hasta 12 horas sin nada que recuperar.
+    if (borrador.version !== BORRADOR_VERSION) return false
+    if (borrador.rut !== rut || !borrador.guardadoEn || !borrador.bus?.ppu) return false
+    return (
+      Date.now() - new Date(borrador.guardadoEn).getTime() <
+      BORRADOR_MAX_HORAS * 3_600_000
+    )
   } catch {
     return false
   }

@@ -28,11 +28,36 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { WeekSelector } from '@/components/week-selector'
 import { useWeekFilter } from '@/hooks/use-week-filter'
-import { MODULOS, moduloAplicaAlBus, type ModuloClave } from '@/constants/modulos'
-import { useModulosVigentes } from '@/hooks/use-modulos-config'
+import { MODULOS, type ModuloClave } from '@/constants/modulos'
+import { useModulosConfig } from '@/hooks/use-modulos-config'
+import { clavesVigentesEnSemana, modulosExigiblesPara } from '@/lib/cobertura-semanal'
 
 type FlotaRow = Tables<'flota'>
 type RevisionRow = Tables<'revisiones'>
+
+/**
+ * Trae TODAS las filas paginando de a 1000.
+ *
+ * PostgREST corta cada respuesta en 1000 filas aunque se pida un límite
+ * mayor. Con una semana movida (flota grande más re-revisiones) el corte era
+ * silencioso: los buses revisados a comienzos de semana quedaban fuera del
+ * lote y aparecían como pendientes, mandando gente a repetirlos.
+ */
+const traerTodas = async <T,>(
+  // `data` viaja como unknown: cada consulta pide sus propias columnas y el
+  // tipo exacto lo fija quien llama
+  consulta: (desde: number, hasta: number) => PromiseLike<{ data: unknown; error: unknown }>
+): Promise<T[]> => {
+  const PAGINA = 1000
+  const filas: T[] = []
+  for (let inicio = 0; ; inicio += PAGINA) {
+    const { data, error } = await consulta(inicio, inicio + PAGINA - 1)
+    if (error) throw error
+    const lote = (data as T[] | null) ?? []
+    filas.push(...lote)
+    if (lote.length < PAGINA) return filas
+  }
+}
 
 export const PendientesPage = () => {
   const navigate = useNavigate()
@@ -55,21 +80,30 @@ export const PendientesPage = () => {
 
   const { data: revisiones, isLoading: revisionesLoading } = useQuery({
     queryKey: ['pendientes-revisiones', weekInfo.startISO, weekInfo.endISO],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('revisiones')
-        .select('id, bus_ppu, bus_interno, inspector_nombre, terminal_detectado, estado_bus, created_at')
-        .gte('created_at', weekInfo.startISO)
-        .lte('created_at', weekInfo.endISO)
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      return (data ?? []) as RevisionRow[]
-    },
-    refetchInterval: 15_000,
+    queryFn: () =>
+      traerTodas<RevisionRow>((desde, hasta) =>
+        supabase
+          .from('revisiones')
+          .select(
+            'id, bus_ppu, bus_interno, inspector_nombre, terminal_detectado, estado_bus, created_at'
+          )
+          .gte('created_at', weekInfo.startISO)
+          .lte('created_at', weekInfo.endISO)
+          .order('created_at', { ascending: false })
+          .range(desde, hasta)
+      ),
+    refetchInterval: 60_000,
   })
 
-  // Alcance vigente: qué se está revisando hoy según Configuración
-  const { clavesActivas, cargando: modulosCargando } = useModulosVigentes()
+  // Alcance de la SEMANA seleccionada, no de hoy. Con la vigencia de hoy, un
+  // módulo programado "sólo viernes" no aparecía pendiente en toda la semana
+  // y el viernes volcaba la flota entera a pendiente de golpe; y al mirar
+  // semanas pasadas se las juzgaba con la programación actual.
+  const { porClave, cargando: modulosCargando } = useModulosConfig()
+  const clavesActivas = useMemo(
+    () => clavesVigentesEnSemana(porClave, weekInfo.startISO),
+    [porClave, weekInfo.startISO]
+  )
 
   const modulosMedibles = useMemo(
     () =>
@@ -94,30 +128,34 @@ export const PendientesPage = () => {
       modulosMedibles.map((modulo) => modulo.clave).sort().join(','),
     ],
     enabled: modulosMedibles.length > 0,
-    refetchInterval: 15_000,
+    // El canal realtime invalida esta consulta con cada revisión nueva; el
+    // intervalo queda de red de seguridad sin re-descargar todo cada 15 s
+    refetchInterval: 60_000,
     queryFn: async () => {
       const porModulo = new Map<ModuloClave, Set<string>>()
       await Promise.all(
         modulosMedibles.map(async (modulo) => {
-          const { data, error } = await supabase
-            .from(modulo.tabla as 'tags')
-            .select('bus_ppu')
-            .gte('created_at', weekInfo.startISO)
-            .lte('created_at', weekInfo.endISO)
-            .limit(20000)
-          if (error) {
+          try {
+            const filas = await traerTodas<{ bus_ppu: string }>((desde, hasta) =>
+              supabase
+                .from(modulo.tabla as 'tags')
+                .select('bus_ppu')
+                .gte('created_at', weekInfo.startISO)
+                .lte('created_at', weekInfo.endISO)
+                .range(desde, hasta)
+            )
+            porModulo.set(modulo.clave, new Set(filas.map((fila) => fila.bus_ppu)))
+          } catch (error) {
             // Tabla sin crear todavía: se informa y ese módulo no se exige,
             // en vez de marcar la flota entera como pendiente
-            console.warn(`No se pudo leer ${modulo.tabla}`, error.message)
-            return
+            console.warn(`No se pudo leer ${modulo.tabla}`, error)
           }
-          porModulo.set(
-            modulo.clave,
-            new Set((data ?? []).map((fila) => (fila as { bus_ppu: string }).bus_ppu))
-          )
         })
       )
-      return porModulo
+      // Si NINGÚN módulo se pudo medir (RLS, tablas sin crear), un mapa vacío
+      // marcaba la flota entera como "completada": cero faltantes para todos.
+      // Devolver null hace caer al criterio clásico (¿tiene revisión?).
+      return porModulo.size > 0 ? porModulo : null
     },
   })
 
@@ -139,18 +177,18 @@ export const PendientesPage = () => {
       // prueba imposible semana tras semana.
       const enPanne = lastRevision?.estado_bus === 'EN_PANNE'
 
-      // Módulos vigentes que a este bus todavía le faltan esta semana
-      const faltantes = modulosMedibles.filter((modulo) => {
-        if (enPanne && modulo.requiereBusOperativo) return false
-        // Mobileye no aplica fuera de la flota Volvo: contarlo dejaba a
-        // cada Scania "Falta: Mobileye" indefinidamente
-        if (!moduloAplicaAlBus(modulo.clave, bus)) return false
-        const cubiertos = cobertura?.get(modulo.clave)
-        // Sin datos del módulo (tabla ausente o consulta aún en vuelo) no se
-        // inventa un pendiente: se cae al criterio de siempre
-        if (!cubiertos) return false
-        return !cubiertos.has(bus.ppu)
-      })
+      // Módulos que a este bus todavía le faltan esta semana. La regla de
+      // exigibilidad (tabla + vigencia + aplica al bus + panne) es la MISMA
+      // que usa el aviso de "bus ya revisado": vive en cobertura-semanal.ts.
+      const faltantes = modulosExigiblesPara(clavesActivas, bus, { enPanne }).filter(
+        (modulo) => {
+          const cubiertos = cobertura?.get(modulo.clave)
+          // Sin datos del módulo (tabla ausente o consulta aún en vuelo) no
+          // se inventa un pendiente: se cae al criterio de siempre
+          if (!cubiertos) return false
+          return !cubiertos.has(bus.ppu)
+        }
+      )
 
       // Los que quedan fuera por estar el bus en panne, para poder decirlo
       const omitidosPorPanne = enPanne
@@ -208,7 +246,13 @@ export const PendientesPage = () => {
   }
 
   const handleDownloadPDF = async () => {
-    const pendientes = filtered.filter((item) => item.pending)
+    // La hoja se imprime con el alcance del TERMINAL, ignorando el buscador:
+    // con "ZJ" escrito en la caja, el PDF salía con 2 pendientes y un avance
+    // falso, y en terreno se daba la flota por casi lista
+    const busesDelAlcance = buses.filter(
+      (item) => terminalFilter === 'TODOS' || item.bus.terminal === terminalFilter
+    )
+    const pendientes = busesDelAlcance.filter((item) => item.pending)
 
     if (pendientes.length === 0) {
       alert('No hay buses pendientes para exportar')
@@ -229,8 +273,8 @@ export const PendientesPage = () => {
         terminalFilter === 'TODOS'
           ? 'Todos los terminales'
           : `Terminal ${terminalFilter}`,
-      totalFlota: total,
-      revisados: completedCount,
+      totalFlota: busesDelAlcance.length,
+      revisados: busesDelAlcance.length - pendientes.length,
       alcance: modulosMedibles.map((modulo) => modulo.nombre),
     })
   }

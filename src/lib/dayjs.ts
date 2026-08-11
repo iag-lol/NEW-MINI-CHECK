@@ -16,13 +16,9 @@ dayjs.extend(relativeTime)
 
 dayjs.tz.setDefault('America/Santiago')
 
-export const getIsoWeekYear = (value: Dayjs = dayjs()) => {
-  const week = value.isoWeek()
-  const month = value.month()
-  const year = value.year()
-  if (week === 1 && month === 11) return year + 1
-  if (week >= 52 && month === 0) return year - 1
-  return year
-}
+// Delegado al plugin isoWeek: la aproximación manual anterior podía
+// discrepar de .isoWeekYear() justo en las semanas que cruzan el año, y
+// semana_iso es la clave con la que agrupan los reportes.
+export const getIsoWeekYear = (value: Dayjs = dayjs()) => value.isoWeekYear()
 
 export default dayjs

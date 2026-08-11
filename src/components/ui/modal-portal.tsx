@@ -20,6 +20,11 @@ import { createPortal } from 'react-dom'
  * Además se bloquea el desplazamiento del fondo mientras está abierto, para
  * que no se pueda mover la página por detrás del velo.
  */
+// Contador global de candados: con dos diálogos abiertos a la vez (p. ej. el
+// aviso de sesión sobre otro diálogo), el primero en cerrarse restauraba el
+// scroll del fondo aunque el segundo siguiera en pantalla.
+let candadosDeScroll = 0
+
 export const ModalPortal = ({
   abierto,
   children,
@@ -29,10 +34,13 @@ export const ModalPortal = ({
 }) => {
   useEffect(() => {
     if (!abierto) return
-    const anterior = document.body.style.overflow
+    candadosDeScroll += 1
     document.body.style.overflow = 'hidden'
     return () => {
-      document.body.style.overflow = anterior
+      candadosDeScroll = Math.max(0, candadosDeScroll - 1)
+      if (candadosDeScroll === 0) {
+        document.body.style.overflow = ''
+      }
     }
   }, [abierto])
 
