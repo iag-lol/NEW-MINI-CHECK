@@ -1,5 +1,6 @@
 import { Navigate, createBrowserRouter } from 'react-router-dom'
-import { lazy, Suspense, type ReactNode } from 'react'
+import { Suspense, type ReactNode } from 'react'
+import { paginaLazy } from '@/routes/pagina-lazy'
 import { ProtectedRoute } from '@/routes/protected-route'
 import { RequireRole } from '@/routes/require-role'
 import { RootRedirect } from '@/routes/root-redirect'
@@ -7,30 +8,30 @@ import { NotFoundPage } from '@/routes/not-found'
 import { RouteErrorPage } from '@/routes/route-error'
 import { RouteLoadingPage } from '@/routes/route-loading'
 
-const LoginPage = lazy(() => import('@/features/auth/login-page').then((module) => ({ default: module.LoginPage })))
-const DashboardPage = lazy(() => import('@/features/dashboard/dashboard-page').then((module) => ({ default: module.DashboardPage })))
-const InspectionFormPage = lazy(() => import('@/features/inspection/inspection-form-page').then((module) => ({ default: module.InspectionFormPage })))
-const RecordsPage = lazy(() => import('@/features/records/records-page').then((module) => ({ default: module.RecordsPage })))
-const TagModulePage = lazy(() => import('@/features/modules/tag-page').then((module) => ({ default: module.TagModulePage })))
-const CamarasModulePage = lazy(() => import('@/features/modules/camaras-page').then((module) => ({ default: module.CamarasModulePage })))
-const ExtintoresModulePage = lazy(() => import('@/features/modules/extintores-page').then((module) => ({ default: module.ExtintoresModulePage })))
-const MobileyeModulePage = lazy(() => import('@/features/modules/mobileye-page').then((module) => ({ default: module.MobileyeModulePage })))
-const OdometroModulePage = lazy(() => import('@/features/modules/odometro-page').then((module) => ({ default: module.OdometroModulePage })))
-const RackModulePage = lazy(() => import('@/features/modules/rack-page').then((module) => ({ default: module.RackModulePage })))
-const WifiModulePage = lazy(() => import('@/features/modules/wifi-page').then((module) => ({ default: module.WifiModulePage })))
-const PublicidadModulePage = lazy(() => import('@/features/modules/publicidad-page').then((module) => ({ default: module.PublicidadModulePage })))
-const FlotaPage = lazy(() => import('@/features/flota/flota-page').then((module) => ({ default: module.FlotaPage })))
-const ReportesPage = lazy(() => import('@/features/reportes/reportes-page').then((module) => ({ default: module.ReportesPage })))
-const ReportsPage = lazy(() => import('@/features/reports/reports-page').then((module) => ({ default: module.ReportsPage })))
-const InformesPage = lazy(() => import('@/features/informes/informes-page').then((module) => ({ default: module.InformesPage })))
-const ComunicacionPage = lazy(() => import('@/features/comunicacion/comunicacion-page').then((module) => ({ default: module.ComunicacionPage })))
-const PersonalPage = lazy(() => import('@/features/personal/personal-page').then((module) => ({ default: module.PersonalPage })))
-const ConfiguracionPage = lazy(() => import('@/features/configuracion/configuracion-page').then((module) => ({ default: module.ConfiguracionPage })))
-const Mas15ModulePage = lazy(() => import('@/features/modules/mas15-page').then((module) => ({ default: module.Mas15ModulePage })))
-const NormaGraficaModulePage = lazy(() => import('@/features/modules/norma-grafica-page').then((module) => ({ default: module.NormaGraficaModulePage })))
-const PendientesPage = lazy(() => import('@/features/pendientes/pendientes-page').then((module) => ({ default: module.PendientesPage })))
-const TicketsPage = lazy(() => import('@/features/tickets/tickets-page').then((module) => ({ default: module.TicketsPage })))
-const ProfilePage = lazy(() => import('@/features/profile/profile-page').then((module) => ({ default: module.ProfilePage })))
+const LoginPage = paginaLazy(() => import('@/features/auth/login-page').then((module) => ({ default: module.LoginPage })))
+const DashboardPage = paginaLazy(() => import('@/features/dashboard/dashboard-page').then((module) => ({ default: module.DashboardPage })))
+const InspectionFormPage = paginaLazy(() => import('@/features/inspection/inspection-form-page').then((module) => ({ default: module.InspectionFormPage })))
+const RecordsPage = paginaLazy(() => import('@/features/records/records-page').then((module) => ({ default: module.RecordsPage })))
+const TagModulePage = paginaLazy(() => import('@/features/modules/tag-page').then((module) => ({ default: module.TagModulePage })))
+const CamarasModulePage = paginaLazy(() => import('@/features/modules/camaras-page').then((module) => ({ default: module.CamarasModulePage })))
+const ExtintoresModulePage = paginaLazy(() => import('@/features/modules/extintores-page').then((module) => ({ default: module.ExtintoresModulePage })))
+const MobileyeModulePage = paginaLazy(() => import('@/features/modules/mobileye-page').then((module) => ({ default: module.MobileyeModulePage })))
+const OdometroModulePage = paginaLazy(() => import('@/features/modules/odometro-page').then((module) => ({ default: module.OdometroModulePage })))
+const RackModulePage = paginaLazy(() => import('@/features/modules/rack-page').then((module) => ({ default: module.RackModulePage })))
+const WifiModulePage = paginaLazy(() => import('@/features/modules/wifi-page').then((module) => ({ default: module.WifiModulePage })))
+const PublicidadModulePage = paginaLazy(() => import('@/features/modules/publicidad-page').then((module) => ({ default: module.PublicidadModulePage })))
+const FlotaPage = paginaLazy(() => import('@/features/flota/flota-page').then((module) => ({ default: module.FlotaPage })))
+const ReportesPage = paginaLazy(() => import('@/features/reportes/reportes-page').then((module) => ({ default: module.ReportesPage })))
+const ReportsPage = paginaLazy(() => import('@/features/reports/reports-page').then((module) => ({ default: module.ReportsPage })))
+const InformesPage = paginaLazy(() => import('@/features/informes/informes-page').then((module) => ({ default: module.InformesPage })))
+const ComunicacionPage = paginaLazy(() => import('@/features/comunicacion/comunicacion-page').then((module) => ({ default: module.ComunicacionPage })))
+const PersonalPage = paginaLazy(() => import('@/features/personal/personal-page').then((module) => ({ default: module.PersonalPage })))
+const ConfiguracionPage = paginaLazy(() => import('@/features/configuracion/configuracion-page').then((module) => ({ default: module.ConfiguracionPage })))
+const Mas15ModulePage = paginaLazy(() => import('@/features/modules/mas15-page').then((module) => ({ default: module.Mas15ModulePage })))
+const NormaGraficaModulePage = paginaLazy(() => import('@/features/modules/norma-grafica-page').then((module) => ({ default: module.NormaGraficaModulePage })))
+const PendientesPage = paginaLazy(() => import('@/features/pendientes/pendientes-page').then((module) => ({ default: module.PendientesPage })))
+const TicketsPage = paginaLazy(() => import('@/features/tickets/tickets-page').then((module) => ({ default: module.TicketsPage })))
+const ProfilePage = paginaLazy(() => import('@/features/profile/profile-page').then((module) => ({ default: module.ProfilePage })))
 
 const loadPage = (page: ReactNode) => (
   <Suspense fallback={<RouteLoadingPage />}>{page}</Suspense>
